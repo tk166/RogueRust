@@ -77715,6 +77715,16 @@
       "Id": "sensory_stone",
       "NameKey": "Sensory Stone",
       "Entry": "sensory_stone"
+    },
+    {
+      "Id": "tomb_of_lord_red_mask",
+      "NameKey": "Tomb of Lord Red Mask",
+      "Entry": "tomb_of_lord_red_mask"
+    },
+    {
+      "Id": "mind_bloom",
+      "NameKey": "Mind Bloom",
+      "Entry": "mind_bloom"
     }
   ],
   "Potions": [
@@ -78072,6 +78082,12 @@
       },
       {
         "Id": "sensory_stone"
+      },
+      {
+        "Id": "tomb_of_lord_red_mask"
+      },
+      {
+        "Id": "mind_bloom"
       }
     ]
   },
@@ -80815,6 +80831,148 @@
             {
               "Effect": "offer_cards:1:colorless",
               "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "tomb_of_lord_red_mask",
+      "TextKey": "An ornamented tomb waits across a floating path. A slot for coins sits under an inscription somebody has scratched out.",
+      "Options": [
+        {
+          "Label": "Don the Red Mask (222 gold)",
+          "Requires": [
+            {
+              "Kind": "relic",
+              "Op": "has",
+              "Id": "red_mask"
+            }
+          ],
+          "Effects": [
+            {
+              "Effect": "gold",
+              "Amount": 222
+            }
+          ],
+          "Next": ""
+        },
+        {
+          "Label": "Offer all Gold",
+          "Requires": [
+            {
+              "Kind": "gold",
+              "Op": "at_least",
+              "Amount": 1
+            }
+          ],
+          "Effects": [
+            {
+              "Effect": "gold_all",
+              "Amount": 0
+            },
+            {
+              "Effect": "relic:red_mask",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "mind_bloom",
+      "TextKey": "Your imagination takes shape around you. In this brief moment, whatever you wish for can be true -- and it will cost you.",
+      "Options": [
+        {
+          "Label": "I am War (Act 1 Boss)",
+          "Effects": [
+            {
+              "Effect": "fight_gold_bonus",
+              "Amount": 50
+            },
+            {
+              "Effect": "fight_relic_rarity:rare",
+              "Amount": 0
+            }
+          ],
+          "EffectsAsc": [
+            {
+              "Effect": "fight_gold_bonus",
+              "Amount": 25
+            },
+            {
+              "Effect": "fight_relic_rarity:rare",
+              "Amount": 0
+            }
+          ],
+          "Fight": "boss",
+          "Encounter": "Boss",
+          "Next": ""
+        },
+        {
+          "Label": "I am Awake (upgrade all)",
+          "Effects": [
+            {
+              "Effect": "upgrade_all",
+              "Amount": 0
+            },
+            {
+              "Effect": "relic:mark_of_the_bloom",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        },
+        {
+          "Label": "I am Rich (999 gold)",
+          "Requires": [
+            {
+              "Kind": "floor",
+              "Op": "at_most",
+              "Amount": 6
+            }
+          ],
+          "Effects": [
+            {
+              "Effect": "gold",
+              "Amount": 999
+            },
+            {
+              "Effect": "curse:normality",
+              "Amount": 2
+            }
+          ],
+          "Next": ""
+        },
+        {
+          "Label": "I am Healthy (heal to full)",
+          "Requires": [
+            {
+              "Kind": "floor",
+              "Op": "at_least",
+              "Amount": 7
+            }
+          ],
+          "Effects": [
+            {
+              "Effect": "heal_full",
+              "Amount": 0
+            },
+            {
+              "Effect": "curse:doubt",
+              "Amount": 1
             }
           ],
           "Next": ""

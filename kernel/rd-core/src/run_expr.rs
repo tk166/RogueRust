@@ -52,6 +52,9 @@ pub struct RunFacts<'a> {
     pub relics: &'a [&'a str],
     /// 牌组里的卡 id（重复的算多次：`deck_count` 数的是**张数**）。
     pub deck: &'a [&'a str],
+    /// §321：**本幕内的层号**（`0` = 还没出发，`1..=15`）。`mind_bloom` 的第三个选项按它
+    /// 在 `[I am Rich]` / `[I am Healthy]` 之间换。
+    pub floor: i32,
     /// §319：与 [`Self::deck`] **逐位对应**的类型名（`attack` / `skill` / `power` / `curse` /
     /// `status` / `other`），给条件原子 `card_tag` 用（`falling` 的三个选项各自按类型上锁）。
     ///
@@ -80,6 +83,8 @@ const KINDS: &[&str] = &[
     "card_damage",
     // §319：`card_tag` —— "牌组里有一张 <tag> 牌"（`Falling` 的三个选项各自按类型上锁）。
     "card_tag",
+    // §321：`floor` —— 本幕内的层号（`mind_bloom` 的第三个选项按它换）。
+    "floor",
 ];
 
 /// 数值型 kind 允许的比较（`AtLeast` = `x >= n`，`AtMost` = `x <= n`）。
@@ -258,6 +263,8 @@ pub fn decide(
             "health" => facts.health,
             "max_health" => facts.health_max,
             "ascension" => i32::from(facts.ascension),
+            // §321：层号（本幕内，`0` = 还没出发）。
+            "floor" => facts.floor,
             "deck_count" => i32::try_from(facts.deck.len()).unwrap_or(i32::MAX),
             // §287：单次最高伤害。阈值 `at_least 10` 就是 wiki 的 "10 or more damage per hit"。
             "card_damage" => facts.max_hit_damage,
@@ -280,7 +287,7 @@ pub fn decide(
 
 /// 数值型 kind（`Amount` 是数字，不是 id）。
 const NUMERIC_KINDS: &[&str] = &["gold", "health", "max_health", "health_percent", "deck_count",
-                                "ascension", "card_damage"];
+                                "ascension", "card_damage", "floor"];
 
 /// 与 §278 的 `percent_of` 同一个取整：`floor(base × percent / 100)`。
 fn percent_of(base: i32, percent: i32) -> i32 {
@@ -329,8 +336,10 @@ mod tests {
             ascension: 10,
             relics: &relics,
             deck: &deck,
-            // §287：牌组里单次伤害的最高值。测试里给一个显式的数（`0` = 没有）。
+            // §321：本幕内的层号（`floor` 原子的边界值在这里钉）。
+            floor: 6,
             deck_tags: &tags,
+            // §287：牌组里单次伤害的最高值。测试里给一个显式的数（`0` = 没有）。
             max_hit_damage: 0,
         };
         // (kind, op, amount, id) —— 每一条都成对出现（成立 / 不成立）。
@@ -370,6 +379,12 @@ mod tests {
             // 大小写都**不成立**（不是退回成 "any"）。空名字是**错误**：
             // 与 `relic`/`card` 同一个形状（`MissingId`）—— 没有 id 的存在型条件是在问"有没有任一"。
             ("card_tag", "has", 0, "Attack", false),
+            // §321：层号（本幕内）。两侧都要：`mind_bloom` 的第三个选项就是拿它切的。
+            // facts 里给的是 `floor = 6`（第三幕第 6 行），所以 6 是边界的那一侧。
+            ("floor", "at_most", 6, "", true),
+            ("floor", "at_most", 5, "", false),
+            ("floor", "at_least", 6, "", true),
+            ("floor", "at_least", 7, "", false),
         ];
         for (kind, op, amount, id, want) in cases {
             assert_eq!(
@@ -378,6 +393,36 @@ mod tests {
                 "{kind} {op} {amount} {id:?} -- each case must answer on both sides"
             );
         }
+    }
+
+    /// §321：`floor` 必须跟着**事实**走，不能是个常量。
+    ///
+    /// 为什久单独一条：`every_kind_answers_both_sides` 只用了一组事实（floor = 6），
+    /// 而"把 floor 写成常量 6"在那一组上**全部通过** —— 实测过（负控没红）。边界要换一组
+    /// 事实再问一次，才能把常量与真值分开。
+    #[test]
+    fn the_floor_requirement_follows_the_fact_not_a_constant() {
+        fn facts_at<'a>(floor: i32, relics: &'a [&'a str], deck: &'a [&'a str]) -> RunFacts<'a> {
+            RunFacts {
+                floor,
+                gold: 0,
+                health: 80,
+                health_max: 80,
+                ascension: 0,
+                relics,
+                deck,
+                deck_tags: &[],
+                max_hit_damage: 0,
+            }
+        }
+        // 6 层：`at_most 6` 成立、`at_least 7` 不成立。
+        assert_eq!(decide("floor", "at_most", 6, "", &facts_at(6, &[], &[])), Ok(true));
+        assert_eq!(decide("floor", "at_least", 7, "", &facts_at(6, &[], &[])), Ok(false));
+        // 7 层：两个答案都翻过来。
+        assert_eq!(decide("floor", "at_most", 6, "", &facts_at(7, &[], &[])), Ok(false));
+        assert_eq!(decide("floor", "at_least", 7, "", &facts_at(7, &[], &[])), Ok(true));
+        // 0 层（还没出发）落在 `at_most` 那一侧。
+        assert_eq!(decide("floor", "at_most", 6, "", &facts_at(0, &[], &[])), Ok(true));
     }
 
     /// 认不出的东西**必须报错**，绝不能默认成立。
@@ -393,6 +438,7 @@ mod tests {
             relics: &[],
             deck: &[],
             // §287：牌组里单次伤害的最高值。测试里给一个显式的数（`0` = 没有）。
+            floor: 0,
             deck_tags: &[],
             max_hit_damage: 0,
         };
@@ -438,6 +484,7 @@ mod tests {
             ascension: 0,
             relics,
             deck,
+            floor: 0,
             deck_tags: &[],
             max_hit_damage: 0,
         }

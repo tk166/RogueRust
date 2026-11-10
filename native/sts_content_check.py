@@ -4328,9 +4328,11 @@ REQUIRES_KINDS = ("gold", "health", "max_health", "health_percent", "deck_count"
                   "card_damage",
                   # §319：`card_tag` —— "牌组里有一张 <tag> 牌"（`Falling` 的三个选项各自
                   # 按类型上锁）。`Id` 必须是下面 `CARD_KIND_NAMES` 里的一个。
-                  "card_tag")
+                  "card_tag",
+                  # §321：`floor` —— **本幕内的层号**（`mind_bloom` 的第三个选项按它换）。
+                  "floor")
 REQUIRES_NUMERIC = ("gold", "health", "max_health", "health_percent", "deck_count", "ascension",
-                    "card_damage")
+                    "card_damage", "floor")
 REQUIRES_NUMERIC_OPS = ("at_least", "at_most")
 REQUIRES_PRESENCE_OPS = ("has", "lacks")
 
@@ -4345,7 +4347,9 @@ EVENT_PERCENT_EFFECTS = ("damage_pct", "max_hp_pct")
 # 逐字对应（那是第一份；这一份是第二意见）。
 CARD_KIND_NAMES = ("attack", "skill", "power", "status", "curse", "other")
 EVENT_BARE_EFFECTS = ("heal", "gold", "damage", "max_hp", "nothing", "heal_full",
-                      "remove_card", "upgrade_card", "transform_card")
+                      "remove_card", "upgrade_card", "transform_card",
+                      # §321：升级**所有**牌（`mind_bloom` 的 `[I am Awake]`）。
+                      "upgrade_all")
 # §320：`offer_cards:<n>:<filter>` 的口径 —— 与 `rd-run::state::OfferFilter::from_wire` 逐字对应。
 OFFER_FILTERS = ("any", "colorless")
 # Mirrors `rd_run::state::RunState::relic_effect`. Kept as a literal list on purpose: this file is
@@ -5153,8 +5157,9 @@ def check_event_vocabulary(doc):
             # §288：`After` 是**例外**：它正是"打完回到事件"，所以它不带 Next/Branches。
             fight = option.get("Fight")
             if fight is not None:
-                if fight not in ("monster", "elite"):
-                    fail(label + ".Fight", "must be `monster` or `elite`, got %r" % (fight,))
+                # §321：`boss` —— `mind_bloom` 的 `[I am War]` 要“打一场第 1 幕 Boss”。
+                if fight not in ("monster", "elite", "boss"):
+                    fail(label + ".Fight", "must be `monster`, `elite` or `boss`, got %r" % (fight,))
                 if (option.get("Next") or "") or option.get("Branches"):
                     fail(label, "`Fight` ends the event, so it cannot also have Next/Branches")
             for key in ("Branches", "BranchesAsc"):

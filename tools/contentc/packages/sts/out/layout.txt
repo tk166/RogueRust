@@ -148,36 +148,37 @@
 162  1  1   4 OBJ _obj(Drawn)                                                  : Drawn:TERM
 163  2  2   8 OBJ _obj(Drawn,TurnEndInHand)                                    : Drawn:TERM TurnEndInHand:TERM
 164  1  2   8 OBJ _obj(Effects)                                                : Effects:TERMLIST
-165  4  6  16 OBJ _obj(Effects,EffectsAsc,Label,Next)                          : Effects:TERMLIST EffectsAsc:TERMLIST Label:STR Next:STR
-166  6 10  24 OBJ _obj(Effects,EffectsAsc,Label,Next,Requires,RequiresAsc)     : Effects:TERMLIST EffectsAsc:TERMLIST Label:STR Next:STR Requires:TERMLIST RequiresAsc:TERMLIST
-167  5  6  16 OBJ _obj(Effects,Encounter,Fight,Label,Next)                     : Effects:TERMLIST Encounter:STR Fight:STR Label:STR Next:STR
-168  4  6  16 OBJ _obj(Effects,Id,Options,TextKey)                             : Effects:TERMLIST Id:STR Options:TERMLIST TextKey:STR
-169  3  4  12 OBJ _obj(Effects,Label,Next)                                     : Effects:TERMLIST Label:STR Next:STR
-170  4  6  16 OBJ _obj(Effects,Label,Next,Requires)                            : Effects:TERMLIST Label:STR Next:STR Requires:TERMLIST
-171  3  3   8 OBJ _obj(Entry,Id,NameKey)                                       : Entry:STR Id:STR NameKey:STR
-172  2  2   8 OBJ _obj(Event,Program)                                          : Event:STR Program:TERM
-173  3  6  16 OBJ _obj(Events,Events2,Events3)                                 : Events:TERMLIST Events2:TERMLIST Events3:TERMLIST
-174  1  1   4 OBJ _obj(Exhausted)                                              : Exhausted:TERM
-175  1  1   4 OBJ _obj(Id)                                                     : Id:STR
-176  3  3   8 OBJ _obj(Id,Intent,Program)                                      : Id:STR Intent:TERM Program:TERM
-177  3  3   8 OBJ _obj(Id,Kind,Op)                                             : Id:STR Kind:STR Op:STR
-178  2  2   8 OBJ _obj(Id,MaxFloor)                                            : Id:STR MaxFloor:INT
-179  4  4  12 OBJ _obj(Id,MaxNodeDepth,MaxProgramSteps,Root)                   : Id:TERM MaxNodeDepth:INT MaxProgramSteps:INT Root:TERM
-180  2  2   8 OBJ _obj(Id,MinFloor)                                            : Id:STR MinFloor:INT
-181  2  2   8 OBJ _obj(Id,MinGold)                                             : Id:STR MinGold:INT
-182  3  4  12 OBJ _obj(Id,Options,TextKey)                                     : Id:STR Options:TERMLIST TextKey:STR
-183  2  2   8 OBJ _obj(Id,Root)                                                : Id:STR(Wrap) Root:TERM
-184  3  3   8 OBJ _obj(Id,Start,UnlockFlag)                                    : Id:STR Start:TERM UnlockFlag:TERM
-185  2  2   8 OBJ _obj(Id,Weight)                                              : Id:STR Weight:INT
-186  3  3   8 OBJ _obj(Key,Max,Min)                                            : Key:STR Max:INT Min:INT
-187  2  2   8 OBJ _obj(Key,Value)                                              : Key:STR Value:INT
-188  2  2   8 OBJ _obj(Kind,Label)                                             : Kind:STR Label:STR
-189  2  2   8 OBJ _obj(Next,Weight)                                            : Next:STR Weight:INT
-190  2  2   8 OBJ _obj(Path,Why)                                               : Path:STR Why:STR
-191  3  3   8 OBJ _obj(Percent,Repeating,SurvivingHealth)                      : Percent:INT Repeating:BOOL SurvivingHealth:INT
-192  2  2   8 OBJ _obj(Stacks,StatusDefinitionId)                              : Stacks:INT StatusDefinitionId:STR(wrap)
-193  1  1   4 OBJ _obj(TurnEndInHand)                                          : TurnEndInHand:TERM
-194  1  1   4 OBJ _obj(gold)                                                   : gold:INT
+165  6  8  20 OBJ _obj(Effects,EffectsAsc,Encounter,Fight,Label,Next)          : Effects:TERMLIST EffectsAsc:TERMLIST Encounter:STR Fight:STR Label:STR Next:STR
+166  4  6  16 OBJ _obj(Effects,EffectsAsc,Label,Next)                          : Effects:TERMLIST EffectsAsc:TERMLIST Label:STR Next:STR
+167  6 10  24 OBJ _obj(Effects,EffectsAsc,Label,Next,Requires,RequiresAsc)     : Effects:TERMLIST EffectsAsc:TERMLIST Label:STR Next:STR Requires:TERMLIST RequiresAsc:TERMLIST
+168  5  6  16 OBJ _obj(Effects,Encounter,Fight,Label,Next)                     : Effects:TERMLIST Encounter:STR Fight:STR Label:STR Next:STR
+169  4  6  16 OBJ _obj(Effects,Id,Options,TextKey)                             : Effects:TERMLIST Id:STR Options:TERMLIST TextKey:STR
+170  3  4  12 OBJ _obj(Effects,Label,Next)                                     : Effects:TERMLIST Label:STR Next:STR
+171  4  6  16 OBJ _obj(Effects,Label,Next,Requires)                            : Effects:TERMLIST Label:STR Next:STR Requires:TERMLIST
+172  3  3   8 OBJ _obj(Entry,Id,NameKey)                                       : Entry:STR Id:STR NameKey:STR
+173  2  2   8 OBJ _obj(Event,Program)                                          : Event:STR Program:TERM
+174  3  6  16 OBJ _obj(Events,Events2,Events3)                                 : Events:TERMLIST Events2:TERMLIST Events3:TERMLIST
+175  1  1   4 OBJ _obj(Exhausted)                                              : Exhausted:TERM
+176  1  1   4 OBJ _obj(Id)                                                     : Id:STR
+177  3  3   8 OBJ _obj(Id,Intent,Program)                                      : Id:STR Intent:TERM Program:TERM
+178  3  3   8 OBJ _obj(Id,Kind,Op)                                             : Id:STR Kind:STR Op:STR
+179  2  2   8 OBJ _obj(Id,MaxFloor)                                            : Id:STR MaxFloor:INT
+180  4  4  12 OBJ _obj(Id,MaxNodeDepth,MaxProgramSteps,Root)                   : Id:TERM MaxNodeDepth:INT MaxProgramSteps:INT Root:TERM
+181  2  2   8 OBJ _obj(Id,MinFloor)                                            : Id:STR MinFloor:INT
+182  2  2   8 OBJ _obj(Id,MinGold)                                             : Id:STR MinGold:INT
+183  3  4  12 OBJ _obj(Id,Options,TextKey)                                     : Id:STR Options:TERMLIST TextKey:STR
+184  2  2   8 OBJ _obj(Id,Root)                                                : Id:STR(Wrap) Root:TERM
+185  3  3   8 OBJ _obj(Id,Start,UnlockFlag)                                    : Id:STR Start:TERM UnlockFlag:TERM
+186  2  2   8 OBJ _obj(Id,Weight)                                              : Id:STR Weight:INT
+187  3  3   8 OBJ _obj(Key,Max,Min)                                            : Key:STR Max:INT Min:INT
+188  2  2   8 OBJ _obj(Key,Value)                                              : Key:STR Value:INT
+189  2  2   8 OBJ _obj(Kind,Label)                                             : Kind:STR Label:STR
+190  2  2   8 OBJ _obj(Next,Weight)                                            : Next:STR Weight:INT
+191  2  2   8 OBJ _obj(Path,Why)                                               : Path:STR Why:STR
+192  3  3   8 OBJ _obj(Percent,Repeating,SurvivingHealth)                      : Percent:INT Repeating:BOOL SurvivingHealth:INT
+193  2  2   8 OBJ _obj(Stacks,StatusDefinitionId)                              : Stacks:INT StatusDefinitionId:STR(wrap)
+194  1  1   4 OBJ _obj(TurnEndInHand)                                          : TurnEndInHand:TERM
+195  1  1   4 OBJ _obj(gold)                                                   : gold:INT
 
 # reserved opcodes:
   0 reserved : (no fields)

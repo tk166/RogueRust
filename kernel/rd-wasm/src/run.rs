@@ -2250,6 +2250,8 @@ fn run_facts<'a>(
     deck_tags: &'a [&'a str],
 ) -> rd_core::run_expr::RunFacts<'a> {
     rd_core::run_expr::RunFacts {
+        // §321：本幕内的层号（`mind_bloom` 的第三个选项按它换）。
+        floor: session.state.floor(),
         gold: session.state.gold(),
         health: session.state.health(),
         health_max: session.state.health_max(),
@@ -3503,7 +3505,10 @@ fn effect_code_of(effect: rd_run::state::EventEffect) -> i32 {
         | EventEffect::RemoveCardRandom(_)
         // §320：候选列表的落点是**候选面板**（`rd_run_event_offer_*`），不是效果码 ——
         // 张数与口径走 `effect_amount`（下面）与内容字符串。
-        | EventEffect::OfferCards(_, _) => -1,
+        | EventEffect::OfferCards(_, _)
+        // §321：`upgrade_all` 的落点是**牌组每一张**，页面上没有效果码能画它（与 `card:<id>`
+        // 同一条规矩：真正的信息在内容字符串里）。
+        | EventEffect::UpgradeAll => -1,
     }
 }
 
@@ -3545,6 +3550,7 @@ fn effect_amount(effect: rd_run::state::EventEffect) -> i32 {
         | EventEffect::LoseRelic
         | EventEffect::GainRandomRelic
         // §319：类型不是"数量"。
+        | EventEffect::UpgradeAll
         | EventEffect::RemoveCardRandom(_)
         | EventEffect::HealFull => 0,
     }
@@ -4477,6 +4483,9 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
     let base = match (kind, event_fight) {
         // §286：事件的伏击是**精英**，即使节点本身是 `?`。
         (_, 2) => "Elite",
+        // §321：`mind_bloom` 的 `[I am War]` 是"打一场**第 1 幕 Boss**" —— 事件的 Boss 档位。
+        // ⚠️ 这一支必须**排在** `(2, _)`/`(_, 2)` 之后、`_` 之前：`event_fight` 比节点更具体。
+        (_, 3) => "Boss",
         (2, _) => "Elite",
         (7, _) => "Boss",
         _ => "Weak",
@@ -4519,9 +4528,13 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
     // installed, because `combat_bonus` borrows the run and the applier borrows the fight.
     // §159 `A7` / `A8` / `A9`: the node's kind decides which of the three rules (if any) raises the
     // enemies' maximum health. Read here, before the run is borrowed by the fight.
-    let fight_kind = match kind {
-        2 => rd_run::state::FightKind::Elite,
-        7 => rd_run::state::FightKind::Boss,
+    // §321：事件的 Boss 档位（`event_fight == 3`）同样要报 Boss —— 否则
+    // `pantograph` / `slavers_collar` 在 Mind Bloom 的 `[I am War]` 里不生效，而 wiki 明说
+    // "Pantograph and Slaver's Collar will work as if it is another Boss encounter"。
+    let fight_kind = match (kind, event_fight) {
+        (_, 3) => rd_run::state::FightKind::Boss,
+        (2, _) => rd_run::state::FightKind::Elite,
+        (7, _) => rd_run::state::FightKind::Boss,
         _ => rd_run::state::FightKind::Normal,
     };
     let enemy_health_percent = session.state.enemy_health_bonus_percent(fight_kind);

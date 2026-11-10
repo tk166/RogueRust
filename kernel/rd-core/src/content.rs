@@ -3670,6 +3670,9 @@ impl<'a> Content<'a> {
                 fight: match node.str_field("Fight").ok().flatten().unwrap_or("") {
                     "monster" => 1,
                     "elite" => 2,
+                    // §321：`"boss"` —— `mind_bloom` 的 `[I am War]` 要"打一场第 1 幕 Boss"。
+                    // 档位不只是文案：`pantograph` / `slavers_collar` 读的就是它。
+                    "boss" => 3,
                     _ => 0,
                 },
                 // §279：条件要按 term 读（`Requires` 是嵌套列表，读成 `&str` 就丢结构了）。
@@ -5488,11 +5491,12 @@ mod tests {
         let content = Content::parse(&bytes).expect("the image parses");
         assert_eq!(
             content.event_count(),
-            24,
+            26,
             "§280 补了 `the_cleric` / `the_moai_head`，§285 补了 `world_of_goop` / `wing_statue` /
              `the_joust`，§286 补了 `dead_adventurer`，§288 补了 `the_colosseum`，§290 补了 `the_nest`，
              §318 补了 `winding_halls` / `mysterious_sphere`（`scrap_pile` 改成 Scrap Ooze 的 9 段链），
-             §319 补了 `falling`，§320 补了 `the_library` / `sensory_stone`。pools 的**位次**比
+             §319 补了 `falling`，§320 补了 `the_library` / `sensory_stone`，§321 补了 `mind_bloom` /
+             `tomb_of_lord_red_mask`。pools 的**位次**比
              id 多，因为 `EventTables` 让 `purification_shrine` / `golden_idol` / `ancient_forge`
              跨幕复用（§133 / §143）"
         );
@@ -5614,6 +5618,8 @@ mod tests {
                 || prefix(effect, "remove_card_random:")
                 // §320：事件候选列表（`The Library` 的 20 选 1、`Sensory Stone` 的无色牌）。
                 || prefix(effect, "offer_cards:")
+                // §321：升级**所有**牌（`mind_bloom` 的 `[I am Awake]`）。
+                || effect == "upgrade_all"
                 || effect == "relic_random"
                 // §287/§288：下一场战斗的奖励修正（`Dead Adventurer` 的欠账、`The Colosseum`
                 // 的定数奖励）。词法的检查交给内容门，这里只回答"这个镜像里有没有它"。
@@ -5655,6 +5661,7 @@ mod tests {
                 "forgotten_altar",
                 "golden_idol",
                 // §318
+                "mind_bloom",
                 "mysterious_sphere",
                 "old_shrine",
                 "purification_shrine",
@@ -5671,6 +5678,7 @@ mod tests {
                 "the_moai_head",
                 "the_nest",
                 "the_ssssserpent",
+                "tomb_of_lord_red_mask",
                 "wandering_merchant",
                 // §318
                 "winding_halls",
@@ -5820,6 +5828,7 @@ mod tests {
                     ascension: 0,
                     relics: &[],
                     deck,
+                    floor: 0,
                     deck_tags: &[],
                     max_hit_damage: max_hit,
                 }
@@ -5983,6 +5992,7 @@ mod tests {
                 ascension: 0,
                 relics: &[],
                 deck: &[],
+                floor: 0,
                 deck_tags: &[],
                 max_hit_damage: 0,
             };
@@ -6104,6 +6114,7 @@ mod tests {
             relics: &["golden_idol"],
             deck: &["strike"],
             // §287：牌组里单次伤害的最高值。测试里给一个显式的数（`0` = 没有）。
+            floor: 0,
             deck_tags: &[],
             max_hit_damage: 0,
         };

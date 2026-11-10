@@ -56,7 +56,7 @@
 |---|---|---|---|
 | 1（Exordium，11 条） | Big Fish / The Cleric / Dead Adventurer / Golden Idol / Living Wall / Hypnotizing Colored Mushrooms / Scrap Ooze / Shining Light / The Ssssserpent / Wing Statue / World of Goop | **8** | `big_fish` / `living_wall` / `mushrooms` |
 | 2（The City，13 条） | Ancient Writing / Augmenter / The Colosseum / Council of Ghosts / Cursed Tome / Forgotten Altar / The Library / Masked Bandits / The Mausoleum / The Nest / Pleading Vagrant / Old Beggar / Vampires | **6**（§320 补了 `the_library`）（另有 `the_joust`：wiki 这一版页面没列它，我们按 2 幕放） | `augmenter` / `council_of_ghosts` / `cursed_tome` / `the_library` / `masked_bandits` / `pleading_vagrant` / `old_beggar` / `vampires` |
-| 3（The Beyond，7 条） | Falling / Mind Bloom / The Moai Head / Mysterious Sphere / Sensory Stone / Tomb of Lord Red Mask / Winding Halls | **5**（§318 补了 `Mysterious Sphere` / `Winding Halls`，§319 补了 `Falling`，§320 补了 `Sensory Stone`） | 其余 **2**：`tomb_of_lord_red_mask` 要事件级遗物条件、`mind_bloom` 要 `upgrade_all` + `Normality` + "不能治疗"的载体 |
+| 3（The Beyond，7 条） | Falling / Mind Bloom / The Moai Head / Mysterious Sphere / Sensory Stone / Tomb of Lord Red Mask / Winding Halls | **7 = 全部**（§318 `Mysterious Sphere` / `Winding Halls`，§319 `Falling`，§320 `Sensory Stone`，§321 `Mind Bloom` / `Tomb of Lord Red Mask`） | — |
 
 ★ **结论**：**Act 1 基本齐（8/11），Act 2 与 Act 3 是主要缺口（5/13、1/7）**。
 旧版本文档写"13 条已做"，其中 3 条（`old_shrine` / `ancient_forge` / `purification_shrine`）
@@ -81,7 +81,7 @@
 | ~~`winding_halls`~~ | 3 | **§318 已做**：Madness ×2 + 12.5%（A15 18%）掉血 / Writhe + 25%（A15 20%）回血 / 5% 最大生命 | — |
 | ~~`mysterious_sphere`~~ | 3 | **§318 已做**：`[Open Sphere]` 打**两只 Orb Walker**（`enc_two_orb_walkers`），Rare 遗物 + 普通战斗奖励 | — |
 | ~~`sensory_stone`~~ | 3 | **§320 已做**：`offer_cards:<n>:colorless`（`PoolCard::colorless` 由 `rd-wasm` 从 `CARD.Tags` 填）+ 段链表达"2/3 张" | — |
-| `mind_bloom` | 3 | **wiki 的四个选项**（§311 更正：旧版这一格写错过）：① *I am War* —— 打一场第 1 幕 Boss，得稀有遗物 + 50（A15 25）金币；② *I am Awake* —— 升级所有牌 + `Mark of the Bloom`（**不能治疗**）；③ *I am Rich* —— 999 金币 + 2 张 `Normality`；④ *I am Healthy* —— 回满血 + `Doubt`；第三项按血量在 Rich / Healthy 之间换 | 大：要 `upgrade_all`、两条新诅咒、`mark_of_the_bloom`（"不能治疗"的载体）与"打一场**第 1 幕** Boss"（事件开战斗有了，**指定 Boss 池**还没有） |
+| ~~`mind_bloom`~~ | 3 | **§321 已做**：`Fight: "boss"` + `Encounter: "Boss"`（第 1 幕 Boss 池）、`upgrade_all`、`mark_of_the_bloom`（`NoHeal`）、两个诅咒、以及 `floor` 条件（第三项按层号换；本幕内 35–40 ⇒ `at_most 6`、41+ ⇒ `at_least 7`） | — |
 
 ### 2.2 缺机制
 
@@ -90,7 +90,7 @@
 | `vampires` | 2 | `remove_all:<id>`（移除**所有**打击）+ `card:<id>` ×5（5 张 `bite`）+ 新牌 `bite`（含 `+` 行与"打出时回血"） |
 | `n'loth` | 2 | "从自己的**遗物**里任选一件失去" —— 现在的 `PendingChoice` 只选**牌** |
 | `masked_bandits` | 2 | 三名册外敌人（Pointy / Romeo / Bear）+ **金币区间**（25–35，今天只有定数） |
-| `tomb_of_lord_red_mask` | 3 | 事件级"有红面具" + `gold_all`（**§300 已做**）⇒ 现在只差事件级条件与内容 |
+| ~~`tomb_of_lord_red_mask`~~ | 3 | **§321 已做**（纯内容）：`relic has red_mask` ⇒ +222 金币；`gold at_least 1` ⇒ `gold_all` + `relic:red_mask` | — |
 | ~~`falling`~~ | 3 | **§319 已做**：`remove_card_random:<kind>`（随机删一张该类型）+ 条件原子 `card_tag`（没有该类型 ⇒ 按钮不画；三种都没有 ⇒ wiki 那条兜底 `[Land]`） |
 | `council_of_ghosts` | 2 | `card:<id>` ×5 + 最大生命 -X% ⇒ 两个原子都有（`card:<id>` §300） |
 | `cursed_tome` | 2 | "从三本里选一本，读几次掉血，最后给`necronomicon`" —— `necronomicon` **明确不做**，所以这条也不做 |
@@ -134,7 +134,7 @@
 |---|---|
 | `remove_all:<id>`（移除所有同 id 的牌） | `vampires` |
 | `dup_deck`（整副牌复制一份） | `mind_bloom` |
-| `upgrade_all`（升级所有牌） | `mind_bloom`（半血那条已经能用 `upgrade_random`） |
+| ~~`upgrade_all`（升级所有牌）~~ | **§321 已做**（`mind_bloom`） |
 
 ### 3.4 ~~随机结果~~ / ~~事件中途开战斗~~ —— 都已做完
 

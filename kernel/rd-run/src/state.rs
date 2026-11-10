@@ -327,8 +327,16 @@ pub enum RelicEffect {
     CampfireToke,
     /// See [`Self::CampfireLift`].
     CampfireDig,
-    /// §259: this relic **removes** Rest (`coffee_dripper`, `mark_of_the_bloom`).
+    /// §259: this relic **removes** Rest (`coffee_dripper`).
+    ///
+    /// §321：`mark_of_the_bloom` **不在**这里 —— 它不禁 Rest，它禁**治疗**（见 [`Self::NoHeal`]）。
+    /// 两者的可观察差别正是判据：前者的 `campfire_options().rest` 是 false，后者是 true 但回 0 点。
     NoRest,
+    /// §321：这件遗物让**治疗**全部无效（`mark_of_the_bloom`："You can no longer heal"）。
+    ///
+    /// 唯一读它的是 [`super::RunState::blocks_healing`]，而它只被 `heal_after_combat` 问 ——
+    /// 那一处是运行层**所有**治疗（休息 / 遗物 / 事件 / `heal_pct` / `heal_full`）的汇。
+    NoHeal,
     /// §259: this relic **removes** Smith (`fusion_hammer`).
     NoSmith,
     /// §259: resting also pays a card reward (`dream_catcher`).
@@ -993,6 +1001,11 @@ pub enum EventEffect {
     /// `[Land] Lose (a random Skill)` —— wiki 明写 random，所以它**不是** `DeckChange`：
     /// 没有问句，应用时就地掷一次（`RunStream::Event`）。
     RemoveCardRandom(CardKind),
+    /// §321：**升级牌组里的每一张**（`upgrade_all`）。`mind_bloom` 的 `[I am Awake]`。
+    ///
+    /// 与 `UpgradeCard`（问玩家一张）的区别：这是一次结算，没有问句。内容里的 `+` 行是**另一张卡**，
+    /// 所以"能不能升"由池子决定（没有 `+` 行、或已经是 `+` ⇒ 什么也不发生，与 `Upgrade` 同一条规则）。
+    UpgradeAll,
     /// §320：**候选列表**（`offer_cards:<n>:<filter>`）—— 抽 `n` 张互不相同的牌摆在玩家面前，
     /// 他取一张进牌组（`The Library` 的 `[Read]` 20 选 1、`Sensory Stone` 的无色牌）。
     ///
@@ -1135,6 +1148,8 @@ impl EventEffect {
             // §280：`The Moai Head` 的 `[Jump Inside]`："Heal to full HP".
             "heal_full" => (Self::HealFull, None),
             "remove_card" => (Self::RemoveCard, None),
+            // §321：`mind_bloom` 的 `[I am Awake]` —— 升级**所有**牌（没有问句）。
+            "upgrade_all" => (Self::UpgradeAll, None),
             "upgrade_card" => (Self::UpgradeCard, None),
             "transform_card" => (Self::TransformCard, None),
             other => {
@@ -2918,6 +2933,7 @@ impl RunState {
             | RelicEffect::CampfireToke
             | RelicEffect::CampfireDig
             | RelicEffect::NoRest
+            | RelicEffect::NoHeal
             | RelicEffect::NoSmith
             | RelicEffect::CurseMaxHealthUp(_)
             | RelicEffect::CardAddGold(_)
@@ -3094,6 +3110,7 @@ impl RunState {
                     | RelicEffect::CampfireToke
                     | RelicEffect::CampfireDig
                     | RelicEffect::NoRest
+                    | RelicEffect::NoHeal
                     | RelicEffect::NoSmith
                     | RelicEffect::StartCombatStatusInKinds(_, _, _)
                     | RelicEffect::StartCombatHealInKinds(_, _)
@@ -3208,7 +3225,9 @@ impl RunState {
             "shovel" => Some(RelicEffect::CampfireDig),
             // 两件关闭 Rest：`Coffee Dripper`（Boss）/ `Mark of the Bloom`（事件）。
             "coffee_dripper" => Some(RelicEffect::NoRest),
-            "mark_of_the_bloom" => Some(RelicEffect::NoRest),
+            // §321：`mark_of_the_bloom` —— "You can no longer heal"（wiki）。
+            // ⚠️ 原来映射到 `NoRest` 是**错的**：它不禁休息，它禁治疗。
+            "mark_of_the_bloom" => Some(RelicEffect::NoHeal),
             // §259：`Fusion Hammer` 关闭 Smith；`Dream Catcher` 让休息额外给一次卡牌奖励。
             "fusion_hammer" => Some(RelicEffect::NoSmith),
             "dream_catcher" => Some(RelicEffect::RestCardReward),
@@ -4001,6 +4020,7 @@ impl RunState {
                     | RelicEffect::CampfireToke
                     | RelicEffect::CampfireDig
                     | RelicEffect::NoRest
+                    | RelicEffect::NoHeal
                     | RelicEffect::NoSmith
                     | RelicEffect::StartCombatStatusInKinds(_, _, _)
                     | RelicEffect::StartCombatHealInKinds(_, _)
@@ -4089,7 +4109,24 @@ impl RunState {
     /// maximum**, never above it. This is M1's only relic effect and it is deliberate: without it
     /// every fight would end with the wrong HP, and HP is the number the whole run walks on.
     pub fn heal_after_combat(&mut self, amount: i32) {
+        // §321：`mark_of_the_bloom` —— "You can no longer heal"。这条规则放在**唯一的治疗汇**上，
+        // 于是休息、遗物（结算侧）、事件（`heal` / `heal_pct` / `heal_full`）一次全覆盖 ——
+        // 而不是在每个调用点各记一遍。
+        //
+        // ⚠️ 战斗**内**的治疗（药水、战斗侧的回合末触发）不走这里，见 §321 的已知缺口。
+        if self.blocks_healing() {
+            return;
+        }
         self.health = (self.health + amount).min(self.health_max);
+    }
+
+    /// §321：这一局还能不能治疗（`mark_of_the_bloom` = 不能）。
+    ///
+    /// 单独一个读法是因为判据要能直接问它 —— 一个埋在 `heal_after_combat` 里的 `if`
+    /// 只能靠"回血量恰好是 0"间接证明。
+    #[must_use]
+    pub fn blocks_healing(&self) -> bool {
+        self.holds_relic_effect(RelicEffect::NoHeal)
     }
 
     /// Adjust health (damage negative). Clamped to `0..=health_max`; the floor matters because a
@@ -4612,7 +4649,10 @@ impl RunState {
                 Some(RelicEffect::CampfireDig) => options.dig = true,
                 // 其余遗物不改变选项集合 —— 列出来是为了让"新增一个变体"在这里编译报错。
                 Some(
-                    RelicEffect::EndOfCombatHeal(_)
+                    // §321：`mark_of_the_bloom` **不**改选项集合 —— Rest 还在，只是回 0 点
+                    // （这正是它与 `coffee_dripper` 的可观察差别）。
+                    RelicEffect::NoHeal
+                    | RelicEffect::EndOfCombatHeal(_)
                     | RelicEffect::EndOfCombatHealIfBelow { .. }
                     | RelicEffect::MaxHealthUp(_)
                     | RelicEffect::HealUp(_)
@@ -6457,6 +6497,12 @@ impl RunState {
                     .map_err(|_| RunError::EmptyRange)? as usize;
                 self.remove_at(eligible[roll] as usize);
             }
+            // §321：升级牌组里的每一张（`upgrade_at` 已经是"没有 `+` 行 ⇒ 什么也不做"）。
+            EventEffect::UpgradeAll => {
+                for index in 0..self.deck_len as usize {
+                    self.upgrade_at(index, pool)?;
+                }
+            }
             EventEffect::RemoveCard | EventEffect::UpgradeCard | EventEffect::TransformCard => {
                 if named.is_some() {
                     return Err(RunError::UnsupportedEventEffect);
@@ -7831,12 +7877,23 @@ mod tests {
         let options = run.campfire_options();
         assert!(options.toke && options.dig, "Peace Pipe / Shovel add their options");
 
-        // Coffee Dripper 与 Mark of the Bloom 关 Rest；Fusion Hammer 关 Smith。
-        for relic in ["coffee_dripper", "mark_of_the_bloom"] {
+        // Coffee Dripper 关 Rest；Fusion Hammer 关 Smith。
+        {
             let mut run = campfire_run();
-            run.push_relic(relic, &TYPED_CARDS).expect(relic);
-            assert!(!run.campfire_options().rest, "{relic} removes Rest");
-            assert!(run.campfire_options().smith, "{relic} does not touch Smith");
+            run.push_relic("coffee_dripper", &TYPED_CARDS).expect("coffee dripper");
+            assert!(!run.campfire_options().rest, "Coffee Dripper removes Rest");
+            assert!(run.campfire_options().smith, "Coffee Dripper does not touch Smith");
+        }
+        // §321：`mark_of_the_bloom` **不**关 Rest —— 它关的是**治疗**。两者的可观察差别就是
+        // 这一对断言：选项还在，但回 0 点（wiki："You can no longer heal"）。
+        {
+            let mut run = campfire_run();
+            run.push_relic("mark_of_the_bloom", &TYPED_CARDS).expect("bloom");
+            assert!(run.campfire_options().rest, "Mark of the Bloom leaves Rest on the menu");
+            assert!(run.campfire_options().smith, "and it does not touch Smith");
+            run.health = run.health_max - 20;
+            at_campfire(&mut run);
+            assert_eq!(run.rest(), Ok(0), "…but Rest heals nothing");
         }
         let mut run = campfire_run();
         run.push_relic("fusion_hammer", &TYPED_CARDS).expect("fusion hammer");
@@ -12592,6 +12649,68 @@ mod tests {
             "strike+",
             "molten_egg upgrades an offered Attack as it enters the deck"
         );
+    }
+
+    /// §321：`upgrade_all` —— `strike` → `strike+`，没有 `+` 行的牌、已经是 `+` 的牌都不动。
+    #[test]
+    fn upgrade_all_upgrades_every_card_that_has_a_plus_row() {
+        let pool = basic_pool();
+        let mut run = RunState::new(7, 80, 0, &["strike", "strike+", "slimed", "defend"])
+            .expect("a run");
+        // `defend` 在 `basic_pool()` 里没有 `defend+` 行 ⇒ 它必须**原样留着**。
+        run.begin_event("mind_bloom", "mind_bloom").expect("the event");
+        run.resolve_event_effects(
+            &EventMove {
+                effects: &[(EventEffect::UpgradeAll, None)],
+                ..EventMove::none()
+            },
+            &pool,
+        )
+        .expect("upgrading everything");
+
+        let deck: Vec<&str> = run.deck().iter().map(|card| card.as_str()).collect();
+        assert_eq!(deck, vec!["strike+", "strike+", "slimed", "defend"]);
+        assert_eq!(run.pending(), Pending::None, "no question, no debt");
+        assert_eq!(run.event_follow(), None, "`upgrade_all` is not a `DeckChange`");
+    }
+
+    /// §321：`mark_of_the_bloom` —— "You can no longer heal"。**每一条**运行层治疗路径都回 0。
+    #[test]
+    fn mark_of_the_bloom_blocks_every_run_layer_heal() {
+        // 先在**没有**遗物的局上证明这些调用**真的会回血**（否则下面那一半是空的）。
+        let mut plain = RunState::new(7, 80, 0, &["strike"]).expect("a run");
+        plain.adjust_health(-40);
+        let hurt = plain.health();
+        assert_eq!(hurt, 40);
+        plain.heal_after_combat(5);
+        assert_eq!(plain.health(), 45, "a plain run heals");
+
+        let mut run = RunState::new(7, 80, 0, &["strike"]).expect("a run");
+        run.push_relic("mark_of_the_bloom", &TYPED_CARDS).expect("bloom");
+        assert!(run.blocks_healing(), "the relic is the flag");
+        run.adjust_health(-40);
+        assert_eq!(run.health(), 40);
+        // ① 直接治疗 ② 事件 `heal` ③ 事件 `heal_pct` ④ 事件 `heal_full` ⑤ 遗物 `HealUp`
+        run.heal_after_combat(5);
+        assert_eq!(run.health(), 40, "heal_after_combat is a no-op");
+        for effect in [
+            EventEffect::Heal(10),
+            EventEffect::HealPercent(500),
+            EventEffect::HealFull,
+        ] {
+            run.begin_event("mind_bloom", "mind_bloom").expect("the event");
+            run.resolve_event_effects(
+                &EventMove { effects: &[(effect, None)], ..EventMove::none() },
+                &basic_pool(),
+            )
+            .expect("the effect applies (it just heals nothing)");
+            assert_eq!(run.health(), 40, "{effect:?} heals nothing");
+        }
+        // ⑤ 遗物的 `HealUp`（`blood_vial` = 拾取时 +2）—— 走的是**同一条公开路径**
+        // （`push_relic`），所以它同时是"拾取类治疗也被拦"的证据。
+        run.push_relic("blood_vial", &TYPED_CARDS)
+            .expect("picking up blood_vial");
+        assert_eq!(run.health(), 40, "a relic payout heals nothing either");
     }
 
     /// §188: a list that fails **in the middle** must not half-apply.
