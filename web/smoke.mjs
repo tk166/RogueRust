@@ -127,6 +127,8 @@ const REQUIRED = [
   "rd_run_reward_card_id_into", "rd_run_reward_card_title_len", "rd_run_reward_card_title_into",
   "rd_run_take_card", "rd_run_skip_reward",
   "rd_env_card_kind", "rd_run_card_kind", "rd_run_node_resolved", "rd_run_boss_beaten",
+  // §343: 这家店的删卡服务还能不能用（wiki: "once per Shop"）。
+  "rd_run_removal_available",
   // §341: "有没有一场正在打的战斗" —— UI 场景表里 SC-03（待开始）与 SC-03b（战斗中）
   // 的唯一内核判据（`rd_env_done()` 在**没有会话**时返回 1，所以它不能反过来说）。
   "rd_run_in_fight",

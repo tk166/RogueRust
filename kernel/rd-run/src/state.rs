@@ -2026,7 +2026,19 @@ pub struct RunState {
     gold: i32,
     /// `-1` before the first step (`run-layer.md` §6.2 invariant 1).
     node: i32,
+    /// 商店删卡服务的**计价步数**：每用一次 +1，价格 = 75 + 25 × 这个数（**跨店累计**）。
     removed_cards: i32,
+    /// §343：**这家店**的删卡服务已经用过了。
+    ///
+    /// wiki.gg：*"Card Removal Service — Can only be used once per Shop."* 与 `removed_cards`
+    /// 是**两件事**：那个是服务涨价（跨店累计），这个是**本次访问的次数上限**。合成一个字段
+    /// 会让"删过之后价格涨了"与"这家店不能删了"变成同一个数。
+    ///
+    /// 在 `enter_shop` 里清 ⇒ "换一家店又能删"是自动的。
+    ///
+    /// `pub(crate)` 是为了 `hash.rs`（与 `state` 平级的模块，不是子模块）—— §308 的
+    /// `state-fields` 闸门要求指纹里出现**字面** `state.<字段>`。
+    pub(crate) removed_this_shop: bool,
     /// §259：`Girya` 用过几次 `Lift`（0..=`GIRYA_MAX_LIFTS`）。
     ///
     /// 它**不是**"力量层数"：力量是每场战斗开始时按这个数折算出来的（`combat_bonus`），
@@ -2266,6 +2278,7 @@ impl RunState {
             gold,
             node: -1,
             removed_cards: 0,
+            removed_this_shop: false,
             girya_lifts: 0,
             ruby_key: false,
             omamori_charges: 0,
@@ -4707,6 +4720,15 @@ impl RunState {
     /// ⚠️ 不再是 `const fn`：`smiling_mask` 要看遗物表。调用点（商店页与 `remove_card`）都是普通
     /// 函数，所以没有传播成本。
     #[must_use]
+    /// §343：这家店的删卡服务**还能不能用**（wiki: "once per Shop"）。
+    ///
+    /// 页面拿它决定"删一张牌"那个按钮画不画得动。单独一个导出而不是让价格返回 `-1`：
+    /// 价格那一格要显示"75 金"，把"不可用"塞进同一个数会让页面把 `-1` 印成价格。
+    #[must_use]
+    pub const fn removal_available(&self) -> bool {
+        !self.removed_this_shop
+    }
+
     pub fn remove_card_price(&self) -> i32 {
         // §342：`smiling_mask` 是**硬价** —— 既不涨价也不折扣，直接 50。
         //
@@ -5271,6 +5293,9 @@ impl RunState {
         potion_pool: &[PoolPotion<'_>],
     ) -> Result<(), RunError> {
         self.stock_shop(card_pool, relic_pool, potion_pool)?;
+        // §343：**新的一家店** ⇒ 删卡服务又能用一次。放在 `stock_shop` **之后**：铺货失败时
+        // 这一趟店没开成，不该把上一家店的状态清掉。
+        self.removed_this_shop = false;
         // `meal_ticket` —— "Whenever you enter a shop, heal 15 HP"。与 `Eternal Feather`
         // 同一条规矩：**进门就付**，不是"买了东西才付"。
         if let Some(RelicEffect::ShopEntryHeal(amount)) =
@@ -6200,6 +6225,11 @@ impl RunState {
         if self.pending != Pending::Shop {
             return Err(RunError::WrongPhase);
         }
+        // §343：**一家店只能删一次**（wiki.gg / fandom 同一句）。检查放在价格之前：
+        // 用过了就不该再谈价钱。
+        if self.removed_this_shop {
+            return Err(RunError::RemovalUsed);
+        }
         let price = self.remove_card_price();
         if self.gold < price {
             return Err(RunError::NotEnoughGold {
@@ -6216,6 +6246,8 @@ impl RunState {
         // §259：`removed_cards` 是**商店服务的计价步数**（+25/次），不是"删过几张牌" ——
         // 所以它留在这里，而不是搬进共用的 `remove_deck_card`（`Toke` 不该让商店涨价）。
         self.removed_cards += 1;
+        // §343：这一家店的额度用掉了。
+        self.removed_this_shop = true;
         Ok(price)
     }
 
@@ -11240,6 +11272,29 @@ mod tests {
         assert_eq!(run.deck()[0].as_str(), second, "the survivors keep their order");
         assert_eq!(run.remove_card_price(), 100, "+25 per use, across shops");
 
+        // §343：**同一家店只能删一次**（wiki.gg / fandom：*"Can only be used once per Shop"*）。
+        // 第二次必须被拒，而且**整局一个字节都不改** —— `RunState` 派生 `PartialEq`，
+        // 所以判据可以直接比整个结构体（§8 的纪律）。
+        let before = run;
+        assert_eq!(run.remove_card(0), Err(RunError::RemovalUsed));
+        assert!(
+            run == before,
+            "a refused removal must leave the run byte-identical"
+        );
+        assert!(!run.removal_available(), "the shop's one removal is spent");
+
+        // **换一家店**：额度恢复，但**价格继续累计**（"+25 each time it is bought at a shop"
+        // 是跨店的）。这两件事必须分开验 —— 把"涨价"与"本次额度"合成一个字段的实现会在这里红。
+        run.pending = Pending::Shop;
+        run.enter_shop(&basic_pool(), &RELICS, &POTIONS)
+            .expect("a second shop");
+        assert!(run.removal_available(), "a new shop allows one more removal");
+        assert_eq!(
+            run.remove_card_price(),
+            100,
+            "+25 per use, across shops (the price does NOT reset with the shop)"
+        );
+
         // And the price has to be payable: an empty purse refuses and changes nothing.
         run.adjust_gold(-9999);
         assert_eq!(run.gold(), 0);
@@ -11250,6 +11305,8 @@ mod tests {
         ));
         let deck_after: Vec<String> = run.deck().iter().map(|id| id.as_str().to_string()).collect();
         assert_eq!(deck_now, deck_after, "a refused purchase must not change the deck");
+        // 而且"钱不够"**没有**把这次额度用掉（拒绝不改状态）。
+        assert!(run.removal_available(), "a refused removal does not spend the shop's one use");
     }
 
     #[test]

@@ -200,9 +200,9 @@ wiki 常见而我们**没有**的：
 | 商店 | **四排齐全**（§332）：5 张有色卡（**2 攻 / 2 技 / 1 能力**，**随机一张 5 折**）、**2 张无色卡**（1 Uncommon + 1 Rare，**贵 20%**）、**3 瓶药水**（65/25/10）、**3 件遗物**（**最右必为 `Shop` 档**、前三格排除、价格按稀有度 143-158 / 238-263 / 285-315）+ 删卡服务（75 起、每次 +25，`smiling_mask` 固定 50）。A16 加价（**补货的商品除外**）、`the_courier` 补货（**四排都补**：有色/无色/药水/遗物）、`membership_card` 折扣都在；折扣**乘法叠加**（0.5 × 0.8 = 40%）且**向上取整**（§338）。
 **四排的价格 ABI 都返回折后价**（§342：无色/药水两排曾经返回挂牌价 ⇒ 页面把买得起的商品禁用）；
 遗物补货按**补出来那一件**的稀有度定价（§342）；`smiling_mask` 是**硬价 50**，不涨价不折扣（§342）。
-⚠️ 待核三条：① 删卡服务上 Courier 与 Membership Card 是否"取更好的那一个"（fandom 说取、wiki.gg 说照常，两源互斥）；
-② **删卡"每店一次"还没实现**（wiki.gg/fandom 都写 "Can only be used once per Shop"）—— 现在能同店连删；
-③ A16 是否加价删卡无据（wiki 只给 75，teemo.dev 标 exact），我们按加价实现。
+**删卡"每店一次"已实现**（§343：`removed_this_shop`，换店恢复而价格继续累计）。
+⚠️ 待核两条：① 删卡服务上 Courier 与 Membership Card 是否"取更好的那一个"（fandom 说取、wiki.gg 说照常，两源互斥）；
+② A16 是否加价删卡无据（wiki 只给 75，teemo.dev 标 exact），我们按加价实现。
 ⚠️ 与 **StS 2** 的差异（未证实 StS 1 如此）：StS 2 的 Courier 补货"保留槽位的稀有度/类型约束"，
 StS 1 的两份 wiki 只说"同一**类别**的商品"，且明说无色牌的**稀有度会重掷** ⇒ 我们**不**保留 Attack/Skill/Power | — |
 | 事件 | **36 条**（三幕池 13+16+10 = 39 条，111 个 `EVND` 段）。剧情分支是**真树**（`EVND` 段表 + `EV.Entry`，选项数不固定），选项支持 `Requires` / `RequiresAsc`、按类型的选牌问句（`the_library` / `sensory_stone` / `falling`）、事件中途开战斗（`dead_adventurer` / `mysterious_sphere` / `colosseum`）与 A15 的糟化分支。与 wiki 的 31 条比是 **29 条**（Act 1 11/11、Act 2 13/13、Act 3 7/7） | 内容（`cursed_tome` 明确不做 —— `necronomicon` 不在范围）。机制侧的事件级条件与 `N'loth` 已做（§331） |

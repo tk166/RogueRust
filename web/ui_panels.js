@@ -229,7 +229,10 @@ const RD_PANELS = (() => {
           id: "remove",
           label: "删一张牌",
           // Same rule: a 75-gold removal with 23 gold is not a button, it is a price list.
-          disabled: s.removePrice > s.gold,
+          // §343：这家店删过了也不是按钮（wiki: "Can only be used once per Shop"）。
+          // ⚠️ 判据写成 `=== 0`（内核**明确**说用过了）而不是 `!== 1`：老夹具没有这个字段，
+          // `!== 1` 会把它们的按钮也禁掉 —— 那是夹具的事，不是规则的事。
+          disabled: s.removePrice > s.gold || s.removalAvailable === 0,
           action: { kind: "remove_card" },
         },
         { id: "leave", label: "离开", action: { kind: "leave" } },

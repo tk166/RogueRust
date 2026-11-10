@@ -208,6 +208,12 @@ pub enum RunError {
     NoEligibleCard,
     /// §189 `A10`：这张牌不能被删（Ascender's Bane："Cannot be removed"）。
     CannotRemove,
+    /// §343：这家店的删卡服务**这一趟已经用过了**。
+    ///
+    /// 自己的变体而不是复用 `WrongPhase`：相位是对的（人就站在商店里），错的是**次数**。
+    /// wiki.gg / fandom 都写 "Can only be used once per Shop"，而页面要说的话
+    /// （"这家店删过了，换一家"）与"你不在商店里"完全不同。
+    RemovalUsed,
     /// §188：一个事件选项里出现了**两个**改牌效果（`remove_card` / `upgrade_card` /
     /// `transform_card`）。待答的选牌只有一个位置，第二个会被静默丢掉 —— 拒绝比丢一半好。
     TwoDeckChanges,

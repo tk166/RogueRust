@@ -496,6 +496,14 @@ SC-03/SC-03b 做不到，因为"未开始"是页面自己记的标志）。
 | 遗物 | `rd_run_shop_relic_count()` | `R.txt(shop_relic_id, slot)` | `rd_run_shop_relic_price(slot)` | `rd_run_buy_relic(slot)` | **无** |
 | 删卡 | — | — | `rd_run_remove_price()` | `rd_run_remove_card(deckIndex)` | — |
 
+**删卡服务的两个数**（§343：wiki 的 *"Can only be used once per Shop"*）：
+
+| 字段 | 域 | 接口 | 备注 |
+|---|---|---|---|
+| `removePrice` | `1..`（75 起、每用一次 +25，**跨店累计**） | `rd_run_remove_price()` | 显示用 |
+| `removalAvailable` | `1` 这家店还能删 / `0` 已经删过 / `-1` 没有局 | `rd_run_removal_available()` | ★ 按钮可用性**只能**看它；用价格返回 `-1` 来表达"不可用"会让页面把 `-1` 印成价格 |
+| 删除 | `>0` = 实付价 / `-2` 拒绝 | `rd_run_remove_card(deckIndex)` | ⚠️ 成功返回的是**价格**，不是 0（与 `buy_*` 不同） |
+
 | 字段 | 域 | 备注 |
 |---|---|---|
 | `price` | `-1` = **已售** / `0..` | ★ `-1` 与"买不起"是两件事：前者画"已售"，后者画价格 + 禁用 |

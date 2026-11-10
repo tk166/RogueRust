@@ -984,6 +984,8 @@ function runSnapshot() {
       break;
     case 2:
       snapshot.removePrice = ex.rd_run_remove_price();
+      // §343：这家店的删卡服务还能不能用（wiki: "once per Shop"）。`1` 能 / `0` 用过了。
+      snapshot.removalAvailable = ex.rd_run_removal_available();
       for (let slot = 0; slot < ex.rd_run_shop_card_count(); slot++) {
         snapshot.shopCards.push({
           id: shopCardId(slot),

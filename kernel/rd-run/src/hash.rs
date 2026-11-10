@@ -69,6 +69,10 @@ pub fn write_run_input(writer: &mut TextWriter<'_>, state: &RunState) {
         .str("\n");
     // §301：已经打过几场 —— `neows_lament` 的"前 3 场"就靠这个数。
     writer
+        // §343：这家店的删卡服务用掉没有。它是**可观察**的（"删一张牌"按钮灰了），
+        // 而且它决定下一步的合法动作集 ⇒ 必须进指纹。
+        .str("removal_used=")
+        .u32(u32::from(state.removed_this_shop))
         .str("fights=")
         .u32(u32::from(state.fights()))
         .str("\n");

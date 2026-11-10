@@ -1886,6 +1886,21 @@ pub unsafe extern "C" fn rd_run_shop_potion_id_into(slot: i32, ptr: *mut u8) -> 
     }
 }
 
+/// §343：这家店的删卡服务**还能不能用** —— `1` 能 / `0` 这家店已经删过了 / `-1` 没有局。
+///
+/// wiki.gg / fandom：*"Card Removal Service — Can only be used once per Shop."*
+/// 页面拿它决定"删一张牌"按钮画不画得动；没有它，那个按钮就是一个**启用的死按钮**
+/// （点下去内核报 `RemovalUsed`）。
+///
+/// 为什么不复用 `rd_run_remove_price()` 返回 `-1`：价格那一格要显示"75 金"，
+/// 把"不可用"塞进同一个数会让页面把 `-1` 印成价格（§276 同形的坑）。
+#[no_mangle]
+pub extern "C" fn rd_run_removal_available() -> i32 {
+    run_slot()
+        .as_ref()
+        .map_or(-1, |s| i32::from(s.state.removal_available()))
+}
+
 /// §332：药水货架第 `slot` 瓶的挂牌价（`-1` = 已售）。
 #[no_mangle]
 pub extern "C" fn rd_run_shop_potion_price(slot: i32) -> i32 {
@@ -7669,7 +7684,96 @@ mod tests {
         assert!(begun, "the fixture must reach a fight within 24 hops");
     }
 
-    /// §342（第九轮 Review P1-1）：**页面看到的价格就是内核收的价格**，四排都一样。
+    /// §343：`rd_run_removal_available()` —— 四态。
+    ///
+    /// 它是"删一张牌"那个按钮的**唯一**依据。没有它，页面只能靠"点一下试试"发现额度用完了，
+    /// 而那就是一个启用的死按钮（本项目最恨的形态）。
+    ///
+    /// 四态：没有局 `-1` → 商店里 `1` → 删过一次 `0` → 换一家店 `1`。
+    #[test]
+    fn the_removal_service_reports_whether_this_shop_still_allows_it() {
+        crate::take_session();
+        *run_slot() = None;
+        assert_eq!(rd_run_removal_available(), -1, "no run at all");
+
+        // 走到一个商店（与 §342 的判据同一段循环）。
+        let mut reached = false;
+        for seed in 0..400 {
+            reset(seed);
+            for _hop in 0..24 {
+                if rd_run_pending() == 2 {
+                    reached = true;
+                    break;
+                }
+                if rd_run_step(0) != 0 {
+                    break;
+                }
+                if rd_run_begin_node() != 0 {
+                    break;
+                }
+                match rd_run_pending() {
+                    1 => {
+                        let _ = rd_run_rest();
+                    }
+                    3 => {
+                        let _ = rd_run_open_chest();
+                        let _ = rd_run_leave();
+                    }
+                    5 => {
+                        let _ = rd_run_choose(0);
+                    }
+                    8 => {
+                        let _ = rd_run_pick_event_card(0);
+                    }
+                    4 => {
+                        let _ = rd_run_skip_reward();
+                    }
+                    _ => {
+                        if rd_run_fight_begin() == 0 {
+                            let _ = rd_run_fight_end();
+                        }
+                    }
+                }
+                while rd_run_pending() == 4 {
+                    let _ = rd_run_skip_reward();
+                }
+            }
+            if reached {
+                break;
+            }
+        }
+        assert!(reached, "no seed reached a shop within 24 hops");
+        assert_eq!(rd_run_removal_available(), 1, "a fresh shop allows one removal");
+
+        // 删一张（价格由 `rd_run_remove_price()` 给，这里只看额度）。
+        let price = rd_run_remove_price();
+        assert!(price > 0, "the removal service has a price: {price}");
+        // 钱不一定够 —— 先把这局的钱"挣"够是做不到的，所以这里只验**拒绝不改额度**：
+        // 钱不够时必须是 `-2`，而额度仍然在。
+        let code = rd_run_remove_card(0);
+        // ⚠️ 这个导出的**成功返回值是价格**（`Ok(price)`），不是 0 —— 与 `buy_*` 的"0 = ok"
+        // 不同。第一版按 0 判断，于是把成功当成了拒绝。
+        if code > 0 {
+            assert_eq!(code, price, "the export returns the price it charged");
+            assert_eq!(rd_run_removal_available(), 0, "the shop's one removal is spent");
+            assert_eq!(
+                rd_run_remove_card(0),
+                -2,
+                "a second removal in the same shop is refused: {}",
+                run_error_text()
+            );
+            assert_eq!(rd_run_removal_available(), 0, "the refusal did not change anything");
+        } else {
+            assert_eq!(code, -2, "not enough gold is a refusal, not a crash");
+            assert_eq!(
+                rd_run_removal_available(),
+                1,
+                "a refused removal must NOT spend the shop's one use"
+            );
+        }
+    }
+
+    /// §342（第九轮 Review P1-1）：**页面看到的价格就是内核收的价格**，四排都一样。    /// §342（第九轮 Review P1-1）：**页面看到的价格就是内核收的价格**，四排都一样。
     ///
     /// 为什么这条必须住在 ABI 层：§338 的判据 `every_purchase_charges_the_price_the_page_shows`
     /// 只测到 `RunState` —— 它证明了"校验/扣款/错误消息三处一个数"，但**没证明"内核告诉页面的数"
