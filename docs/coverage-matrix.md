@@ -42,11 +42,11 @@
 | 状态 | 150 | 139 | 6 | 5 | 0 | 150 | 1 | 0 |
 | 遭遇 | 64 | 46 | 18 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 36 | 36 | 0 | 0 | 0 | 0 | 0 | 0 |
-| 遗物 | 152 | 136 | 16 | 0 | 0 | 0 | 0 | 0 |
+| 遗物 | 152 | 137 | 15 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 957 | 699 | 246 | 12 | 476 | 196 | 85 | 0 |
+| **合计** | 957 | 700 | 245 | 12 | 476 | 196 | 85 | 0 |
 
-扫描到的具名测试：**1229** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
+扫描到的具名测试：**1233** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
 
 事件：池里有 **39** 个位次、**36** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -964,7 +964,7 @@
 | question_card | yes | the_reward_layer_relics_change_the_payout | — | — | — | §269/the_reward_layer_relics_change_the_payout |
 | red_mask | yes | event_level_requirements_filter_the_pool_before_the_roll, the_zero_infrastructure_batch_wires_the_right_carrier …(+1) | — | — | — | §266/§267/event_level_requirements_filter_the_pool_before_the_roll |
 | red_skull | yes | the_conditional_modifier_relics_wire_their_own_carrier | — | — | — | §265/§266/the_conditional_modifier_relics_wire_their_own_carrier |
-| regal_pillow | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+6) | — | — | §156 |
+| regal_pillow | yes | the_run_end_and_rest_heal_come_from_the_kernel | — | — | — | §156/the_run_end_and_rest_heal_come_from_the_kernel |
 | ring_of_the_serpent | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | ring_of_the_snake | yes | the_zero_infrastructure_batch_wires_the_right_carrier, nloth_stays_out_of_the_pool_below_two_relics | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | runic_cube | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |

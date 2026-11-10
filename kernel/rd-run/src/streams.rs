@@ -208,6 +208,11 @@ pub enum RunError {
     NoEligibleCard,
     /// §189 `A10`：这张牌不能被删（Ascender's Bane："Cannot be removed"）。
     CannotRemove,
+    /// §344：`end_act()` 被调用了，但地图**还有路可走**。
+    ///
+    /// 自己的变体而不是复用 `WrongPhase`：相位是对的（人就站在结算完的节点上），错的是
+    /// "这一局还没到尽头"。页面要说的话（"还有路，往前走"）与"你不在那个房间"完全不同。
+    MapNotExhausted,
     /// §343：这家店的删卡服务**这一趟已经用过了**。
     ///
     /// 自己的变体而不是复用 `WrongPhase`：相位是对的（人就站在商店里），错的是**次数**。

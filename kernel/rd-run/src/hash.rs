@@ -73,6 +73,9 @@ pub fn write_run_input(writer: &mut TextWriter<'_>, state: &RunState) {
         // 而且它决定下一步的合法动作集 ⇒ 必须进指纹。
         .str("removal_used=")
         .u32(u32::from(state.removed_this_shop))
+        // §344：幕尽（G2）。它一旦成立这一局就结束了，所以它决定下一步的合法动作集。
+        .str("ended_out_of_map=")
+        .u32(u32::from(state.ended_out_of_map))
         .str("fights=")
         .u32(u32::from(state.fights()))
         .str("\n");

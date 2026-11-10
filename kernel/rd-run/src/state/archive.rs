@@ -58,7 +58,7 @@ pub const MAGIC: &str = "RDA1";
 ///
 /// 为什么**必须**抬版本而不是"在末尾多写两个字节就行"：旧存档读到末尾会缺字段，
 /// 而"缺字段"与"字段是 0"在字节上无法区分 —— 那正是版本号要回答的问题。
-const VERSION: u8 = 12;  // §343：`removed_this_shop`。§308：事件链 + 宝箱计数器 + 每副本 mark。
+const VERSION: u8 = 13;  // §344：`ended_out_of_map`。§343：`removed_this_shop`。§308：事件链 + 宝箱计数器 + 每副本 mark。
 /// payload 缓冲。实测一局约 300–900 B；§308 之后**最坏情况**（60 张牌各带一条 mark）
 /// 是 **5653 B 文本**（`a_deck_where_every_copy_carries_a_mark_still_fits` 打出来的），
 /// 折成 payload 约 4.5 KB —— 8 KB 是它上面一层。这个数不是拍的：那条判据就是拿它压的。
@@ -577,6 +577,8 @@ fn write_payload(state: &RunState, content: i32, payload: &mut [u8]) -> Result<u
     writer.byte(state.fights())?;
     // §343：这家店的删卡服务用掉没有（`false`/`true` → 0/1）。
     writer.byte(u8::from(state.removed_this_shop))?;
+    // §344：这一幕的地图走完了没有（G2）。
+    writer.byte(u8::from(state.ended_out_of_map))?;
     // §293：欠着几张牌要加 + 这一手是哪几张（`pickup_offer` 的长度是 3 或 0）。
     writer.byte(state.pickup_add())?;
     writer.byte(state.pickup_offer().len() as u8)?;
@@ -755,6 +757,8 @@ fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, Archi
     let fights = reader.byte()?;
     // §343
     let removed_this_shop = reader.byte()?;
+    // §344
+    let ended_out_of_map = reader.byte()?;
     // §293：欠着几张牌 + 这一手是哪几张。
     let pickup_add = reader.byte()?;
     let pickup_offer_len = reader.byte()? as usize;
@@ -987,6 +991,7 @@ fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, Archi
     restored.wing_boots_used = wing_boots_used;
     restored.fights = fights;
     restored.removed_this_shop = removed_this_shop != 0;
+    restored.ended_out_of_map = ended_out_of_map != 0;
     restored.pickup_add = pickup_add;
     restored.pickup_offer = pickup_offer;
     restored.pickup_offer_len = pickup_offer_len as u8;
@@ -1194,6 +1199,8 @@ mod tests {
         // §343：这家店的删卡服务用掉了。**必须显式设**：留默认值 `false` 的话，
         // "漏还原一个字段就红"这句话对它就是假的（§308 的同一个教训）。
         run.removed_this_shop = true;
+        // §344：同上（G2 的"幕尽"）。
+        run.ended_out_of_map = true;
         run
     }
 

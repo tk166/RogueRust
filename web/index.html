@@ -637,12 +637,24 @@ function setSeed(value) {
   const field = document.getElementById("seedInput");
   if (field) field.value = String(runSeed);
 }
-/// The run is finished. Two ways to get here, and only one of them exists yet: **defeat** (the
-/// hero's health reached 0). There is no boss encounter in this content, so a run cannot be won --
-/// the end of the act says so instead of pretending.
-let runOver = false;
-/// Why it ended, for the summary.
-let runOverWhy = "";
+/// §344（缺口 G1）：**这一局结束了吗** —— 只问内核。
+///
+/// 这里原来是两个模块级变量（`runOver` / `runOverWhy`），由 `endFight`（战败）与 `end_act`
+/// （幕尽）两处赋值。两个变量、两个写者，与 `#nodePanel` 两个写者（`port-plan.md` §89/§90）
+/// 同一个形状；而代价是"局终"成了**历史**的函数 —— 回档之后、回放里、以及任何新写的渲染层
+/// 都得重新发明它。
+///
+/// 现在它是**派生值**：读取时问内核（R1）。`rd_run_over_why()` 的数值是 `RunEnd` 的判别值
+/// （`0` 进行中 / `1` 战败 / `2` 通关 / `3` 地图走完了），**不要重排**。
+const runOver = () => ex.rd_run_over() === 1;
+/// 为什么结束，给摘要面板用。
+function runEndWhy() {
+  const why = ex.rd_run_over_why();
+  if (why === 1) return `第 ${ex.rd_run_observe(0)} 层战败`;
+  if (why === 2) return "通关：最后一幕的 Boss 已击败";
+  if (why === 3) return `第 ${ex.rd_run_act()} 幕到此为止（地图走完了）`;
+  return "";
+}
 
 const runRead = {
   obs: (i) => ex.rd_run_observe(i),
@@ -898,9 +910,9 @@ function runSnapshot() {
   const pending = ex.rd_run_pending();
   const snapshot = {
     mode,
-    runOver,
-    runOverWhy,
-    cleared: !runOver && ex.rd_run_boss_beaten() === 1,
+    runOver: runOver(),
+    runOverWhy: runEndWhy(),
+    cleared: !runOver() && ex.rd_run_boss_beaten() === 1,
     act: ex.rd_run_act(),
     pending,
     kind: ex.rd_run_node_kind(),
@@ -977,7 +989,10 @@ function runSnapshot() {
       snapshot.eventNeeds = ex.rd_run_event_needs();
       break;
     case 1:
-      snapshot.restHeal = Math.floor((snapshot.hpMax * 30) / 100);
+      // §344（缺口 G9）：回复量**必须**问内核 —— `rest_heal()` 已经算上了 `regal_pillow`（+15）
+      // 与 `eternal_feather`（每 5 张牌 +3），而这里原来自己写 `Math.floor(hpMax * 30 / 100)`，
+      // 于是持那两件遗物时**显示的数字是错的**（显示 +24、实际 +39）。
+      snapshot.restHeal = ex.rd_run_rest_heal();
       // §259: the options come from the kernel, not from the page's idea of which relics exist.
       snapshot.campfire = ex.rd_run_campfire_options();
       snapshot.giryaLifts = ex.rd_run_girya_lifts();
@@ -1180,11 +1195,10 @@ const PANEL_ACTIONS = {
   event_card: () =>
     showDeckPicker("未知房间：选一张牌", (index) =>
       act(() => ex.rd_run_pick_event_card(index), "事件选牌")),
-  end_act: () => {
-    runOver = true;
-    runOverWhy = "走到第一幕尽头";
-    renderNode();
-  },
+  // §344（缺口 G2）：幕尽现在是一个**内核动作**（`RunState::end_act`）。它只在
+  // "真的没事可做"时接受（没有待决问句 / 脚下节点已结算 / `reachable()` 为空），
+  // 否则响亮拒绝 —— 于是"幕尽"进了存档、进了指纹、也进了回放脚本。
+  end_act: () => act(() => ex.rd_run_end_act(), "结束这一幕"),
 };
 
 /// What the node under the cursor needs. **`RD_PANELS.describe` decides; this only draws and wires.**
@@ -1297,8 +1311,7 @@ function beginFight() {
 /// go through it, so `runOver` cannot be left set by accident. Declared (not assigned) so the boot,
 /// which runs before the wiring block, can call it.
 function startRun() {
-  runOver = false;
-  runOverWhy = "";
+  // §344：`runOver` 不再是一个要重置的变量 —— 它每次从内核读。
   // §159: read the two fields the run is made of, clamp the level to the wiki's ladder, and write
   // both back so the page shows what the kernel actually got. An empty seed field means "keep the
   // one you have" (which is the random one on the first load).
@@ -1325,12 +1338,8 @@ function startRun() {
 function endFight() {
   const result = ex.rd_run_fight_end();
   setMode("run");
-  // Defeat is the end of the run, not a return to the map: the health came back as 0 and there is
-  // nothing to walk with.
-  if (result === 2 || ex.rd_run_observe(2) <= 0) {
-    runOver = true;
-    runOverWhy = `第 ${ex.rd_run_observe(0)} 层战败`;
-  }
+  // §344：**不用在这里置位** —— 战败时内核的血量已经是 0，`rd_run_over()` 会给出答案。
+  // （原来这里是两个写者之一：`endFight` 置"战败"、`end_act` 置"幕尽"。）
   renderMap();
   renderNode();
   renderTopBar();
@@ -2111,17 +2120,17 @@ function measure() {
     // Clicking the node you are standing on is not a move -- it is "show me what this node wants",
     // which must always work even after a refused click somewhere else.
     const here = ev.target.closest("g.node.here");
-    if (here && mode === "run" && !runOver) {
+    if (here && mode === "run" && !runOver()) {
       renderNode();
       return;
     }
     const group = ev.target.closest("g.node.reachable");
-    if (!group || mode !== "run" || runOver) {
+    if (!group || mode !== "run" || runOver()) {
       // **Say why nothing happened.** An unlit node used to swallow the click silently, which reads
       // as a broken page; the two reasons are "not a neighbour of where you stand" and "settle this
       // one first".
       const node = ev.target.closest("g.node");
-      if (node && mode === "run" && !runOver) {
+      if (node && mode === "run" && !runOver()) {
         const reasoning = ex.rd_run_action_count() === 0
           ? "先把手上的选择做完（面板里那个），才能往前走"
           : "只能走点亮的节点 —— 它和当前节点连着";
@@ -2437,8 +2446,9 @@ function measure() {
       return;
     }
     // 回档换了整局：先把战斗视图收起来，再让页面按新状态重画。
+    // §344：`runOver` 从内核读，所以回档之后它自动是对的（原来要手动清 —— 而"手动清"
+    // 正是"历史"的来源）。
     setMode("run");
-    runOver = false;
     renderMap();
     renderNode();
     renderTopBar();
@@ -2514,7 +2524,6 @@ function measure() {
     // 无论结果如何，槽里现在都是**回放过的那一局** —— 先把视图切回来，再说结果，
     // 否则玩家看到的还是上一局的画面（"状态改了没重渲染 = 玩家看不见"）。
     setMode("run");
-    runOver = false;
     renderMap();
     renderNode();
     renderTopBar();

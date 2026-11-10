@@ -3467,6 +3467,12 @@ pub const BEAT_TURN_STARTED: i32 = 10;
 pub const BEAT_TURN_ENDED: i32 = 11;
 /// A combatant was created (split / summon). `a` = its ordinal, `b` = its maximum health.
 pub const BEAT_SUMMONED: i32 = 12;
+/// §344（缺口 G11）：一个战斗员被**移出战斗**（`node.destroyCombatant`，§178）。
+///
+/// 与 [`BEAT_DOWNED`] 的区别：倒下的人**还在名册里**（触发器还能响），被移出的人**不在了**。
+/// 这个常量以前**不存在** —— `rd-core::beat::BeatKind::Destroyed` 会发 13，而 ABI 只认到 12，
+/// 于是任何消费者（页面、3D 渲染层、bench）都只能把 13 当成"未知种类"静默跳过。
+pub const BEAT_DESTROYED: i32 = 13;
 
 /// `flags` bit: this Damage was damage-over-time, not a hit.
 pub const BEAT_FLAG_DOT: i32 = 1;

@@ -119,6 +119,8 @@ const K_BLESSING_CARD: u8 = 17;
 const K_DROP_POTION: u8 = 18;
 const K_FIGHT_END: u8 = 19;
 const K_FIGHT_BEGIN: u8 = 20;
+/// §344：`end_act`（幕尽）。它改变 `run_end()`，所以必须进脚本 —— 否则回放会在最后一步分叉。
+const K_END_ACT: u8 = 21;
 const K_GRANT_POTION: u8 = 21;
 /// §293：加牌问句的四个动作（见 `LOG_KINDS`）。
 const K_PICKUP_ADD_CARD: u8 = 0x5a;
@@ -161,6 +163,7 @@ const fn rec_kind_name(kind: u8) -> &'static str {
         K_DROP_POTION => "drop_potion",
         K_FIGHT_END => "fight_end",
         K_FIGHT_BEGIN => "fight_begin",
+        K_END_ACT => "end_act",
         K_GRANT_POTION => "grant_potion",
     // §293：加牌问句的四个动作。它们都改运行层（牌组/上限），所以必须进脚本 ——
     // 否则"调用之后的哈希"会把它们的效果算进去，而回放里没人做这件事。
@@ -206,6 +209,7 @@ fn rec_kind_from_name(name: &str) -> Option<u8> {
         "drop_potion" => K_DROP_POTION,
         "fight_end" => K_FIGHT_END,
         "fight_begin" => K_FIGHT_BEGIN,
+        "end_act" => K_END_ACT,
         "grant_potion" => K_GRANT_POTION,
         // §259
         "lift" => K_LIFT,
@@ -963,6 +967,58 @@ pub extern "C" fn rd_run_start(seed: i32, ascension: i32) -> i32 {
 #[no_mangle]
 pub extern "C" fn rd_run_in_fight() -> i32 {
     run_slot().as_ref().map_or(-1, |s| i32::from(s.in_fight))
+}
+
+/// §344（缺口 G9）：在篝火"休息"能回多少血；`-1` = 没有局。
+///
+/// **它必须来自内核**：`RunState::rest_heal()` 已经算上了 `regal_pillow`（+15）与
+/// `eternal_feather`（每 5 张牌 +3），而页面此前自己写 `Math.floor(hpMax * 30 / 100)` ——
+/// 持那两件遗物时**显示的数字是错的**（显示 +24、实际 +39）。那不是"分层不好看"，是**两个数**。
+///
+/// 为什么不是"返回一个百分比"：`eternal_feather` 那一项按**张数**算（每满 5 张 +3），
+/// 与 `hpMax` 无关 —— 一个百分比表达不了它。
+#[no_mangle]
+pub extern "C" fn rd_run_rest_heal() -> i32 {
+    run_slot().as_ref().map_or(-1, |s| s.state.rest_heal())
+}
+
+/// §344（缺口 G1）：这一局结束了吗 —— `1` 结束 / `0` 还能打 / `-1` 没有局。
+///
+/// 页面前有一对**自己记的**模块级变量（`runOver` / `runOverWhy`）：战败时在 `endFight` 里置位、
+/// 幕尽时在 `end_act` 里置位。于是"局终"不是**状态**的函数，而是**历史**的函数 ——
+/// 存档回档之后、回放里、以及任何新写的渲染层都得重新发明它（与 §341 的 `mode` 同一个病）。
+#[no_mangle]
+pub extern "C" fn rd_run_over() -> i32 {
+    run_slot()
+        .as_ref()
+        .map_or(-1, |s| i32::from(s.state.run_end() != rd_run::state::RunEnd::Ongoing))
+}
+
+/// §344（缺口 G1）：为什么结束 —— `RunEnd` 的判别值：`0` 进行中 / `1` 战败 / `2` 通关 /
+/// `3` 地图走完了（G2）；`-1` 没有局。
+///
+/// 与 `rd_run_over()` 分开是**故意的**：页面要显示的话完全不同（"第 N 层战败" vs "这一幕到此为止"），
+/// 而一个 `1/0` 说不出这件事。数值是 `RunEnd` 的判别值，**不要重排**。
+#[no_mangle]
+pub extern "C" fn rd_run_over_why() -> i32 {
+    run_slot()
+        .as_ref()
+        .map_or(-1, |s| i32::from(s.state.run_end() as u8))
+}
+
+/// §344（缺口 G2）：宣告"这一幕的地图走完了" —— `0` 接受 / `-2` 拒绝（原因在错误缓冲）/ `-1` 没有局。
+///
+/// 以前这只是页面上的一句话（`runOver = true`），于是"幕尽"不是内核事实：存档不存它、
+/// 指纹不算它、回放看不见它。现在它有三条前提（没有待决问句 / 脚下节点已结算 /
+/// `reachable()` 为空），任何一条不成立都**一个字节都不改**。
+#[no_mangle]
+pub extern "C" fn rd_run_end_act() -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    session.log(K_END_ACT, -1, -1, "");
+    let outcome = session.state.end_act().map(|()| 0i32);
+    finish(session, outcome)
 }
 
 /// The seed of the current run, or `i32::MIN` if there is none.
@@ -5975,6 +6031,9 @@ pub unsafe extern "C" fn rd_run_replay_from(ptr: *const u8, len: i32) -> i32 {
             K_BEGIN_EVENT => {
                 let _ = rd_run_begin_event(payload.as_ptr(), payload.len() as i32);
             }
+            K_END_ACT => {
+                let _ = rd_run_end_act();
+            }
             _ => {}
         }
 
@@ -7682,6 +7741,93 @@ mod tests {
             }
         }
         assert!(begun, "the fixture must reach a fight within 24 hops");
+    }
+
+    /// §344：缺口 G1 / G2 / G9 的三个导出各测一次（值 + 哨兵）。
+    ///
+    /// 这三个导出的存在理由都是同一个：**页面不该自己算/自己记**。
+    #[test]
+    fn the_run_end_and_rest_heal_come_from_the_kernel() {
+        crate::take_session();
+        *run_slot() = None;
+        assert_eq!(rd_run_over(), -1, "no run");
+        assert_eq!(rd_run_over_why(), -1, "no run");
+        assert_eq!(rd_run_rest_heal(), -1, "no run");
+
+        reset(7);
+        assert_eq!(rd_run_over(), 0, "a fresh run is ongoing");
+        assert_eq!(rd_run_over_why(), 0, "…and the reason is `Ongoing`");
+
+        // G9：回复量 = 30% 上限 + 遗物加成。**页面算不出来**：`eternal_feather` 按张数算。
+        let hp_max = rd_run_observe(3);
+        assert_eq!(
+            rd_run_rest_heal(),
+            hp_max * 30 / 100,
+            "no rest relic: 30% of max"
+        );
+        assert_eq!(
+            unsafe { rd_run_grant_relic(b"regal_pillow".as_ptr(), 12) },
+            0,
+            "grant regal_pillow: {}",
+            run_error_text()
+        );
+        assert_eq!(
+            rd_run_rest_heal(),
+            hp_max * 30 / 100 + 15,
+            "regal_pillow adds 15 -- a page computing 30% would show the old number"
+        );
+
+        // G2：`end_act` 在地图还有路可走时必须被拒（`-2`），而且不改状态。
+        assert_eq!(
+            rd_run_end_act(),
+            -2,
+            "there is somewhere to go: {}",
+            run_error_text()
+        );
+        assert_eq!(rd_run_over(), 0, "a refused end_act changes nothing");
+    }
+
+    /// §344（缺口 G11）：**每个 `BeatKind` 都有 ABI 常量，且常量等于它的码**。
+    ///
+    /// 这个常量表以前缺 13（`Destroyed`）：`rd-core` 会发它，ABI 只认到 12，于是任何消费者
+    /// 只能把 13 当成"未知"静默跳过 —— 而"静默跳过一条动画"没有任何判据会红。
+    ///
+    /// 判据是**穷尽**的：1..=13 逐个有常量、常量等于码，14 不在闭集里。加一种 beat 却忘了
+    /// 加常量，这条就会红（`FACT.md` §4.20：同一个词表被两处认识就一定漂）。
+    #[test]
+    fn every_beat_kind_has_an_abi_constant() {
+        let table: [(i32, &str); 13] = [
+            (crate::BEAT_DAMAGE, "Damage"),
+            (crate::BEAT_BLOCK, "Block"),
+            (crate::BEAT_HEAL, "Heal"),
+            (crate::BEAT_STATUS_CHANGED, "StatusChanged"),
+            (crate::BEAT_STATUS_REMOVED, "StatusRemoved"),
+            (crate::BEAT_STATUS_PREVENTED, "StatusPrevented"),
+            (crate::BEAT_DOWNED, "Downed"),
+            (crate::BEAT_ESCAPED, "Escaped"),
+            (crate::BEAT_CARD_PLAYED, "CardPlayed"),
+            (crate::BEAT_TURN_STARTED, "TurnStarted"),
+            (crate::BEAT_TURN_ENDED, "TurnEnded"),
+            (crate::BEAT_SUMMONED, "Summoned"),
+            (crate::BEAT_DESTROYED, "Destroyed"),
+        ];
+        for (index, (code, name)) in table.iter().enumerate() {
+            assert_eq!(
+                *code,
+                index as i32 + 1,
+                "{name}: the ABI value must be its position (1-based) -- the numbers are frozen"
+            );
+            assert!(
+                rd_core::beat::BeatKind::from_code(*code).is_some(),
+                "{name}: the core does not know code {code} -- the constant names nothing"
+            );
+        }
+        // 闭集的另一侧：14 不存在。加一种 beat 就得同时加常量，否则上面那条 `from_code`
+        // 仍会绿，而消费者会静默跳过。
+        assert!(
+            rd_core::beat::BeatKind::from_code(14).is_none(),
+            "a 14th beat kind appeared -- add its ABI constant and this table together"
+        );
     }
 
     /// §343：`rd_run_removal_available()` —— 四态。

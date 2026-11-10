@@ -791,6 +791,27 @@ pub const UNKNOWN_TREASURE_BASE: i32 = 2;
 /// §272：`tiny_chest` —— 每到第几个 `?` 房强制宝箱（wiki："Every 4th ? room"）。
 pub const TINY_CHEST_ROOMS: u8 = 4;
 
+/// §344：这一局**结束了吗、为什么**。判别值就是 ABI 的值（`rd_run_over_why()`）。
+///
+/// 为什么需要它（缺口 G1）：页面前有一对**自己记的**模块级变量（`runOver` / `runOverWhy`）——
+/// 战败时在 `endFight` 里置位、幕尽时在 `end_act` 里置位。于是"局终"不是**状态**的函数，
+/// 而是**历史**的函数：存档回档之后、回放里、以及任何新写的渲染层都得重新发明它。
+///
+/// 四个值的判据在 [`RunState::run_end`]，顺序有意义：**死就是死**，哪怕地图也走完了。
+#[repr(u8)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum RunEnd {
+    /// 还能打。
+    #[default]
+    Ongoing = 0,
+    /// 战败（`health <= 0`）。战斗收尾会把血量折回运行层，战败就是 0。
+    Defeat = 1,
+    /// **最后一幕**的 Boss 倒了。
+    Victory = 2,
+    /// 地图走完了（M1 的"这一幕到此为止"），由 [`RunState::end_act`] 记下。
+    OutOfMap = 3,
+}
+
 /// What the node under the cursor is waiting for.
 ///
 /// A node is not settled by walking onto it (`env-abi.md` §11.5): walking sets the cursor, and
@@ -2112,6 +2133,11 @@ pub struct RunState {
     /// Has the act been **cleared**? Set when the boss dies (`inv:§7.2`: the boss is the end of the
     /// act). Until this existed a run could not be won, only lost.
     boss_beaten: bool,
+    /// §344：`end_act()` 已经宣告"这一幕的地图走完了"（缺口 G2 的落点）。
+    ///
+    /// 为什么必须是**状态**而不是页面上的一个布尔：它一旦成立，这一局就结束了 —— 存档要存它、
+    /// 指纹要算它（它决定下一步的合法动作集），而页面只是**读**它。
+    pub(crate) ended_out_of_map: bool,
     /// §189 `A20`: 这一幕已经倒下了几个 Boss（0 = 还没有，1 = 第一个已倒）。只有最后一幕 + A20
     /// 才会变成 1；换幕时归零。与 `boss_beaten` 同类：run 层状态，不进战斗指纹。
     bosses_fought: u8,
@@ -2308,6 +2334,7 @@ impl RunState {
             shop: ShopStock::empty(),
             reward: Reward::empty(),
             boss_beaten: false,
+            ended_out_of_map: false,
             bosses_fought: 0,
             act: 1,
             event: RunId::EMPTY,
@@ -4591,6 +4618,51 @@ impl RunState {
 
     /// Has the node under the cursor already paid out?
     #[must_use]
+    /// §344：这一局结束了吗、为什么（缺口 G1）。
+    ///
+    /// 顺序有意义：**死就是死** —— 血量归零时即使地图也走完了，答案仍是 `Defeat`。
+    #[must_use]
+    pub fn run_end(&self) -> RunEnd {
+        if self.health <= 0 {
+            return RunEnd::Defeat;
+        }
+        // 最后一幕的 Boss 倒了才算赢：前两幕的 `boss_beaten` 只表示"这一幕通关了"，
+        // `mark_boss_beaten` 会换幕并把它清掉。
+        if self.act >= MAX_ACT && self.boss_beaten {
+            return RunEnd::Victory;
+        }
+        if self.ended_out_of_map {
+            return RunEnd::OutOfMap;
+        }
+        RunEnd::Ongoing
+    }
+
+    /// §344（缺口 G2）：宣告"这一幕的地图走完了"。
+    ///
+    /// M1 的地图有 15 排，最后一排没有出边 —— 走到那儿就**没有下一步**了。以前这只是页面上的
+    /// 一句话（`runOver = true`），现在它是一个**内核动作**：拒绝要响亮，接受要留痕。
+    ///
+    /// 三条前提，缺一不可（任何一条不成立都**不改一个字节**）：
+    /// 1. 没有待决问句（`pending == None`）—— 有问句就还有事做；
+    /// 2. 脚下的节点**已结算** —— 没结算就还有事做；
+    /// 3. `reachable()` 为空 —— 还有路可走就还有事做。
+    pub fn end_act(&mut self) -> Result<(), RunError> {
+        if self.pending != Pending::None {
+            return Err(RunError::WrongPhase);
+        }
+        if self.node < 0 {
+            return Err(RunError::WrongPhase);
+        }
+        if !self.node_resolved() {
+            return Err(RunError::NodeNotSettled);
+        }
+        if !self.reachable().is_empty() {
+            return Err(RunError::MapNotExhausted);
+        }
+        self.ended_out_of_map = true;
+        Ok(())
+    }
+
     pub fn node_resolved(&self) -> bool {
         let node = self.node;
         if node < 0 {
@@ -10259,6 +10331,129 @@ mod tests {
              (got {})",
             restocked.price
         );
+    }
+
+    /// §344（缺口 G1）：`run_end()` 的四个值各自由什么触发。
+    ///
+    /// 页面前有一对**自己记的**模块级变量（`runOver` / `runOverWhy`）—— 战败时置位、幕尽时置位。
+    /// 它们能对，是因为页面的每一处赋值都记得改；而"记得"不是判据。这条把答案变成**状态的函数**。
+    #[test]
+    fn the_run_end_is_a_function_of_the_state() {
+        use crate::state::RunEnd;
+
+        // ① 刚开局：还能打。
+        let mut run = ironclad();
+        assert_eq!(run.run_end(), RunEnd::Ongoing, "a fresh run is ongoing");
+
+        // ② 血量归零 ⇒ 战败（战斗收尾把血量折回运行层，战败就是 0）。
+        run.adjust_health(-9999);
+        assert_eq!(run.health(), 0);
+        assert_eq!(run.run_end(), RunEnd::Defeat, "zero health is a defeat");
+
+        // ③ 前两幕的 `boss_beaten` **不是**通关：`mark_boss_beaten` 会换幕并清掉它。
+        let mut act1 = ironclad();
+        act1.act = 1;
+        act1.boss_beaten = true;
+        assert_eq!(
+            act1.run_end(),
+            RunEnd::Ongoing,
+            "clearing act 1 is not winning the run"
+        );
+
+        // ④ 最后一幕 + Boss 已倒 ⇒ 通关。
+        let mut last = ironclad();
+        last.act = MAX_ACT;
+        last.boss_beaten = true;
+        assert_eq!(last.run_end(), RunEnd::Victory, "the last act's boss ends the run");
+
+        // ⑤ 顺序：**死就是死** —— 即使这一幕的地图也走完了。
+        let mut both = ironclad();
+        both.act = MAX_ACT;
+        both.boss_beaten = true;
+        both.ended_out_of_map = true;
+        both.adjust_health(-9999);
+        assert_eq!(
+            both.run_end(),
+            RunEnd::Defeat,
+            "defeat outranks every other end state"
+        );
+    }
+
+    /// §344（缺口 G2）：`end_act()` 的三条前提，各测一次 —— 而且拒绝**一个字节都不改**。
+    ///
+    /// 以前"幕尽"只是页面上的一句话（`runOver = true`），于是它不是内核事实：存档不存它、
+    /// 指纹不算它、回放看不见它。现在它是一个动作，所以它必须**只在真的没事可做时**接受。
+    #[test]
+    fn ending_an_act_requires_that_there_is_nothing_left_to_do() {
+        use crate::state::RunEnd;
+
+        // 前提 1：还有待决问句 ⇒ 拒绝。
+        let mut run = ironclad();
+        run.pending = Pending::Shop;
+        let before = run;
+        assert_eq!(run.end_act(), Err(RunError::WrongPhase));
+        assert!(run == before, "a refused end_act must change nothing");
+        assert_eq!(run.run_end(), RunEnd::Ongoing);
+
+        // 前提 2：脚下的节点还没结算 ⇒ 拒绝（`NodeNotSettled`）。
+        let mut run = ironclad();
+        run.pending = Pending::None;
+        if run.node >= 0 {
+            // 站在一个没结算的节点上。
+            run.resolved = [0; 2];
+            let before = run;
+            assert_eq!(run.end_act(), Err(RunError::NodeNotSettled));
+            assert!(run == before, "a refused end_act must change nothing");
+        }
+
+        // 前提 3：还有路可走 ⇒ 拒绝（`MapNotExhausted`）。
+        //
+        // ⚠️ 必须先**站到一个节点上**：`node == -1`（还没出发）时 `end_act` 报的是
+        // `WrongPhase`（前提 0），而第一版直接 `mark_resolved()` —— 游标还是 -1，
+        // 于是这条判据红在"期望 MapNotExhausted、得到 WrongPhase"，而规则本身是对的。
+        let mut run = ironclad();
+        let target = run.reachable().get(0).expect("a floor-1 node");
+        run.enter_node(target).expect("climb");
+        assert!(run.node >= 0, "we are standing on a node now");
+        assert!(!run.reachable().is_empty(), "and it has exits");
+        run.mark_resolved();
+        let before = run;
+        assert_eq!(run.end_act(), Err(RunError::MapNotExhausted));
+        assert!(run == before, "a refused end_act must change nothing");
+
+        // 三条都满足 ⇒ 接受，而且**只有它**能把 `OutOfMap` 打开。
+        //
+        // 构造"最后一排、已结算、没有出边"：直接把游标摆到最后一排的一个节点上并标记结算。
+        // 不走地图 —— 这条判据问的是 `end_act` 的守卫，不是"能不能走到最后一排"。
+        let mut run = ironclad();
+        let mut placed = false;
+        for index in 0..run.map().node_count() {
+            if let Some((row, _)) = run.map().locate(index as u8) {
+                if row as usize == ROWS - 1 {
+                    run.node = index as i32;
+                    run.floor = ROWS as i32;
+                    run.pending = Pending::None;
+                    run.mark_resolved();
+                    placed = true;
+                    break;
+                }
+            }
+        }
+        assert!(placed, "the map must have a last row");
+        // ⚠️ 最后一排**不是**"没有出边"：`reachable()` 在 `floor >= ROWS` 时把 **Boss 哨兵**
+        // 当成唯一的前进方向（`inv:§7.2`：Boss 是 floor 16，在地图之外）。所以"真的没事可做"
+        // 只在 **Boss 已经倒过**时成立 —— 而那时 `act < MAX_ACT` 的这一局就是"这一幕走完了"。
+        //
+        // 这条也说明一件事：**当前内容里 `OutOfMap` 几乎不可达**（Boss 一倒，要么换幕、
+        // 要么就是最后一幕 ⇒ `Victory` 优先）。`end_act` 仍然值得存在 —— 它是 SC-02b 的
+        // 内核落点，而且守卫是"真的没事可做"，不是"页面觉得没事可做"。
+        run.boss_beaten = true;
+        assert!(
+            run.reachable().is_empty(),
+            "with the boss already down the last row has nothing left"
+        );
+        assert_eq!(run.end_act(), Ok(()), "nothing left to do: accept");
+        assert_eq!(run.run_end(), RunEnd::OutOfMap, "and now the act is over");
     }
 
     /// §342（第九轮 Review P1-2）：补出来的遗物按**它自己的稀有度**定价。

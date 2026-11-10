@@ -81,7 +81,7 @@ SC-03/SC-03b 做不到，因为"未开始"是页面自己记的标志）。
 | 2 | **SC-03b** | 战斗中 | `rd_run_in_fight() == 1`（§341） | 战斗层 | `render()` | `fight_end` → SC-04 / SC-12b |
 | 3 | **SC-11a** | 遗物欠账·改牌 | `rd_run_pickup_picks() > 0` | 弹窗 | `renderNode` | 选完回到**原来那一屏** |
 | 4 | **SC-11b** | 遗物欠账·加牌 | `rd_run_pickup_add() > 0` | 弹窗 | `renderNode` | 同上 |
-| 5 | **SC-12b** | 局终 | `rd_run_over() == 1`（§6-G1，**尚未导出**） | 节点面板 | `renderNode` | 重开 / 换 seed |
+| 5 | **SC-12b** | 局终 | `rd_run_over() == 1`（§344 已导出；`rd_run_over_why()` 说为什么） | 节点面板 | `renderNode` | 重开 / 换 seed |
 | 6 | **SC-12a** | 幕通关 | `rd_run_boss_beaten() == 1` 且 `rd_run_over() != 1` | 节点面板 | `renderNode` | 重开 / 换 seed |
 | 7 | **SC-01** | 塔底祝福 | `pending == 6` | 节点面板 | `renderNode` | `choose_start` → 6→(7)→0 |
 | 8 | **SC-01b** | 祝福选牌 | `pending == 7` | 弹窗 | `showDeckPicker` | `pick_blessing_card` → 0 |
@@ -93,7 +93,7 @@ SC-03/SC-03b 做不到，因为"未开始"是页面自己记的标志）。
 | 14 | **SC-05** | 商店 | `pending == 2` | 节点面板（四排） | `renderNode` | `leave` → 0 |
 | 15 | **SC-06** | 篝火 | `pending == 1` | 节点面板 | `renderNode` | `rest`/`smith`/…/`leave` → 0 |
 | 16 | **SC-03** | 战斗（**待开始**） | `rd_run_in_fight() == 0` 且 `pending == 0` 且（`kind ∈ {1,2,7}` 或 `kind==5 && unknownRoom==2` 或 `eventFight > 0`） | 战斗层 | `render()` | `fight_begin` → SC-03b |
-| 17 | **SC-02b** | 幕尽头 | `rd_run_in_fight() == 0` 且 `pending == 0` 且 `rd_run_action_count() == 0` 且 `kind >= 0` | 节点面板 | `renderNode` | 页面侧 `end_act`（**无内核动作**，§6-G2） |
+| 17 | **SC-02b** | 幕尽头 | `rd_run_in_fight() == 0` 且 `pending == 0` 且 `rd_run_action_count() == 0` 且 `kind >= 0`。⚠️ **当前内容不可达**（§6 末尾） | 节点面板 | `renderNode` | `rd_run_end_act()`（§344 起是内核动作） |
 | 18 | **SC-02** | 地图（兜底） | `rd_run_in_fight() == 0` 且 `pending == 0` | 地图层 + 顶栏 | `renderMap` + `renderTopBar` | `step(node)` → 进入某节点 |
 
 > **为什么 SC-03b 排在第 2 位**：它是"正在打"，与"站在一个战斗节点上但还没开打"是**两个不同的
@@ -131,6 +131,8 @@ SC-03/SC-03b 做不到，因为"未开始"是页面自己记的标志）。
 | `enemyOverflow` | `0/1` | 开战时定死 | `rd_env_enemy_overflow()` | T1 | `1` ⇒ 观察向量装不下，必须**说出来**，不许静默只画 6 个 |
 | `forcedTurns` | `0..` | 回合被强行结束 | `rd_env_forced_turns()` | T2 | 变大 ⇒ 报"时间扭曲"。观察向量**故意不携带**这个事实 |
 | `contentPin` | 8 位十六进制 | 构建时定死 | `rd_content_fingerprint()` | T0 | 与 `packages/sts/out/build.json` 的镜像 sha 同源 |
+| `runOver` | `0/1` | 血量归零 / 幕尽 / 通关 | `rd_run_over()` | T2 | §344：**不要自己记**（曾经是页面的一对模块级变量） |
+| `runEndWhy` | `0` 进行中 / `1` 战败 / `2` 通关 / `3` 地图走完了 | 同上 | `rd_run_over_why()` | T2 | 数值是 `RunEnd` 的判别值，**不要重排** |
 
 **遗物条**（`relicCount` 个 chip）：
 
@@ -518,7 +520,7 @@ SC-03/SC-03b 做不到，因为"未开始"是页面自己记的标志）。
 |---|---|---|---|
 | `options` | 位掩码 `0..63` | `rd_run_campfire_options()` | `Rest 1 \| Smith 2 \| Recall 4 \| Lift 8 \| Toke 16 \| Dig 32` |
 | `giryaLifts` | `0..3` | `rd_run_girya_lifts()` | 只用于文案"已用 n/3" |
-| `restHeal` | `1..` | **无导出**：页面算 `hpMax * 30 / 100` | §6-G9：**规则住在渲染层**，这是最该修的一条 |
+| `restHeal` | `1..` | `rd_run_rest_heal()` | §344：**已关闭 G9**。它含 `regal_pillow`（+15）与 `eternal_feather`（每 5 张 +3），页面自己算会显示错数 |
 | `relics` | id 列表 | `R.txt(relic_id, i)` | 只用于"举铁已用满"的说明文字 |
 
 > ★ **六个选项的存在与否是内核的答案**（位掩码）。页面自己判"我有 Girya 就显示举铁"是
@@ -764,17 +766,17 @@ SC-03/SC-03b 做不到，因为"未开始"是页面自己记的标志）。
 
 | id | 缺口 | 今天怎么办 | 建议 | 代价 |
 |---|---|---|---|---|
-| **G1** | **"这一局结束了"没有内核判据** | 页面在 `fight_end` 看到失败时自己置 `runOver`（`index.html:1329`） | `rd_run_over()` → `0/1` + `rd_run_over_why()` → `0` 战败 / `1` 幕尽 | 小：`RunState` 已有相关事实（health==0 / boss_beaten） |
-| **G2** | **幕尽头没有动作** | 页面按钮只本地置 `runOver` | `rd_run_end_act()`，或在动作表里发一个 kind | 中：要定"幕尽头"是什么状态 |
+| ~~**G1**~~ | ~~"这一局结束了"没有内核判据~~ | — | **已关闭（§344）**：`rd_run_over()` → `1/0/-1`，`rd_run_over_why()` → `0` 进行中 / `1` 战败 / `2` 通关 / `3` 地图走完了 | 已完成 |
+| ~~**G2**~~ | ~~幕尽头没有动作~~ | — | **已关闭（§344）**：`rd_run_end_act()`（`0` 接受 / `-2` 拒绝）。三条前提：没有待决问句 / 脚下节点已结算 / `reachable()` 为空 | 已完成。⚠️ 当前内容里**几乎不可达**（最后一排的唯一前进方向是 Boss 哨兵）—— 见 §6 末尾 |
 | **G3** | **"我有没有某件遗物"要遍历 id** | `for i in 0..relic_count { relicId(i) }`（`singingBowl` 就这样） | `rd_run_has_relic(idPtr, len)` → `0/1`，或一个遗物**位掩码** | 小，但位掩码要随内容增长 ⇒ 用 id 查询更稳 |
 | **G4** | **药水没有显示名/描述** | 只显示 id（`entropic_brew`） | `rd_run_potion_name_len/into`、`..._text_...` | 小：`POT` 段已有字段 |
 | **G5** | **Boss 名字写死** | `snapshot.bossName = "Slime Boss"` | `R.txt(boss_name)` 或从 `ENCT` 读 | 小 |
 | **G6** | **没有"事件 id / 遭遇 id"** | 事件只有一行文本；战斗只有敌人名 | `rd_run_event_id_len/into`、`rd_env_encounter_id_len/into` | 中：`EV`/`ENCT` 段有 id，只是没导出 |
 | **G7** | **祝福只有 2 个 offer（写死）** | `for slot in 0..2` | `rd_run_start_offer_count()` | 很小 |
 | **G8** | **商店四排都没有标题** | 回退到 id | 与 G4 同一个形状：`shop_*_title_len/into` | 小 |
-| **G9** | **`restHeal` 的 30% 住在渲染层** | `Math.floor(hpMax*30/100)` | `rd_run_rest_heal()` | 很小，**且是规则外泄**，优先级最高 |
+| ~~**G9**~~ | ~~`restHeal` 的 30% 住在渲染层~~ | — | **已关闭（§344）**：`rd_run_rest_heal()` | 已完成。⚠️ 它不只是分层问题：`rest_heal()` 还含 `regal_pillow`（+15）与 `eternal_feather`（每 5 张 +3），页面自己算**显示的数字是错的** |
 | **G10** | **没有连续量**（T4） | 没有时长/位置/缓动 | 不必加：3D 自己定，但要**记下来**这是渲染层的自由度 | 0（约定） |
-| **G11** | **beat kind 13 无 ABI 常量** | 页面 `switch` 落空 ⇒ 静默不播 | 加 `BEAT_DESTROYED = 13` + 页面分支 | 很小，但**漏了就是静默** |
+| ~~**G11**~~ | ~~beat kind 13 无 ABI 常量~~ | — | **已关闭（§344）**：`BEAT_DESTROYED = 13`，并且有一条**穷尽**判据（`1..=13` 每个都有常量、`14` 不在闭集里） | 已完成。⚠️ 页面**根本不消费 beat**（动画走 `diffObservations`）—— 所以"页面 switch 落空"是本文档当初的推断，真实缺口是"消费者无法命名它" |
 | **G12** | **"现在是谁的回合"只有文本** | `rd_env_active_len()` 返回 `Exec(...)` 那种诊断串 | `rd_env_active_slot()` → 墙位（`-1` 英雄 / `0..5`） | 小 |
 | **G13** | **手牌没有 id 导出** | 只有 `def_slot` + 名字/标题/文本 | 3D 图集按 `def_slot` 建表即可 | 0（够用，但要知道 `def_slot` 是**内容行号**，跨版本会变） |
 | **G14** | **费用的"未修饰 vs 修饰"不分离** | 只有最终价；每副本 delta 不可见 | 若要演"这张牌降价了"，需要 `rd_env_card_cost_printed(slot)` | 小 |
@@ -788,6 +790,18 @@ SC-03/SC-03b 做不到，因为"未开始"是页面自己记的标志）。
 > 存档/回放"用的是同一个字段。
 
 > **G9 / G1 / G11 是"会静默出错"的三条**，其余是"做不好看/做不了"。静默那三条优先。
+>
+> ### 四条关闭之后的两条观察（§344）
+>
+> 1. **G9 不只是"分层不好看"**：页面原来自己算 `Math.floor(hpMax*30/100)`，而
+>    `RunState::rest_heal()` 还含 `regal_pillow`（+15）与 `eternal_feather`（每 5 张牌 +3）——
+>    持那两件遗物时**显示的数字是错的**（显示 +24、实际 +39）。"规则外泄"最终总会变成
+>    "两个数"，只是时间问题。
+> 2. **SC-02b（幕尽头）在当前内容里几乎不可达**：`reachable()` 在最后一排把 **Boss 哨兵**
+>    当成唯一前进方向（`inv:§7.2`：Boss 是 floor 16、在地图之外），所以"真的没事可做"只在
+>    **Boss 已倒**时成立 —— 而那时要么换幕、要么就是最后一幕（`Victory` 优先）。
+>    `rd_run_end_act()` 仍然值得存在（它是 SC-02b 的内核落点，守卫是"真的没事可做"），
+>    但**场景表里那一行应当标成"当前内容不可达"**，而不是假装它在跑。
 
 ---
 
