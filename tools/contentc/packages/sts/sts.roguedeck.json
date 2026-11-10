@@ -44980,6 +44980,18 @@
                 }
               },
               {
+                "kind": "node.removeDebuffs",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  }
+                }
+              },
+              {
                 "kind": "node.modifyStatusStacks",
                 "value": {
                   "TargetSelector": {
@@ -47330,6 +47342,18 @@
                 }
               },
               {
+                "kind": "node.removeDebuffs",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  }
+                }
+              },
+              {
                 "kind": "node.setCombatantCounter",
                 "value": {
                   "TargetSelector": {
@@ -47484,6 +47508,18 @@
                         }
                       },
                       "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.removeDebuffs",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      }
                     }
                   },
                   {
@@ -47824,27 +47860,114 @@
           "value": {
             "Children": [
               {
-                "kind": "node.createCombatant",
+                "kind": "node.conditional",
                 "value": {
-                  "DefinitionId": "torch_head",
-                  "TeamId": "enemy",
-                  "Health": {
-                    "kind": "const",
+                  "Condition": {
+                    "kind": "compare",
                     "value": {
-                      "Value": 38
+                      "Op": "GreaterOrEqual",
+                      "Left": {
+                        "kind": "combatantCount",
+                        "value": {
+                          "AliveOnly": true,
+                          "Selector": {
+                            "kind": "sel.allAllies",
+                            "value": {}
+                          }
+                        }
+                      },
+                      "Right": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 3
+                        }
+                      }
                     }
-                  }
-                }
-              },
-              {
-                "kind": "node.createCombatant",
-                "value": {
-                  "DefinitionId": "torch_head",
-                  "TeamId": "enemy",
-                  "Health": {
-                    "kind": "const",
+                  },
+                  "Then": {
+                    "kind": "node.sequence",
                     "value": {
-                      "Value": 38
+                      "Children": []
+                    }
+                  },
+                  "Else": {
+                    "kind": "node.conditional",
+                    "value": {
+                      "Condition": {
+                        "kind": "compare",
+                        "value": {
+                          "Op": "GreaterOrEqual",
+                          "Left": {
+                            "kind": "combatantCount",
+                            "value": {
+                              "AliveOnly": true,
+                              "Selector": {
+                                "kind": "sel.allAllies",
+                                "value": {}
+                              }
+                            }
+                          },
+                          "Right": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 2
+                            }
+                          }
+                        }
+                      },
+                      "Then": {
+                        "kind": "node.sequence",
+                        "value": {
+                          "Children": [
+                            {
+                              "kind": "node.createCombatant",
+                              "value": {
+                                "DefinitionId": "torch_head",
+                                "TeamId": "enemy",
+                                "Health": {
+                                  "kind": "const",
+                                  "value": {
+                                    "Value": 38
+                                  }
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      "Else": {
+                        "kind": "node.sequence",
+                        "value": {
+                          "Children": [
+                            {
+                              "kind": "node.createCombatant",
+                              "value": {
+                                "DefinitionId": "torch_head",
+                                "TeamId": "enemy",
+                                "Health": {
+                                  "kind": "const",
+                                  "value": {
+                                    "Value": 38
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "kind": "node.createCombatant",
+                              "value": {
+                                "DefinitionId": "torch_head",
+                                "TeamId": "enemy",
+                                "Health": {
+                                  "kind": "const",
+                                  "value": {
+                                    "Value": 38
+                                  }
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
                     }
                   }
                 }
@@ -62277,6 +62400,36 @@
                   "Weight": 30
                 }
               ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.enemyAliveCount",
+                "value": {
+                  "Op": "LessOrEqual",
+                  "Value": 2
+                }
+              },
+              "Priority": 45,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "the_collector.spawn"
+                  },
+                  "Weight": 25
+                },
+                {
+                  "Action": {
+                    "value": "the_collector.fireball"
+                  },
+                  "Weight": 45
+                },
+                {
+                  "Action": {
+                    "value": "the_collector.buff"
+                  },
+                  "Weight": 30
+                }
+              ]
             }
           ],
           "DisplayName": "The Collector",
@@ -62583,6 +62736,72 @@
                   "Weight": 25
                 }
               ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 4
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "prev_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 4
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 75,
+              "Action": {
+                "value": "awakened_one.sludge"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 5
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "prev_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 5
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 75,
+              "Action": {
+                "value": "awakened_one.tackle"
+              }
             }
           ],
           "DisplayName": "Awakened One",
@@ -76208,6 +76427,36 @@
               "Weight": 30
             }
           ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.enemyAliveCount",
+            "value": {
+              "Op": "LessOrEqual",
+              "Value": 2
+            }
+          },
+          "Priority": 45,
+          "Choice": [
+            {
+              "Action": {
+                "value": "the_collector.spawn"
+              },
+              "Weight": 25
+            },
+            {
+              "Action": {
+                "value": "the_collector.fireball"
+              },
+              "Weight": 45
+            },
+            {
+              "Action": {
+                "value": "the_collector.buff"
+              },
+              "Weight": 30
+            }
+          ]
         }
       ],
       "Tier": "Boss",
@@ -76466,6 +76715,72 @@
               "Weight": 25
             }
           ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 4
+                  }
+                },
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "prev_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 4
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 75,
+          "Action": {
+            "value": "awakened_one.sludge"
+          }
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 5
+                  }
+                },
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "prev_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 5
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 75,
+          "Action": {
+            "value": "awakened_one.tackle"
+          }
         }
       ],
       "Tier": "Boss",

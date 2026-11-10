@@ -216,6 +216,7 @@ wiki 常见而我们**没有**的：
 | 遭遇池按幕分 | **有**（`gap_check.py` 打印每幕的数量） | 内容（第二幕的普通池只有 2 个） |
 | **精英池** | 每幕 **3 个**：Act1 `three_sentries / gremlin_nob / lagavulin`、Act2 `gremlin_leader / book_of_stabbing / slavers`、Act3 `giant_head / nemesis / reptomancer` | — （wiki 的每幕 3 个齐了；§327 补了升档数值：Slaver 的 HP 档位 A7、Taskmaster 的 Whip A2/A18） |
 | **招式表升档** | §328：wiki 写了 `{{Asc\|N\|` 而内容缺档的动作 **0** 条（审计 115/166 条意图行；3 条由别的机制表达：`darkling.nip` 走 `Rolls`、`book_of_stabbing.multi_stab` 走 A18 计数器、`the_guardian.twin_slam` 走 `mode_shift_budget` 计数器） | — （`native/sts_content_check.py` 的 `[7b]` 每次验收都重比一遍） |
+| **Boss 相位** | §329：六个 Boss 的相位规则逐条对过 wiki —— Champ 的 Anger/Execute、Awakened One 的 unawakened→Rebirth、Collector 的两条召唤分支、Automaton 的 A19 Boost 顶替 Stunned、Time Eater 的一次性 Haste、Donu/Deca 的交替；本轮补了 Rebirth/Haste 的 **清 Debuff**与 Collector 的 **再召唤 + up to 2** | — （余下只有"A19 的具体数值"这类，已由 `[7]`/`[7b]` 钉住） |
 | ~~Boss 池~~ | ✅ **每幕三只**（§194）：Slime Boss / Guardian / Hexaghost，Champ / Automaton / Collector，Time Eater / Awakened One / Donu & Deca | — |
 | 药水 | **33 / 33**（Ironclad 口径） | — （见 §D.1，全部落地） |
 | 遗物 | **15 件**（9 Common / 4 Uncommon / 1 Rare / 1 Event，`gap_check.py` 打印）。效果是 `rd-run` 里的**手写规则**，不是数据 | 内容 + 内核（每件一条规则）。⚠️ 总数**仍未核对**（wiki 的 `Relics List` 是模板生成的；`Relics` 的 Cargo 表可以像卡表那样查，但还没做 —— 下一轮补 `audit_relic_gap.py`） |

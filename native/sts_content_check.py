@@ -1144,6 +1144,7 @@ INV_ACTIONS = {
     "the_champ.execute": ("Attack", [("damage", 10, "event"), ("damage", 10, "event")]),
     # §194: Haste -- "when reduced to below half HP, heals to 50% (A19: also 32 Block), once".
     "time_eater.haste": ("Buff", [("heal", ("expr", "max"), "source"),
+                                  ("cleanse", "source"),
                                   ("counter", "te_haste", 1, False, "source")]),
     "time_eater.reverberate": ("Attack", [("damage", 7, "event"), ("damage", 7, "event"),
                                           ("damage", 7, "event")]),
@@ -1347,8 +1348,12 @@ INV_ACTIONS = {
     # --- The Collector (wiki: Fireball 18, Buff +3 Str + 15 Block, Mega Debuff 3/3/3) -------------
     # §195.3: the two moves the weighted rule draws from, each recording itself in `last_move`
     # (that counter is how "cannot Buff twice in a row" is expressed without kernel state).
-    "the_collector.spawn": ("Special", [("spawn", "torch_head", 38),
-                                        ("spawn", "torch_head", 38)]),
+    # §329：wiki "Summons **up to 2** Torch Heads" —— 现在是"3 个敌人 ⇒ 0 只 / 2 个 ⇒ 1 只 /
+    # 否则 2 只"的三层条件，所以事实里三条 `spawn` 各自挂着一个 `when`（事实模型不表达计数，
+    # 计数语义由 `the_collector_summons_only_up_to_two_torch_heads` 那条**行为**判据钉住）。
+    "the_collector.spawn": ("Special", [("when", None, "when", None, "spawn", "torch_head", 38),
+                                        ("when", None, "when", None, "spawn", "torch_head", 38),
+                                        ("when", None, "when", None, "spawn", "torch_head", 38)]),
     "the_collector.fireball": ("Attack", [("damage", 18, "event")]),
     "the_collector.buff": ("Defend", [("status", "standard.strength", 3, "allAllies"),
                                       ("block", 15, "source")]),
@@ -1360,7 +1365,9 @@ INV_ACTIONS = {
     "awakened_one.slash": ("Attack", [("damage", 20, "event")]),
     "awakened_one.soul_strike": ("Attack", [("damage", 6, "event"), ("damage", 6, "event"),
                                             ("damage", 6, "event"), ("damage", 6, "event")]),
+    # §329：wiki "Heals to full HP. **Removes all Debuffs**. Loses Curiosity."
     "awakened_one.rebirth": ("Special", [("heal", ("expr", "max"), "source"),
+                                         ("cleanse", "source"),
                                          ("modify", "standard.curiosity", -99, "source"),
                                          ("counter", "ao_phase", 1, False, "source"),
                                          ("counter", "ao_started", 0, False, "source")]),
@@ -2864,7 +2871,9 @@ INV_ASC_VARIANTS = {
                                 ('status', 'standard.vulnerable', 1, 'event'),
                                 ('status', 'standard.frail', 1, 'event')])],
     # Donu / Deca (Beam 10x2->A4 12x2 both; Square of Protection +3 Plated Armor at A19).
+    # §329：wiki "Removes all Debuffs. Heals to 50% HP. (A19: gains 32 Block.)"
     'time_eater.haste': [(19, [('heal', ('expr', 'max'), 'source'),
+                               ('cleanse', 'source'),
                                ('block', 32, 'source'),
                                ('counter', 'te_haste', 1, False, 'source')])],
     'donu.beam': [(4, [('damage', 12, 'event'), ('damage', 12, 'event')])],
