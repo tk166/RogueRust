@@ -39565,7 +39565,7 @@
       "Id": "taskmaster.scouring_whip",
       "PackageId": "sts",
       "NameKey": "Scouring Whip",
-      "DescriptionKey": "Scouring Whip - 7 damage, 1 Wound to discard",
+      "DescriptionKey": "Scouring Whip — 7 damage, 1 Wound (A2: 2, A18: 3 + 1 Strength)",
       "Intent": {
         "Kind": "Attack",
         "Label": "Scouring Whip - 7 damage, 1 Wound to discard"
@@ -39630,7 +39630,7 @@
       },
       "ProgramAsc": [
         {
-          "AscensionMin": 3,
+          "AscensionMin": 2,
           "Program": {
             "Id": {
               "Value": "(unnamed)"
@@ -39680,6 +39680,91 @@
                         }
                       },
                       "ToZone": "DiscardPile",
+                      "ResultKey": null
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        },
+        {
+          "AscensionMin": 18,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 7
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  },
+                  {
+                    "kind": "node.createCardInstance",
+                    "value": {
+                      "CardDefinitionId": {
+                        "value": "wound"
+                      },
+                      "Count": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 3
+                        }
+                      },
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "ToZone": "DiscardPile",
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.applyStatus",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.strength"
+                      },
+                      "Stacks": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "DurationTurns": 0,
+                      "Charges": 0,
                       "ResultKey": null
                     }
                   }
@@ -60528,7 +60613,7 @@
           "Spawn": true,
           "MaxHealthAsc": [
             {
-              "AscensionMin": 8,
+              "AscensionMin": 7,
               "MaxHealth": 48
             }
           ]
@@ -60672,7 +60757,7 @@
           "Spawn": true,
           "MaxHealthAsc": [
             {
-              "AscensionMin": 8,
+              "AscensionMin": 7,
               "MaxHealth": 48
             }
           ]

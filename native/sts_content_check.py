@@ -2770,7 +2770,13 @@ INV_ASC_VARIANTS = {
     'spire_growth.aggressive': [(2, [('damage', 18, 'event')])],
     'spire_growth.aggressive_heavy': [(2, [('damage', 25, 'event')])],
     'spire_growth.strategic': [(2, [('status', 'standard.constricted', 12, 'event')])],
-    'taskmaster.scouring_whip': [(3, [('damage', 7, 'event'), ('card', 'wound', 2, 'DiscardPile', 'event')])],
+    # §327：wiki `Taskmaster` —— "Adds (1 Wound; A2: 2; A18: 3 Wounds). (A18: Gains 1 Strength.)"
+    # 原来记的是 `(3, …)`：值（2 Wound）对，**档位错**（A2 不是 A3），A18 那一档整条缺失。
+    'taskmaster.scouring_whip': [
+        (2, [('damage', 7, 'event'), ('card', 'wound', 2, 'DiscardPile', 'event')]),
+        (18, [('damage', 7, 'event'), ('card', 'wound', 3, 'DiscardPile', 'event'),
+              ('status', 'standard.strength', 1, 'source')]),
+    ],
     'the_champ.heavy_slash': [(4, [('damage', 18, 'event')])],
     # ================= §194 =================
     # The Guardian (wiki: Fierce Bash 32->A4 36, Roll Attack 9->A4 10, Sharp Hide 3->A19 4).
@@ -3198,9 +3204,8 @@ INV_ASC_HP = {
     'torch_head': 40, 'awakened_one': 320, 'donu': 265, 'deca': 265, 'looter': 46,
 }
 # Which ascension level owns "tougher enemies" (§187's three rules).
-INV_ASC_HP_LEVEL = {'Elite': 8, 'Boss': 9}
-
-
+# §327：旧的「按池子」表（`{'Elite': 8, 'Boss': 9}`）已被下面那份**按怪物**的同名绑定遮蔽（§315），
+# 留着只会让下一个人改错地方 —— 删掉。
 # §207: the wiki's starting-power ascension rows (`Enemy Infobox` -> `Powers`), by monster id.
 # `{status: [(level, stacks), …]}` -- the **independent copy** the content is checked against.
 INV_STATUS_ASC = {
@@ -3253,14 +3258,21 @@ def check_starting_status_ascension(doc):
     ok("starting-status ascension", "%d rows pinned (A2/A17/A19)" % len(seen))
 
 
-# §315: 钉的档位与**池子档位**不一致的怪物（默认按池子推：普通 A7 / 精英 A8 / Boss A9）。
+# 钉的档位与**池子档位**不一致的怪物（默认按池子推：普通 A7 / 精英 A8 / Boss A9）。
 #
-# `Sentry` 是唯一的一个：wiki 「38-42，**A8** 起 39-45」—— 它在 Act 1 是**精英**（A8 对得上），
-# 在 Act 2 又是**普通**敌人（池子档位 A7）。同一只怪、同一张表，所以档位只能按**它自己**钉。
+# ⚠️ 根子上的规则是：wiki 的 `AscHP` 行按**怪物自己**的 `Type` 定（`| Type = Normal` ⇒ A7），
+# 而"按池子推"只是因为它俩绝大多数时候一致。不一致时就必须钉：
+#
+#   * `Sentry`（§315）：精英怪出现在 Act 2 的**普通**池里 ⇒ 钉 A8
+#     （wiki 「38-42，**A8** 起 39-45」）。
+#   * `Blue Slaver` / `Red Slaver`（§327）：**普通**怪出现在 Act 2 的**精英**池（`Slavers`）里
+#     ⇒ 钉 A7（wiki.gg「46-50 | 48-52 | 7」与 SlaySpireDB「Ascension 7 and up」两个来源）。
 INV_ASC_HP_LEVEL = {
     'sentry_1': 8,
     'sentry_2': 8,
     'sentry_3': 8,
+    'blue_slaver': 7,
+    'slaver_red': 7,
 }
 
 # §207: monsters whose ENCT record has **no** `MaxHealthAsc`, with the wiki reason.

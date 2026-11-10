@@ -37,16 +37,16 @@
 | 类别 | 行数 | TestNamed | HarnessOnly | 两层都没有 | SourceTie:wiki | SourceTie:spec | 有偏差声明 | orphan |
 |---|---|---|---|---|---|---|---|---|
 | 怪物 | 61 | 53 | 0 | 8 | 52 | 9 | 14 | 0 |
-| 敌人动作 | 166 | 81 | 85 | 0 | 143 | 23 | 59 | 0 |
+| 敌人动作 | 166 | 82 | 84 | 0 | 143 | 23 | 59 | 0 |
 | 卡牌 | 295 | 167 | 128 | 0 | 281 | 14 | 18 | 0 |
 | 状态 | 148 | 137 | 6 | 5 | 0 | 148 | 1 | 0 |
 | 遭遇 | 64 | 44 | 20 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 35 | 35 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 152 | 135 | 17 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 954 | 685 | 256 | 13 | 476 | 194 | 92 | 0 |
+| **合计** | 954 | 686 | 255 | 13 | 476 | 194 | 92 | 0 |
 
-扫描到的具名测试：**1203** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
+扫描到的具名测试：**1204** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
 
 事件：池里有 **38** 个位次、**35** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -95,8 +95,8 @@
 | reptomancer | yes | the_five_elite_encounters_match_the_wiki_numbers, reptomancer_switches_to_snake_strike_when_four_daggers_are_out …(+1) | — | wiki:wiki_asc/reptomancer.txt | — | §175/INV_ASC_HP+INV_MONSTERS/the_five_elite_encounters_match_the_wiki_numbers |
 | repulsor | yes | the_repulsor_puts_two_dazed_into_the_draw_pile | — | wiki:wiki_asc/shapes.txt | — | §316/§317/INV_ASC_HP+INV_MONSTERS/the_repulsor_puts_two_dazed_into_the_draw_pile |
 | romeo | yes | masked_bandits_fight_brings_three_named_bandits | — | spec:INV_ASC_HP+INV_MONSTERS | — | §323/INV_ASC_HP+INV_MONSTERS/masked_bandits_fight_brings_three_named_bandits |
-| sentry_1 | yes | a_turn_boundary_leaves_no_chain_referenced, dexterity_from_the_content_scales_a_real_defend …(+3) | — | wiki:wiki_asc/sentry.txt | — | §315/§323/INV_ASC_HP+INV_MONSTERS/a_turn_boundary_leaves_no_chain_referenced |
-| sentry_2 | yes | a_long_fight_never_reports_a_step_problem | — | wiki:wiki_asc/sentry.txt | — | §134/§323/INV_ASC_HP+INV_MONSTERS/a_long_fight_never_reports_a_step_problem |
+| sentry_1 | yes | a_turn_boundary_leaves_no_chain_referenced, dexterity_from_the_content_scales_a_real_defend …(+3) | — | wiki:wiki_asc/sentry.txt | — | §323/§327/INV_ASC_HP+INV_MONSTERS/a_turn_boundary_leaves_no_chain_referenced |
+| sentry_2 | yes | a_long_fight_never_reports_a_step_problem | — | wiki:wiki_asc/sentry.txt | — | §323/§327/INV_ASC_HP+INV_MONSTERS/a_long_fight_never_reports_a_step_problem |
 | sentry_3 | yes | a_long_fight_never_reports_a_step_problem | — | wiki:wiki_asc/sentry.txt | — | §134/§323/INV_ASC_HP+INV_MONSTERS/a_long_fight_never_reports_a_step_problem |
 | shelled_parasite | yes | act_two_fights_act_two_enemies | — | wiki:wiki_asc/shelled_parasite.txt | — | §312/§313/INV_ASC_HP+INV_MONSTERS/act_two_fights_act_two_enemies |
 | slaver_red | yes | the_five_elite_encounters_match_the_wiki_numbers, the_composed_encounters_pick_from_their_candidates …(+1) | — | wiki:wiki_asc/slavers.txt | — | §258/INV_ASC_HP+INV_MONSTERS/the_five_elite_encounters_match_the_wiki_numbers |
@@ -110,7 +110,7 @@
 | spike_slime_s | yes | a_minion_flees_when_its_master_falls, the_summon_cap_is_a_loud_failure | — | wiki:wiki_asc/spike_slime.txt | — | §282/§323/INV_ASC_HP+INV_MONSTERS/a_minion_flees_when_its_master_falls |
 | spiker | yes | spiker_never_repeats_its_attack_and_buffs_thorns_at_most_six_times, starting_statuses_follow_their_ascension_rows | — | wiki:wiki_asc/shapes.txt | — | §214/§312/INV_ASC_HP+INV_MONSTERS/spiker_never_repeats_its_attack_and_buffs_thorns_at_most_six_times |
 | spire_growth | yes | spire_growth_smashes_instead_of_choosing | — | wiki:wiki_asc/spire_growth.txt | — | §214/§312/INV_ASC_HP+INV_MONSTERS/spire_growth_smashes_instead_of_choosing |
-| taskmaster | yes | the_five_elite_encounters_match_the_wiki_numbers | — | wiki:wiki_asc/taskmaster.txt | — | INV_ASC_HP+INV_MONSTERS/the_five_elite_encounters_match_the_wiki_numbers |
+| taskmaster | yes | the_five_elite_encounters_match_the_wiki_numbers, taskmaster_scouring_whip_scales_wounds_and_strength_by_ascension | — | wiki:wiki_asc/taskmaster.txt | — | INV_ASC_HP+INV_MONSTERS/the_five_elite_encounters_match_the_wiki_numbers |
 | the_champ | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids, the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half …(+1) | — | wiki:wiki_asc/the_champ.txt | gap §H: A19 的 "Gloat 换成 Defensive Stance" 未实现；Anger 按名清 debuff；第二阶段只做第一次 Execute | §194/§312/INV_ASC_HP+INV_MONSTERS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
 | the_collector | yes | the_collector_draws_by_weight_and_never_buffs_twice_in_a_row, a_minion_is_not_on_the_field_until_its_summon_lands | — | wiki:wiki_asc/the_collector.txt | gap §H: 25/45/30（0-1 只 Torch Head 时的权重）未分档 | §138/§282/INV_ASC_HP+INV_MONSTERS/the_collector_draws_by_weight_and_never_buffs_twice_in_a_row |
 | the_guardian | yes | mode_shift_is_a_budget_drained_by_the_health_actually_lost, building_a_guardian_fight_seeds_its_mode_shift_budget_by_ascension …(+1) | — | wiki:wiki_asc/the_guardian.txt | — | §194/INV_ASC_HP+INV_MONSTERS+INV_SPAWN_COUNTERS/mode_shift_is_a_budget_drained_by_the_health_actually_lost |
@@ -263,7 +263,7 @@
 | spire_growth.aggressive | yes | — | ENEMY_DIFF | wiki:wiki_asc/spire_growth.txt (via spire_growth) | — | §147/§214/INV_ACTIONS+INV_ASC_VARIANTS |
 | spire_growth.aggressive_heavy | yes | spire_growth_smashes_instead_of_choosing | — | wiki:wiki_asc/spire_growth.txt (via spire_growth) | — | §147/§214/INV_ACTIONS+INV_ASC_VARIANTS/spire_growth_smashes_instead_of_choosing |
 | spire_growth.strategic | yes | — | ENEMY_DIFF | wiki:wiki_asc/spire_growth.txt (via spire_growth) | — | §147/§214/INV_ACTIONS+INV_ASC_VARIANTS |
-| taskmaster.scouring_whip | yes | — | ENEMY_DIFF | wiki:wiki_asc/taskmaster.txt (via taskmaster) | — | INV_ACTIONS+INV_ASC_VARIANTS |
+| taskmaster.scouring_whip | yes | taskmaster_scouring_whip_scales_wounds_and_strength_by_ascension | — | wiki:wiki_asc/taskmaster.txt (via taskmaster) | — | §327/INV_ACTIONS+INV_ASC_VARIANTS/taskmaster_scouring_whip_scales_wounds_and_strength_by_ascension |
 | the_champ.anger | yes | the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half | — | wiki:wiki_asc/the_champ.txt (via the_champ) | — | INV_ACTIONS+INV_ASC_VARIANTS/the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half |
 | the_champ.defensive_stance | yes | the_champ_swaps_gloat_for_defensive_stance_at_a19 | — | wiki:wiki_asc/the_champ.txt (via the_champ) | — | §194/INV_ACTIONS+INV_ASC_VARIANTS/the_champ_swaps_gloat_for_defensive_stance_at_a19 |
 | the_champ.execute | yes | the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half | — | wiki:wiki_asc/the_champ.txt (via the_champ) · 仅基础值 | 无升档：wiki The Champ: Execute is 10x2, no A-row | §194/INV_ACTIONS+INV_NO_ASC/the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half |
@@ -586,7 +586,7 @@
 | wild_strike+ | yes | — | CARD_DIFF | wiki:wiki_cards/wild_strike.txt (via wild_strike) | — | INV_CARDS |
 | wish | yes | wish_offers_three_cards_and_plays_the_pick_at_once | — | wiki:wiki_cards/wish.txt | — | §254/§255/CARD_WIKI+INV_CARDS/wish_offers_three_cards_and_plays_the_pick_at_once |
 | wish+ | yes | wish_plus_offers_the_upgraded_options | — | wiki:wiki_cards/wish.txt (via wish) | — | INV_CARDS/wish_plus_offers_the_upgraded_options |
-| wound | yes | the_new_red_skills_do_what_their_pages_say, painful_stabs_shuffles_a_wound_only_on_unblocked_damage …(+4) | — | wiki:wiki_cards/wound.txt | — | §173/CARD_WIKI+INV_CARDS/the_new_red_skills_do_what_their_pages_say |
+| wound | yes | the_new_red_skills_do_what_their_pages_say, painful_stabs_shuffles_a_wound_only_on_unblocked_damage …(+4) | — | wiki:wiki_cards/wound.txt | — | §173/§327/CARD_WIKI+INV_CARDS/the_new_red_skills_do_what_their_pages_say |
 | writhe | yes | the_two_event_curses_behave_as_their_pages_say | — | wiki:wiki_cards/writhe.txt | — | §220/§221/CARD_WIKI+INV_CARDS/the_two_event_curses_behave_as_their_pages_say |
 
 ## 状态（148）
@@ -722,7 +722,7 @@
 | standard.stasis_ready | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_STATUSES | — | §195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
 | standard.stone_calendar | yes | the_eight_turn_shaped_relics_wire_their_own_status, the_turn_shaped_relic_statuses_fire_on_the_turn_the_wiki_names | — | spec:INV_STATUSES | — | §260/INV_STATUSES/the_eight_turn_shaped_relics_wire_their_own_status |
 | standard.strange_spoon | yes | — | — | spec:INV_STATUSES | — | §296/§302/INV_STATUSES |
-| standard.strength | yes | dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not, modifier_rows_match_exactly_and_through_the_documented_namespace_bridge …(+71) | — | spec:INV_STATUSES | — | §313/§324/INV_STATUSES/dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not |
+| standard.strength | yes | dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not, modifier_rows_match_exactly_and_through_the_documented_namespace_bridge …(+72) | — | spec:INV_STATUSES | — | §313/§324/INV_STATUSES/dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not |
 | standard.strike_dummy | yes | strike_dummy_only_boosts_cards_that_carry_the_strike_tag | — | spec:INV_STATUSES | — | §297/§302/INV_STATUSES/strike_dummy_only_boosts_cards_that_carry_the_strike_tag |
 | standard.sundial | yes | the_shuffle_trigger_pays_the_abacus_and_sundial | — | spec:INV_STATUSES | — | §292/§294/INV_STATUSES/the_shuffle_trigger_pays_the_abacus_and_sundial |
 | standard.the_abacus | yes | the_shuffle_trigger_pays_the_abacus_and_sundial | — | spec:INV_STATUSES | — | §292/§294/INV_STATUSES/the_shuffle_trigger_pays_the_abacus_and_sundial |
@@ -786,7 +786,7 @@
 | enc_sentry_and_spheric | yes | the_sentry_keeps_one_hp_table_across_two_tiers | — | — | — | §313/§315/the_sentry_keeps_one_hp_table_across_two_tiers |
 | enc_shelled_parasite | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §277/§311 |
 | enc_slaver_red | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §130/§258 |
-| enc_slavers | yes | the_five_elite_encounters_match_the_wiki_numbers, blue_slaver_never_rakes_twice_in_a_row_at_a17 …(+1) | — | — | — | the_five_elite_encounters_match_the_wiki_numbers |
+| enc_slavers | yes | the_five_elite_encounters_match_the_wiki_numbers, blue_slaver_never_rakes_twice_in_a_row_at_a17 …(+2) | — | — | — | the_five_elite_encounters_match_the_wiki_numbers |
 | enc_slime_boss | yes | every_act_has_three_bosses_and_each_one_is_a_buildable_encounter, a_combinator_rule_switches_the_boss_move …(+1) | — | — | — | §194/every_act_has_three_bosses_and_each_one_is_a_buildable_encounter |
 | enc_small_slimes | yes | a_spawned_combatant_still_resolves_to_its_enemy_record | — | — | — | §130/a_spawned_combatant_still_resolves_to_its_enemy_record |
 | enc_snake_plant | yes | malleable_grows_by_one_per_hit_and_resets_when_the_turn_starts | — | — | — | §311/§312/malleable_grows_by_one_per_hit_and_resets_when_the_turn_starts |

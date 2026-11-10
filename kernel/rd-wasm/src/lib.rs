@@ -6332,6 +6332,62 @@ mod card_text_tests {
     }
 
     /// §258：`slaver_red.scrape` 的 **A17**（Vulnerable 1 → 2）原来整档是缺的。
+    /// §327：`taskmaster.scouring_whip` —— wiki "Adds (1 Wound; A2: 2; A18: 3 Wounds).
+    /// (A18: Gains 1 Strength.)"
+    ///
+    /// 三档一起测（阈值两侧各一次）：A1 → 1 Wound 无 Strength；A2 → 2 Wounds；A18 → 3 Wounds
+    /// **且自身 +1 Strength**。只测 A18 会漏掉"A2 那一档根本没写"（那正是修之前的样子）。
+    #[test]
+    fn taskmaster_scouring_whip_scales_wounds_and_strength_by_ascension() {
+        let content = rd_core::content::Content::parse(crate::IMAGE).expect("image");
+        // (等级, 弃牌堆 Wound 张数, Taskmaster 自己的 Strength)
+        for (ascension, wounds, strength) in [(1u8, 1, 0), (2u8, 2, 0), (17u8, 2, 0), (18u8, 3, 1)] {
+            let session = build_session_at(22, "enc_slavers", 300, None, 0, ascension)
+                .unwrap_or_else(|e| panic!("A{ascension}: {e}"));
+            install_session(session);
+            {
+                let session = slot().as_mut().expect("session");
+                let row = u32::from(
+                    content
+                        .lookup_in("taskmaster.scouring_whip", rd_core::content::EK_EACTION)
+                        .expect("scouring whip")
+                        .index,
+                );
+                rd_core::intent::execute_action(
+                    &mut session.state,
+                    &content,
+                    &cid_in("taskmaster"),
+                    row,
+                    Some(cid_in("hero")),
+                )
+                .expect("scouring whip");
+                rd_core::exec::drain(&mut session.state, Some(&content), None).expect("drain");
+            }
+            let session = slot().as_ref().expect("session");
+            let pile = session
+                .state
+                .card_zones(&cid_in("hero"))
+                .map(|z| z.slots(rd_core::state::CardZone::DiscardPile).len())
+                .unwrap_or(0);
+            assert_eq!(pile, wounds, "A{ascension}: Wounds into the discard pile");
+            let own_strength = session
+                .state
+                .combatant(&cid_in("taskmaster"))
+                .map_or(0, |c| {
+                    c.statuses()
+                        .iter()
+                        .filter(|s| s.definition_id.as_str() == "standard.strength")
+                        .map(|s| s.stacks)
+                        .sum::<i32>()
+                });
+            assert_eq!(
+                own_strength, strength,
+                "A{ascension}: Scouring Whip's own Strength (A18 only)"
+            );
+            take_session();
+        }
+    }
+
     #[test]
     fn slaver_red_scrape_applies_two_vulnerable_from_a17() {
         let content = rd_core::content::Content::parse(crate::IMAGE).expect("image");

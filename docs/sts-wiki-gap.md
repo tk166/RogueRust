@@ -214,7 +214,7 @@ wiki 常见而我们**没有**的：
 |---|---|---|
 | 地图 6 种节点 + Boss 行 / 每幕独立地图 | **有** | — |
 | 遭遇池按幕分 | **有**（`gap_check.py` 打印每幕的数量） | 内容（第二幕的普通池只有 2 个） |
-| **精英池** | 每幕 **3 个**：Act1 `three_sentries / gremlin_nob / lagavulin`、Act2 `gremlin_leader / book_of_stabbing / slavers`、Act3 `giant_head / nemesis / reptomancer` | — （wiki 的每幕 3 个齐了） |
+| **精英池** | 每幕 **3 个**：Act1 `three_sentries / gremlin_nob / lagavulin`、Act2 `gremlin_leader / book_of_stabbing / slavers`、Act3 `giant_head / nemesis / reptomancer` | — （wiki 的每幕 3 个齐了；§327 补了升档数值：Slaver 的 HP 档位 A7、Taskmaster 的 Whip A2/A18） |
 | ~~Boss 池~~ | ✅ **每幕三只**（§194）：Slime Boss / Guardian / Hexaghost，Champ / Automaton / Collector，Time Eater / Awakened One / Donu & Deca | — |
 | 药水 | **33 / 33**（Ironclad 口径） | — （见 §D.1，全部落地） |
 | 遗物 | **15 件**（9 Common / 4 Uncommon / 1 Rare / 1 Event，`gap_check.py` 打印）。效果是 `rd-run` 里的**手写规则**，不是数据 | 内容 + 内核（每件一条规则）。⚠️ 总数**仍未核对**（wiki 的 `Relics List` 是模板生成的；`Relics` 的 Cargo 表可以像卡表那样查，但还没做 —— 下一轮补 `audit_relic_gap.py`） |
