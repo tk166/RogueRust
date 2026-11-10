@@ -969,6 +969,19 @@ pub extern "C" fn rd_run_in_fight() -> i32 {
     run_slot().as_ref().map_or(-1, |s| i32::from(s.in_fight))
 }
 
+/// §348（P2-1）：**现在有没有一局** —— `1` 有 / `0` 没有。
+///
+/// 为什么需要它：`rd_run_seed()` 用 `i32::MIN` 表示"没有局"，而 `rd_run_start(i32::MIN, ..)`
+/// **没有拒绝**这个 seed ⇒ 用那个 seed 开的局会让页面判成"未开局"（SC-00）。
+/// **"有没有局"和"seed 是多少"是两个问题**，不该共用一格。
+///
+/// 为什么不直接禁止 `i32::MIN` 当 seed：那会把一个哨兵变成一条**游戏规则**
+/// （"这个种子不能用"），而玩家看不到理由。分成两个导出更便宜，也更诚实。
+#[no_mangle]
+pub extern "C" fn rd_run_exists() -> i32 {
+    i32::from(run_slot().as_ref().is_some())
+}
+
 /// §346（缺口 G3）：身上有没有这件遗物 —— `1` 有 / `0` 没有 / `-1` 没有局。
 ///
 /// 为什么值得一个导出：页面靠**遍历**遗物、逐个读 id、比字符串来回答这个问题，而且写了两遍
@@ -1060,16 +1073,25 @@ pub unsafe extern "C" fn rd_run_encounter_id_into(ptr: *mut u8) -> i32 {
 /// 来路：本幕的 Boss 池（`EncounterTables.Boss` / `Boss2` / `Boss3`，§130 按幕分池）→ 第一条遭遇
 /// → `ENCT.Enemies[0].Id`。Boss 遭遇都是单只敌人（`Slime Boss` / `The Guardian` / …），
 /// 所以"第一条遭遇的第一个敌人"就是那个 Boss。
-fn boss_enemy_id<'a>(content: &'a Content<'a>, act: u8) -> Option<&'a str> {
+fn boss_enemy_id<'a>(content: &'a Content<'a>, act: u8, last_encounter: &str) -> Option<&'a str> {
     let pool = match act {
         1 => "Boss",
         2 => "Boss2",
         3 => "Boss3",
         _ => return None,
     };
+    // §348：**只回答已经确定的那一只**。
+    //
+    // 之前这里取的是"本幕 Boss 池的第一条"，而 `pick_encounter` 是**开战时**才从池里掷的
+    // （`RunStream::Combat`）。本内容每幕三个等权 Boss ⇒ 三分之二的局里页面**预告了错的 Boss**。
+    //
+    // 判据：`last_encounter`（`rd_run_fight_begin` 写的那个）落在**本幕 Boss 池**里 ⇒ 就是它。
+    // 否则"还不知道"（站在 Boss 节点上还没开打、或刚换幕），返回空串 —— 不猜。
     let ids = content.encounter_pool(pool)?;
-    let encounter_id = ids.iter().find(|id| !id.is_empty())?;
-    let entry = content.lookup_in(encounter_id, rd_core::content::EK_ENCOUNTER)?;
+    if !ids.iter().any(|id| !id.is_empty() && *id == last_encounter) {
+        return None;
+    }
+    let entry = content.lookup_in(last_encounter, rd_core::content::EK_ENCOUNTER)?;
     let enemies = content.encounter_enemies(u32::from(entry.index)).ok()?;
     let first = enemies.iter().next()?.ok()?;
     first.id().ok()
@@ -1081,7 +1103,14 @@ pub extern "C" fn rd_run_boss_id_len() -> i32 {
     let Some(session) = run_slot().as_ref() else {
         return -1;
     };
-    boss_enemy_id(content(), session.state.act()).map_or(-1, |id| id.len() as i32)
+    // ⚠️ 三态要分清：`-1` = **没有局**，`0` = **有局但 Boss 还没定**（空串），`>0` = 长度。
+    // 第一版写成 `.map_or(-1, ..)`，于是"还不知道"被报成了"没有局" —— 判据当场抓到。
+    boss_enemy_id(
+        content(),
+        session.state.act(),
+        session.state.last_encounter().as_str(),
+    )
+    .map_or(0, |id| id.len() as i32)
 }
 
 /// # Safety
@@ -1092,7 +1121,11 @@ pub unsafe extern "C" fn rd_run_boss_id_into(ptr: *mut u8) -> i32 {
     let Some(session) = run_slot().as_ref() else {
         return 0;
     };
-    match boss_enemy_id(content(), session.state.act()) {
+    match boss_enemy_id(
+        content(),
+        session.state.act(),
+        session.state.last_encounter().as_str(),
+    ) {
         Some(id) => write_out(id, ptr),
         None => 0,
     }
@@ -8001,43 +8034,94 @@ mod tests {
         let _ = rd_run_fight_end();
     }
 
-    /// §345（缺口 G5）：`rd_run_boss_id_*` 按**幕**给不同的 id。
+    /// §348（第十轮 Review P1-1）：Boss 身份 = **本局实际掷出的那只**，不是池子第一条。
     ///
-    /// 页面前写死了 "Slime Boss" —— 第二、三幕会显示错的 Boss 名。判据要求三幕**互不相同**：
-    /// 只断言"非空"的话，一个永远返回第一幕的 Boss 的实现也会绿（那正是写死的等价物）。
+    /// 旧实现取"本幕 Boss 池的第一条"，而 `pick_encounter` 是**开战时**才掷的
+    /// （`RunStream::Combat`）。本内容每幕三个等权 Boss ⇒ 三分之二的局里页面预告了错的 Boss。
+    /// 旧判据（"三幕互不相同"）恰好**必然通过**，所以它抓不到。
+    ///
+    /// 新判据直接测那个函数：本幕池里**每一个** Boss 都 nameable，池外的一律 `None`。
     #[test]
-    fn the_boss_id_follows_the_act() {
+    fn the_boss_id_names_the_actual_boss_not_the_pool_head() {
+        let content = content();
+
+        // ① 本幕池里的**每一个** Boss 都要 nameable —— 这正是"取第一条"过不了的一条。
+        assert_eq!(
+            boss_enemy_id(content, 1, "enc_slime_boss"),
+            Some("slime_boss")
+        );
+        assert_eq!(
+            boss_enemy_id(content, 1, "enc_the_guardian"),
+            Some("the_guardian")
+        );
+        assert_eq!(
+            boss_enemy_id(content, 1, "enc_hexaghost"),
+            Some("hexaghost")
+        );
+        assert_eq!(boss_enemy_id(content, 2, "enc_the_champ"), Some("the_champ"));
+        assert_eq!(
+            boss_enemy_id(content, 3, "enc_time_eater"),
+            Some("time_eater")
+        );
+        // 多敌人的 Boss 取第一个（`Awakened One` 带两个 Cultist）。
+        assert_eq!(
+            boss_enemy_id(content, 3, "enc_awakened_one"),
+            Some("awakened_one")
+        );
+
+        // ② 池外的一律 `None`：普通遭遇、**别幕**的 Boss、空串。
+        assert_eq!(
+            boss_enemy_id(content, 1, "enc_cultist"),
+            None,
+            "a normal encounter is not a boss"
+        );
+        assert_eq!(
+            boss_enemy_id(content, 2, "enc_slime_boss"),
+            None,
+            "act 1's boss is not act 2's"
+        );
+        assert_eq!(
+            boss_enemy_id(content, 1, ""),
+            None,
+            "nothing fought yet: we do not know"
+        );
+
+        // ③ ABI 三态：没有局 `-1`、有局但还没打 Boss ⇒ `0`（空串，**不猜**）。
         crate::take_session();
         *run_slot() = None;
         assert_eq!(rd_run_boss_id_len(), -1, "no run at all");
+        assert_eq!(rd_run_exists(), 0, "…and `rd_run_exists` agrees");
+
+        // ④ P2-1 的边界：`i32::MIN` 是**合法 seed**（`rd_run_start` 不拒绝它），
+        //    所以"有没有局"不能拿它当哨兵 —— 这一局必须被认成"有局"。
+        assert_eq!(
+            rd_run_start(i32::MIN, 0),
+            0,
+            "i32::MIN is a legal seed: {}",
+            run_error_text()
+        );
+        assert_eq!(
+            rd_run_exists(),
+            1,
+            "a run started with i32::MIN still EXISTS -- `noRun` must not use the seed"
+        );
+        assert_ne!(
+            rd_run_boss_id_len(),
+            -1,
+            "…and it is a real run, not 'no run'"
+        );
 
         reset(7);
-        let read = || {
-            let len = rd_run_boss_id_len();
-            assert!(len > 0, "act {} has no boss id", rd_run_act());
-            let ptr = std::ptr::addr_of_mut!(RUN_SCRATCH) as *mut u8;
-            let written = unsafe { rd_run_boss_id_into(ptr) };
-            assert_eq!(written, len);
-            let bytes = unsafe { std::slice::from_raw_parts(ptr, len as usize) };
-            std::str::from_utf8(bytes).expect("ascii").to_string()
-        };
-
-        let act1 = read();
-        assert_eq!(act1, "slime_boss", "act 1's boss is the Slime Boss");
-
-        // 换幕：`mark_boss_beaten()` 是**公开**的，而且它做的事就是"这一幕通关了 ⇒ act + 1"
-        // （最后一幕除外）。不用真的打三场 Boss 战 —— 这条判据问的是"按幕查池"。
-        let mut ids = vec![act1];
-        for _ in 2..=3 {
-            if let Some(session) = run_slot().as_mut() {
-                session.state.mark_boss_beaten();
-            }
-            ids.push(read());
-        }
-        assert_ne!(ids[0], ids[1], "act 2 must not show act 1's boss");
-        assert_ne!(ids[1], ids[2], "act 3 must not show act 2's boss");
-        assert_ne!(ids[0], ids[2], "act 3 must not show act 1's boss");
+        assert_eq!(rd_run_exists(), 1, "a run exists");
+        assert_eq!(
+            rd_run_boss_id_len(),
+            0,
+            "before the boss fight we do NOT know which of the three it is -- returning the \
+             pool head here is the bug this test exists for"
+        );
     }
+
+
 
     /// §344：缺口 G1 / G2 / G9 的三个导出各测一次（值 + 哨兵）。
     ///

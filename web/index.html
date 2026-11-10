@@ -935,7 +935,9 @@ function runSnapshot() {
     mode,
     // §347：`classifyScene` 要的两个**内核事实**（都不是页面历史）。
     // `noRun`：SC-00 的判据（原来靠 `pending === -1` 间接判断）；`inFight`：SC-03 与 SC-03b 的分界。
-    noRun: ex.rd_run_seed() === -2147483648,
+    // §348：**不要**用 `rd_run_seed() === i32::MIN` —— 那是一个**合法 seed**
+    // （`rd_run_start` 不拒绝它），拿它当"无值"哨兵会让那一局被判成"未开局"。
+    noRun: ex.rd_run_exists() !== 1,
     inFight: ex.rd_run_in_fight() === 1,
     runOver: runOver(),
     runOverWhy: runEndWhy(),

@@ -203,6 +203,11 @@ wiki 常见而我们**没有**的：
 **删卡"每店一次"已实现**（§343：`removed_this_shop`，换店恢复而价格继续累计）。
 ⚠️ 待核两条：① 删卡服务上 Courier 与 Membership Card 是否"取更好的那一个"（fandom 说取、wiki.gg 说照常，两源互斥）；
 ② A16 是否加价删卡无据（wiki 只给 75，teemo.dev 标 exact），我们按加价实现。
+⚠️ **已知偏差（§348）**：原版在**进幕时**就定下本幕 Boss（地图顶上画着它）；我们是**开战时**
+才从本幕 Boss 池里掷（`RunStream::Combat`）。所以 `rd_run_boss_id_*` 在"站在 Boss 节点上、
+还没开打"时返回**空串**（诚实地表示"还不知道"），页面显示"本幕 Boss"；打完之后才给真名。
+把"进幕即定"搬过来会改 RNG 消耗顺序（`corpus` / 存档 / 回放都对它敏感），所以记在这里，
+不在 UI 这一轮动。
 ⚠️ 与 **StS 2** 的差异（未证实 StS 1 如此）：StS 2 的 Courier 补货"保留槽位的稀有度/类型约束"，
 StS 1 的两份 wiki 只说"同一**类别**的商品"，且明说无色牌的**稀有度会重掷** ⇒ 我们**不**保留 Attack/Skill/Power | — |
 | 事件 | **36 条**（三幕池 13+16+10 = 39 条，111 个 `EVND` 段）。剧情分支是**真树**（`EVND` 段表 + `EV.Entry`，选项数不固定），选项支持 `Requires` / `RequiresAsc`、按类型的选牌问句（`the_library` / `sensory_stone` / `falling`）、事件中途开战斗（`dead_adventurer` / `mysterious_sphere` / `colosseum`）与 A15 的糟化分支。与 wiki 的 31 条比是 **29 条**（Act 1 11/11、Act 2 13/13、Act 3 7/7） | 内容（`cursed_tome` 明确不做 —— `necronomicon` 不在范围）。机制侧的事件级条件与 `N'loth` 已做（§331） |

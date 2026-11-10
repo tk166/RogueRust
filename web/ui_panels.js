@@ -499,8 +499,12 @@ const RD_PANELS = (() => {
     { id: "SC-03", overlay: false, test: (s) => s.pending === 0 && !s.inFight && preFight(s) },
     // 17 幕尽头：没有下一步可走（M1 的地图走到最后一排）。
     { id: "SC-02b", overlay: false, test: (s) => s.pending === 0 && !s.inFight && mapExhausted(s) },
-    // 18 地图（兜底）：无条件 —— "前面一条都没命中"由包装层保证。
-    { id: "SC-02", overlay: false, test: () => true },
+    // 18 地图（兜底）：**只在"无待决"时**才是兜底。
+    //
+    // §348（第十轮 Review P2-2）：这里原来是 `() => true`，于是 `SC-??` **不可达** ——
+    // 将来内核新增一个 `Pending`，页面会静默把它画成普通地图。现在表外的 `pending`
+    // 会落到 `SC-??`，由 `describe` 给一份**显式**的"未知状态"面板。
+    { id: "SC-02", overlay: false, test: (s) => s.pending === 0 },
   ];
 
   // 包装层：**构造即互斥**。
@@ -582,9 +586,19 @@ const RD_PANELS = (() => {
           rows: [],
           buttons: [{ id: "done", label: "就到这里", action: { kind: "end_act" } }],
         };
-      // SC-00 / SC-02 / SC-03b / SC-?? 都落在 `describeIdle`：
-      // 前三个是"这一屏不是节点面板"（战斗由 `render()` 画、地图由 `renderMap()` 画），
-      // 而 `SC-??` 是表外状态 —— 给它一句"这个节点没有可做的事"比空白好。
+      // SC-??：**表外状态**（内核给了一个场景表里没有的 `pending`）。
+      //
+      // §348：它必须**显性**说出来，而不是画成地图或"这个节点没有可做的事" ——
+      // 静默降级正是"新增一个 Pending，UI 悄悄画错屏"的形状。
+      case "SC-??":
+        return {
+          title: "未知状态",
+          lines: [`内核给的待决值 ${s.pending} 不在场景表里 · 这一屏不知道怎么画`],
+          rows: [],
+          buttons: [],
+        };
+      // SC-00 / SC-02 / SC-03b 落在 `describeIdle`：它们不是"节点面板"那一屏
+      // （战斗由 `render()` 画、地图由 `renderMap()` 画），节点面板只是兜底。
       default:
         return describeIdle(s);
     }

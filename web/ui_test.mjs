@@ -1234,6 +1234,23 @@ console.log(`  enemy statuses    count cell == obs[base+7], and bash makes it no
     }
   }
 
+  // §348（P2-2）：**表外的 `pending` 必须显性化**，不能静默落地图。
+  // 兜底原来是无条件的，于是 `SC-??` 不可达 —— 将来内核新增一个 `Pending`，页面会把它画成
+  // 普通地图，而屏幕上一切正常。这条夹具钉住"它落到 `SC-??` 且说得出那个值"。
+  {
+    const unknown = { ...BASE, pending: 99 };
+    const hit = P.classifyScene(unknown);
+    if (hit !== "SC-??") fail(`pending=99 must classify as SC-??, got ${hit}`);
+    if (P.scenesMatching(unknown).length !== 0) {
+      fail(`pending=99 must match no scene, got ${JSON.stringify(P.scenesMatching(unknown))}`);
+    }
+    const described = P.describe(unknown);
+    if (described.title !== "未知状态") fail(`pending=99 must say so, got ${described.title}`);
+    if (!(described.lines || []).some((line) => line.includes("99"))) {
+      fail(`pending=99 must name the value, got ${JSON.stringify(described.lines)}`);
+    }
+  }
+
   // 覆盖：`SCENES` 里每一个 id 都要有夹具（少一个 = 那个场景从没被验证过）。
   for (const id of ORDER) {
     if (!seen.has(id)) fail(`no fixture for scene ${id}`);
@@ -1259,6 +1276,7 @@ console.log(`  enemy statuses    count cell == obs[base+7], and bash makes it no
 }
 
 console.log(`  scene table       classifyScene: 18 fixtures, base scenes unique, overlays stack`);
+console.log(`  unknown pending   pending=99 => SC-?? with an explicit panel (not the map)`);
 console.log(`  display names     prettifyId rules; table > kernel name > prettified id`);
 console.log(`  cell-for-cell     every printed quantity == its observation cell, at 5 moments`);
 console.log(`  energy below max  checked after paying a cost (the only moment they differ)`);
