@@ -127,6 +127,9 @@ const REQUIRED = [
   "rd_run_reward_card_id_into", "rd_run_reward_card_title_len", "rd_run_reward_card_title_into",
   "rd_run_take_card", "rd_run_skip_reward",
   "rd_env_card_kind", "rd_run_card_kind", "rd_run_node_resolved", "rd_run_boss_beaten",
+  // §341: "有没有一场正在打的战斗" —— UI 场景表里 SC-03（待开始）与 SC-03b（战斗中）
+  // 的唯一内核判据（`rd_env_done()` 在**没有会话**时返回 1，所以它不能反过来说）。
+  "rd_run_in_fight",
   // §161.3: the pending card choice (Elixir / Gambler's Brew). The options are zone `3` of the
   // pile exports above, so there is no second set of string getters to keep in sync.
   "rd_env_choice_pending", "rd_env_choice_kind", "rd_env_choice_min", "rd_env_choice_max",

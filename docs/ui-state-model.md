@@ -71,26 +71,38 @@
 判定式按**优先级从上到下**（`RD_PANELS.describe` 的顺序就是这张表）。同一时刻可能有多条成立，
 **先成立的赢**。
 
-| id | 场景 | 判定式（按优先级） | 主层 | 唯一写者 | 主要出口 |
-|---|---|---|---|---|---|
-| **SC-11a** | 遗物欠账·改牌 | `rd_run_pickup_picks() > 0` | 弹窗 | `renderNode` | 选完回到**原来那一屏** |
-| **SC-11b** | 遗物欠账·加牌 | `rd_run_pickup_add() > 0` | 弹窗 | `renderNode` | 同上 |
-| **SC-12a** | 幕通关 | `rd_run_boss_beaten() == 1` 且未战败 | 节点面板 | `renderNode` | 重开 / 换 seed |
-| **SC-12b** | 局终 | `runOver`（**页面侧**，见 §6-G1） | 节点面板 | `renderNode` | 重开 / 换 seed |
-| **SC-01** | 塔底祝福 | `pending == 6` | 节点面板 | `renderNode` | `choose_start` → 6→(7)→0 |
-| **SC-01b** | 祝福选牌 | `pending == 7` | 弹窗 | `showDeckPicker` | `pick_blessing_card` → 0 |
-| **SC-09** | 事件选牌 | `pending == 8` | 弹窗 | `showDeckPicker` | `pick_event_card` → 0 |
-| **SC-10** | 事件候选 | `pending == 9` | 节点面板（行表） | `renderNode` | `event_offer_take` → 0 |
-| **SC-04** | 战斗奖励 | `pending == 4` | 节点面板（行表） | `renderNode` | `take_card`/`skip_reward` → 0 |
-| **SC-08** | 事件 | `pending == 5` | 节点面板 | `renderNode` | `choose` → 0 / 4 / 8 / 9 / 战斗 |
-| **SC-07** | 宝箱 | `pending == 3` | 节点面板 | `renderNode` | `open_chest`/`leave` → 0 |
-| **SC-05** | 商店 | `pending == 2` | 节点面板（四排） | `renderNode` | `leave` → 0 |
-| **SC-06** | 篝火 | `pending == 1` | 节点面板 | `renderNode` | `rest`/`smith`/…/`leave` → 0 |
-| **SC-03** | 战斗（未开始） | `pending == 0` 且（`kind ∈ {1,2,7}` 或 `kind==5 && unknownRoom==2` 或 `eventFight > 0`） | 战斗层 | `render()` | `fight_begin` → SC-03b |
-| **SC-03b** | 战斗中 | `mode == "fight"`（页面侧），`E.obs` 有效 | 战斗层 | `render()` | `fight_end` → SC-04 / SC-12b |
-| **SC-02** | 地图 | `pending == 0` 且上面都不成立 | 地图层 + 顶栏 | `renderMap` + `renderTopBar` | `step(node)` → 进入某节点 |
-| **SC-02b** | 幕尽头 | `pending == 0` 且 `rd_run_action_count() == 0` 且 `kind >= 0` | 节点面板 | `renderNode` | 页面侧 `end_act`（**无内核动作**，§6-G2） |
-| **SC-00** | 未开局 | `rd_run_seed() == i32::MIN` | 节点面板 | `renderNode` | `rd_run_start(seed, asc)` → SC-01 |
+**排序原则**：**强状态优先** —— 越"不可协商"的事实越靠前（没有局 → 正在打 → 欠账 → 终局 →
+具体的 `pending` → 预备战斗 → 兜底）。判定式尽量**互斥**；每条都必须只用内核事实（§341 之前
+SC-03/SC-03b 做不到，因为"未开始"是页面自己记的标志）。
+
+| # | id | 场景 | 判定式 | 主层 | 唯一写者 | 主要出口 |
+|---:|---|---|---|---|---|---|
+| 1 | **SC-00** | 未开局 | `rd_run_seed() == i32::MIN`（`R.obs(0)` 也是 `i32::MIN`） | 节点面板 | `renderNode` | `rd_run_start(seed, asc)` → SC-01 |
+| 2 | **SC-03b** | 战斗中 | `rd_run_in_fight() == 1`（§341） | 战斗层 | `render()` | `fight_end` → SC-04 / SC-12b |
+| 3 | **SC-11a** | 遗物欠账·改牌 | `rd_run_pickup_picks() > 0` | 弹窗 | `renderNode` | 选完回到**原来那一屏** |
+| 4 | **SC-11b** | 遗物欠账·加牌 | `rd_run_pickup_add() > 0` | 弹窗 | `renderNode` | 同上 |
+| 5 | **SC-12b** | 局终 | `rd_run_over() == 1`（§6-G1，**尚未导出**） | 节点面板 | `renderNode` | 重开 / 换 seed |
+| 6 | **SC-12a** | 幕通关 | `rd_run_boss_beaten() == 1` 且 `rd_run_over() != 1` | 节点面板 | `renderNode` | 重开 / 换 seed |
+| 7 | **SC-01** | 塔底祝福 | `pending == 6` | 节点面板 | `renderNode` | `choose_start` → 6→(7)→0 |
+| 8 | **SC-01b** | 祝福选牌 | `pending == 7` | 弹窗 | `showDeckPicker` | `pick_blessing_card` → 0 |
+| 9 | **SC-09** | 事件选牌 | `pending == 8` | 弹窗 | `showDeckPicker` | `pick_event_card` → 0 |
+| 10 | **SC-10** | 事件候选 | `pending == 9` | 节点面板（行表） | `renderNode` | `event_offer_take` → 0 |
+| 11 | **SC-04** | 战斗奖励 | `pending == 4` | 节点面板（行表） | `renderNode` | `take_card`/`skip_reward` → 0 |
+| 12 | **SC-08** | 事件 | `pending == 5` | 节点面板 | `renderNode` | `choose` → 0 / 4 / 8 / 9 / 战斗 |
+| 13 | **SC-07** | 宝箱 | `pending == 3` | 节点面板 | `renderNode` | `open_chest`/`leave` → 0 |
+| 14 | **SC-05** | 商店 | `pending == 2` | 节点面板（四排） | `renderNode` | `leave` → 0 |
+| 15 | **SC-06** | 篝火 | `pending == 1` | 节点面板 | `renderNode` | `rest`/`smith`/…/`leave` → 0 |
+| 16 | **SC-03** | 战斗（**待开始**） | `rd_run_in_fight() == 0` 且 `pending == 0` 且（`kind ∈ {1,2,7}` 或 `kind==5 && unknownRoom==2` 或 `eventFight > 0`） | 战斗层 | `render()` | `fight_begin` → SC-03b |
+| 17 | **SC-02b** | 幕尽头 | `rd_run_in_fight() == 0` 且 `pending == 0` 且 `rd_run_action_count() == 0` 且 `kind >= 0` | 节点面板 | `renderNode` | 页面侧 `end_act`（**无内核动作**，§6-G2） |
+| 18 | **SC-02** | 地图（兜底） | `rd_run_in_fight() == 0` 且 `pending == 0` | 地图层 + 顶栏 | `renderMap` + `renderTopBar` | `step(node)` → 进入某节点 |
+
+> **为什么 SC-03b 排在第 2 位**：它是"正在打"，与"站在一个战斗节点上但还没开打"是**两个不同的
+> 屏**。旧表把 SC-03 排在前面，而 SC-03 的"未开始"是页面自己记的 `mode` —— 纯函数判不出来，
+> 于是 3D 重写必须重新发明这条判断。`rd_run_in_fight()`（§341）把这一格补上之后，两条判定式
+> 才**互斥**。
+>
+> **为什么 SC-02b 排在 SC-02 之前**：两者都是 `pending == 0`，而 SC-02 是**兜底**。旧表把兜底
+> 排在前面 ⇒ SC-02b **永远不可达**（八轮 Review 3.1 的第二处）。
 
 > **`pending` 完整取值域**（`rd_run_pending`，`Pending` 判别值）：
 > `0` 无待决 · `1` 篝火 · `2` 商店 · `3` 宝箱 · `4` 奖励 · `5` 事件 · `6` 祝福 ·
@@ -723,9 +735,17 @@
 
 **两条规则**：
 
-1. **`pending` 是唯一的场景判别式**，除了三个覆盖层（`pickupPicks` / `pickupAdd` / 弹窗）和
-   两个终局（`cleared` / `runOver`）。覆盖层**不改变** `pending`，所以"选完回到原来那一屏"
-   是自动成立的。
+1. **`pending` 是优先级很高的一项输入，但它不是唯一的判别式。** 场景由三类**权威事实**共同
+   决定：
+   * **有没有局**（`rd_run_seed() == i32::MIN`）；
+   * **有没有一场正在打的战斗**（`rd_run_in_fight()`，§341）；
+   * **节点的 `pending` 与"要不要打"**（`rd_run_pending()` + `kind` + `unknownRoom` + `eventFight`）。
+
+   三个覆盖层（`pickupPicks` / `pickupAdd` / 弹窗）与两个终局（`boss_beaten` / `run_over`）
+   **压在**上面三类之上，但它们**不改变** `pending` —— 所以"选完回到原来那一屏"是自动成立的。
+   ⚠️ 这句话以前写的是"`pending` 是唯一判别式"，与 §1 自己的判定式矛盾（§1 明确列了
+   `kind` / `unknownRoom` / `eventFight`）—— 八轮 Review 3.2 抓的就是这一句。别让代码生成器
+   把它读成"按 `pending` 一个 switch 就够了"。
 2. **只有 `rd_run_step` 与各节点动作会推进 `pending`**。渲染层不许自己改场景。
 
 ---
@@ -751,6 +771,13 @@
 | **G13** | **手牌没有 id 导出** | 只有 `def_slot` + 名字/标题/文本 | 3D 图集按 `def_slot` 建表即可 | 0（够用，但要知道 `def_slot` 是**内容行号**，跨版本会变） |
 | **G14** | **费用的"未修饰 vs 修饰"不分离** | 只有最终价；每副本 delta 不可见 | 若要演"这张牌降价了"，需要 `rd_env_card_cost_printed(slot)` | 小 |
 | **G15** | **`E.obs(140..147)` 恒 `-1`（保留）** | — | 3D **不要**读这 8 格 | 0（约定） |
+| ~~**G16**~~ | ~~"有没有一场正在打的战斗"没有内核判据~~ | — | **已关闭（§341）**：`rd_run_in_fight()` → `1/0/-1` | 已完成 |
+
+> **G16 为什么曾经是缺口**：`pending` 在"战斗前"与"战斗中"都是 `0`；`node_resolved()` 战斗中仍是
+> false；`rd_env_done()` 在**没有会话**时返回 `1`（"结束了"），所以它不能反过来说"有没有战斗"。
+> 于是"未开始"只能是页面自己记的 `mode` ⇒ 场景表不是状态的函数，而是**历史的函数**。
+> `rd_run_in_fight()` 读的是 `fight_begin` 提交点写、`fight_end` 清的那一格 —— 与"战斗中不许
+> 存档/回放"用的是同一个字段。
 
 > **G9 / G1 / G11 是"会静默出错"的三条**，其余是"做不好看/做不了"。静默那三条优先。
 
@@ -773,6 +800,21 @@
 反证（必须能红）：往本文里塞一个**不存在**的名字（`rd_run_` + 随便几个字母），检查器必须报错；
 从白名单里删一条、同时删掉本文对它的提及，检查器必须报"未登记"。
 
+### 7b. 名字对了不等于场景对了（八轮 Review 3.3 的边界）
+
+`ui_state_check.py` **只**证明"文档点名的导出都存在、每个导出都被登记"。它**不**证明：
+
+* 参数/返回值/哨兵/长度单位对不对；
+* 某个字段是否被写在**正确的表格行**里（只要名字在文中出现过就算登记 —— §8 的分类错位
+  就是这么混过去的）；
+* 场景谓词是否互斥、是否可达。
+
+所以 §1 那张表还欠一份**可执行的**东西：19 个场景各一份 `snapshot` 夹具，断言
+`classifyScene(snapshot)` **唯一命中**；多重命中或零命中都要**报错**，不是"取第一个"。
+（`web/ui_panels.js` 的 `describe()` 已经是这张表的实现，`web/ui_test.mjs` 用字面量 snapshot
+逐状态测 —— 但那是**页面**的版本，不是"这张表"的版本。3D 重写时应当先写 `classifyScene`，
+再写渲染。）
+
 ---
 
 ## 8. 附录：文本导出的名字表（41 对 `_len` / `_into`）
@@ -787,7 +829,6 @@
 | `rd_run_last_error_len` | — | 上一次拒绝的原因 | 消息行 |
 | `rd_run_kind_name_len` | `kind` | 节点种类的名字（`combat`/`elite`/…） | 地图图例 |
 | `rd_run_map_len` | — | （见 §3.1；地图走 `rd_run_map_node`，这一对是文本地图） | 调试 |
-| `rd_run_observe_len` | — | ⚠️ 是 `rd_run_observe_len()`，**不是**文本 | §3.0 |
 | `rd_run_deck_title_len` | `index` | 牌组第 i 张的显示名 | 牌组浏览、选牌 |
 | `rd_run_deck_id_len` | `index` | 牌组第 i 张的定义 id | 选牌、`mark` 对账 |
 | `rd_run_card_fact_len` | `where, slot, field` | 一张牌的**事实**（费用/类型/…），按上下文 | 卡牌详情 |
@@ -819,14 +860,12 @@
 | `rd_env_active_len` | — | **谁在行动**（诊断串） | ⚠️ 只有文本，§6-G12 |
 | `rd_env_host_failure_len` | — | 宿主内部失败细节（容器满之类） | 调试 |
 | `rd_env_code_name_len` | `code` | 拒绝码的名字（与内核同一张表） | 调试 |
-| `rd_env_observe_len` | — | ⚠️ 是 `rd_env_observe_len()`，**不是**文本 | §0.3 |
 | `rd_env_card_name_len` | `handSlot` | 手牌名 | 手牌 |
 | `rd_env_card_title_len` | `handSlot` | 手牌标题（`CARD.NameKey`） | 手牌 |
 | `rd_env_card_text_len` | `handSlot` | 手牌规则文本 | 手牌 |
 | `rd_env_enemy_name_len` | `slot` | 敌人显示名 | 站位层 |
 | `rd_env_intent_len` | `slot` | 意图一行描述 | 站位层 |
 | `rd_env_status_id_len` | `whom, i` | 第 i 条状态的**定义 id** | 状态 chip（轴外状态必走这条） |
-| `rd_env_pile_len` | — | ⚠️ 是 `rd_env_pile_len(zone)`，**不是**文本 | §2.1 |
 | `rd_env_pile_card_id_len` | `zone, i` | 牌堆第 i 张的 id | 牌堆浏览 |
 | `rd_env_pile_card_title_len` | `zone, i` | 牌堆第 i 张的显示名 | 牌堆浏览 |
 | `rd_env_beat_def_len` | `beatIndex` | 这一条 beat 的定义名（状态/卡牌） | 浮字层 |
@@ -839,7 +878,9 @@
 
 | 名字 | 用途 |
 |---|---|
-| `rd_env_observe_len()` | 向量长度（148）。页面**必须**读它，不许写死 |
+| `rd_run_observe_len()` | 运行层向量长度（19）。`rd_run_observe(i)` 按它越界 |
+| `rd_env_observe_len()` | 战斗向量长度（148）。页面**必须**读它，不许写死 |
+| `rd_env_pile_len(zone)` | **计数**（不是文本）：`zone` 的牌数。`zone 3` = 问句的来源牌区 |
 | `rd_env_observe_buf()` | 向量地址（零拷贝） |
 | `rd_env_observe_into(ptr)` | 复制到调用方缓冲区 |
 | `rd_env_scratch_buf()` | 1 KiB 文本中转区 |

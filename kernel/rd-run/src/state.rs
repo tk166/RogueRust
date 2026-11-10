@@ -5322,8 +5322,10 @@ impl RunState {
         let price = low + self.rng.roll(RunStream::Shop, (high - low + 1) as u32)? as i32;
         self.shop.cards[slot] = Offer {
             id: RunId::new(card.id).map_err(|_| RunError::BadId)?,
-            // 与陈列时同一条规矩：涨价在**挂牌**那一刻算，折扣在付款时算（`shop_price`）。
-            price: self.marked_up(price),
+            // §340：**补货不施加 A16 涨价**（wiki：*"Any item re-stocked by The Courier will not be
+            // affected by the 10% price increased 16"*）。首次铺货才走 `marked_up`。
+            // 折扣仍然在付款时算（`shop_price`），与陈列时同一条规矩。
+            price,
         };
         used[0] = false;
         Ok(())
@@ -5354,7 +5356,99 @@ impl RunState {
         let price = 143 + self.rng.roll(RunStream::Shop, 15)? as i32;
         self.shop.relics[slot] = Offer {
             id: picked,
-            price: self.marked_up(price),
+            // §340：补货不受 A16 涨价（见 `restock_card_slot` 的同一条注释）。
+            price,
+        };
+        Ok(())
+    }
+
+    /// §340：`the_courier` 的无色卡那一半 —— 与 [`Self::restock_card_slot`] 同一个形状，
+    /// 候选集是**无色**那一半（wiki: "may be replaced by a colorless card of a **different
+    /// rarity**"，所以这里**不**限制稀有度与原来那格相同）。
+    fn restock_colorless_slot(
+        &mut self,
+        slot: usize,
+        card_pool: &[PoolCard<'_>],
+    ) -> Result<(), RunError> {
+        Self::pool_fits(card_pool.len())?;
+        let mut eligible = [0usize; MAX_POOL];
+        let mut eligible_len = 0usize;
+        for (index, card) in card_pool.iter().enumerate() {
+            if !card.colorless {
+                continue;
+            }
+            // 货架上还活着的无色卡不能再来一张（与有色那一排同一条规矩）。
+            let mut on_shelf = false;
+            for other in 0..self.shop.colorless_len as usize {
+                if other != slot
+                    && self.shop.colorless[other].price >= 0
+                    && self.shop.colorless[other].id == RunId::new(card.id).unwrap_or(RunId::EMPTY)
+                {
+                    on_shelf = true;
+                    break;
+                }
+            }
+            if on_shelf {
+                continue;
+            }
+            if eligible_len == MAX_POOL {
+                return Err(RunError::EmptyPool("cards"));
+            }
+            eligible[eligible_len] = index;
+            eligible_len += 1;
+        }
+        if eligible_len == 0 {
+            self.shop.colorless[slot] = Offer {
+                id: RunId::EMPTY,
+                price: -1,
+            };
+            return Ok(());
+        }
+        let pick = self.rng.roll(RunStream::Shop, eligible_len as u32)? as usize;
+        let card = card_pool[eligible[pick]];
+        let (low, high) = colorless_price_band(card.rarity);
+        let price = low + self.rng.roll(RunStream::Shop, (high - low + 1) as u32)? as i32;
+        self.shop.colorless[slot] = Offer {
+            id: RunId::new(card.id).map_err(|_| RunError::BadId)?,
+            // §340：补货不受 A16 涨价。
+            price,
+        };
+        Ok(())
+    }
+
+    /// §340：`the_courier` 的药水那一半 —— 与铺货同一套稀有度权重（`POTION_RARITY_WEIGHTS`），
+    /// 并且**不与货架上还活着的药水重复**（铺货那边也是这么做的：同一瓶摆三次是明显的重复）。
+    fn restock_potion_slot(
+        &mut self,
+        slot: usize,
+        potion_pool: &[PoolPotion<'_>],
+    ) -> Result<(), RunError> {
+        let mut shelved: [RunId; MAX_SHOP_POTIONS] = [RunId::EMPTY; MAX_SHOP_POTIONS];
+        let mut len = 0usize;
+        for other in 0..self.shop.potions_len as usize {
+            if other != slot && self.shop.potions[other].price >= 0 {
+                shelved[len] = self.shop.potions[other].id;
+                len += 1;
+            }
+        }
+        let picked = self.pick_potion_avoiding(potion_pool, &shelved[..len])?;
+        if picked.as_str().is_empty() {
+            self.shop.potions[slot] = Offer {
+                id: RunId::EMPTY,
+                price: -1,
+            };
+            return Ok(());
+        }
+        let rarity = potion_pool
+            .iter()
+            .find(|entry| entry.id == picked.as_str())
+            .map_or(Rarity::Common, |entry| entry.rarity);
+        let (low, high) = potion_price_band(rarity);
+        let price = low + self.rng.roll(RunStream::Shop, (high - low + 1) as u32)? as i32;
+        self.shop.potions[slot] = Offer {
+            id: picked,
+            // §340：补货不受 A16 涨价。
+            price,
         };
         Ok(())
     }
@@ -5919,10 +6013,15 @@ impl RunState {
         // `Capacity`，而金币已经扣掉、货架也还在 —— 一次**被拒绝的**操作改变了可观察状态。
         // `push_card` 自己先校验再写，失败时什么都不动，所以调换顺序就是完整修复（`adjust_gold`
         // 不会失败）。REVIEW 的 P0，判据是 `a_refused_purchase_leaves_the_run_untouched`。
+        //
+        // §340：补货**也可能失败**（`pool_fits` / `rng.roll` / `BadId`），而它在扣钱之后。
+        // 于是整笔交易包一层快照：补货失败就把 `RunState` 整个还回去（`RunState: Copy`，
+        // 与 `rd-wasm` 的 `fight_begin` 用同一条纪律）。
         // §270：同上，调用方带来的牌必须**就是**货架上那一张。
         if card.id != offer.id.as_str() {
             return Err(RunError::EmptyOffer(slot as u8));
         }
+        let before = *self;
         self.push_card(card)?;
         self.adjust_gold(-due);
         self.maw_bank_broken = true;
@@ -5931,7 +6030,11 @@ impl RunState {
         // **立刻补上**（而不是留空）。走 `RELIC_SECOND_HALVES` 的同一张表，所以"这件遗物有哪两半"
         // 仍然只有一处。
         if self.holds_relic("the_courier") {
-            self.restock_card_slot(slot, card_pool)?;
+            if let Err(error) = self.restock_card_slot(slot, card_pool) {
+                // §340：补货失败 ⇒ **整笔交易**回滚（金币、牌、货架一起），不留半个提交。
+                *self = before;
+                return Err(error);
+            }
         }
         Ok(())
     }
@@ -5966,14 +6069,18 @@ impl RunState {
             });
         }
         // §160: the same commit-point rule as `buy_card` -- the failing half must come first.
+        let before = *self;
         self.push_relic(offer.id.as_str(), card_pool)?;
         self.adjust_gold(-due);
         // §270：`maw_bank` "No longer works when you spend any Gold at a shop"。
         self.maw_bank_broken = true;
         self.shop.relics[slot].price = -1;
-        // §273：`the_courier` 补货（同上）。
+        // §273：`the_courier` 补货（同上）。§340：失败 ⇒ 整笔回滚。
         if self.holds_relic("the_courier") {
-            self.restock_relic_slot(slot, relic_pool)?;
+            if let Err(error) = self.restock_relic_slot(slot, relic_pool) {
+                *self = before;
+                return Err(error);
+            }
         }
         Ok(())
     }
@@ -6007,10 +6114,20 @@ impl RunState {
         else {
             return Err(RunError::NoSuchCard);
         };
+        let before = *self;
         self.push_card(row)?;
         self.adjust_gold(-due);
         self.maw_bank_broken = true;
         self.shop.colorless[slot].price = -1;
+        // §340：无色那一排也要补货 —— wiki 的 Courier 说的是 "cards, relics, and potions"，
+        // 无色牌是 cards；fandom 另补一句"may be replaced by a colorless card of a different
+        // rarity"。§332 加这一排时漏了这条，于是持 Courier 时只有两排会补货。
+        if self.holds_relic("the_courier") {
+            if let Err(error) = self.restock_colorless_slot(slot, card_pool) {
+                *self = before;
+                return Err(error);
+            }
+        }
         Ok(())
     }
 
@@ -6018,7 +6135,11 @@ impl RunState {
     ///
     /// 与 `buy_relic` 同一条**提交点**纪律：`push_potion`（会失败的那一半 —— 腰带满了）在
     /// `adjust_gold` **之前**。反过来的话，"腰带满 + 钱够"会变成"扣了钱没拿到药水"。
-    pub fn buy_potion(&mut self, slot: usize) -> Result<(), RunError> {
+    pub fn buy_potion(
+        &mut self,
+        slot: usize,
+        potion_pool: &[PoolPotion<'_>],
+    ) -> Result<(), RunError> {
         if self.pending != Pending::Shop {
             return Err(RunError::WrongPhase);
         }
@@ -6038,10 +6159,18 @@ impl RunState {
                 gold: self.gold,
             });
         }
+        let before = *self;
         self.push_potion(offer.id.as_str())?;
         self.adjust_gold(-due);
         self.maw_bank_broken = true;
         self.shop.potions[slot].price = -1;
+        // §340：药水那一排也补货（`the_courier` 的原话里有 "potions"）。
+        if self.holds_relic("the_courier") {
+            if let Err(error) = self.restock_potion_slot(slot, potion_pool) {
+                *self = before;
+                return Err(error);
+            }
+        }
         Ok(())
     }
 
@@ -9848,7 +9977,7 @@ mod tests {
             let refused = match buy {
                 0 => short.buy_card(0, card, &TYPED_CARDS),
                 1 => short.buy_colorless(0, &TYPED_CARDS),
-                2 => short.buy_potion(0),
+                2 => short.buy_potion(0, &POTIONS),
                 _ => short.buy_relic(0, &TYPED_CARDS, &RELICS),
             };
             assert_eq!(
@@ -9873,7 +10002,7 @@ mod tests {
             let bought = match buy {
                 0 => exact.buy_card(0, card, &TYPED_CARDS),
                 1 => exact.buy_colorless(0, &TYPED_CARDS),
-                2 => exact.buy_potion(0),
+                2 => exact.buy_potion(0, &POTIONS),
                 _ => exact.buy_relic(0, &TYPED_CARDS, &RELICS),
             };
             assert_eq!(bought, Ok(()), "{name}: exactly `due` gold must be enough");
@@ -9916,6 +10045,194 @@ mod tests {
             run.shop_price(100),
             50,
             "the discount applies to the **rest** of the shop"
+        );
+    }
+
+    /// §340：一张**够补货**的卡池 —— `stock_shop` 摆 2 攻 / 2 技 / 1 能力（+2 无色）之后，
+    /// 池子里**还有余量**，补货才抽得出东西来。
+    ///
+    /// 为什么需要它：`TYPED_CARDS` 只有 4 张（2 攻 / 1 技 / 0 能力 / 1 Special），
+    /// 上架之后一张余量都没有 ⇒ 补货"抽不出来"是**夹具**的事，而判据会把它读成
+    /// "补货没实现"（第二版就是这样红的）。
+    fn restockable_pool() -> Vec<PoolCard<'static>> {
+        let mut pool = Vec::new();
+        pool.extend_from_slice(&TYPED_CARDS);
+        // 再加三张**非无色**的，凑够 2 攻 / 2 技 / 1 能力 之后还有余量可补：
+        // `stock_shop` 摆 5 张，而"补货"要求池子里还有**没上架**的那一张。
+        pool.push(PoolCard {
+            id: "cleave",
+            rarity: Rarity::Common,
+            kind: CardKind::Attack,
+            upgraded: None,
+            colorless: false,
+        });
+        pool.push(PoolCard {
+            id: "shrug_it_off",
+            rarity: Rarity::Common,
+            kind: CardKind::Skill,
+            upgraded: None,
+            colorless: false,
+        });
+        pool.push(PoolCard {
+            id: "inflame",
+            rarity: Rarity::Uncommon,
+            kind: CardKind::Power,
+            upgraded: None,
+            colorless: false,
+        });
+        pool.push(PoolCard {
+            id: "swift_strike",
+            rarity: Rarity::Uncommon,
+            kind: CardKind::Attack,
+            upgraded: None,
+            colorless: true,
+        });
+        pool.push(PoolCard {
+            id: "magnetism",
+            rarity: Rarity::Rare,
+            kind: CardKind::Power,
+            upgraded: None,
+            colorless: true,
+        });
+        pool
+    }
+
+    /// §340：`the_courier` 的补货覆盖**四排** —— 有色卡、无色卡、药水、遗物。
+    ///
+    /// 判据是"活着的格数不缩水"。旧实现只有前两排有补货分支：无色与药水买完就空着，
+    /// 而屏幕上的表现只是"那一格没了"—— 没有任何闸门会红。
+    ///
+    /// 四排各测一次，因为补货是**四条独立的分支**（`restock_*_slot` 各一份），
+    /// 写三条漏一条与全漏在"某一排缩水"这个现象上完全一样。
+    #[test]
+    fn the_courier_restocks_all_four_shelves() {
+        let mut run = ironclad();
+        run.push_relic("the_courier", &TYPED_CARDS).expect("the_courier");
+        run.adjust_gold(4000);
+        run.pending = Pending::Shop;
+        let pool = restockable_pool();
+        run.stock_shop(&pool, &RELICS, &POTIONS).expect("stock the shop");
+
+        let live = |run: &RunState| {
+            (
+                run.shop().cards().iter().filter(|o| o.price >= 0).count(),
+                run.shop().colorless().iter().filter(|o| o.price >= 0).count(),
+                run.shop().potions().iter().filter(|o| o.price >= 0).count(),
+                run.shop().relics().iter().filter(|o| o.price >= 0).count(),
+            )
+        };
+        let before = live(&run);
+        assert_eq!(before.0, 5, "five coloured cards on the shelf");
+        assert_eq!(before.1, 2, "one uncommon + one rare colourless");
+        assert_eq!(before.2, 3, "three potions");
+        assert_eq!(before.3, 1, "the fixture has exactly one relic");
+
+        // ① 有色卡（先把 id 拷出来：`buy_card` 要 `&mut run`，不能同时借着货架）
+        let first = run.shop().cards()[0].id;
+        let first_id = first.as_str().to_string();
+        run.buy_card(0, PoolCard::plain(first_id.as_str()), &pool)
+            .expect("buy a card");
+        assert_eq!(live(&run).0, before.0, "the coloured shelf must not shrink");
+        // ② 无色卡
+        run.buy_colorless(0, &pool).expect("buy a colourless card");
+        assert_eq!(live(&run).1, before.1, "the colourless shelf must not shrink");
+        // ③ 药水
+        run.buy_potion(0, &POTIONS).expect("buy a potion");
+        assert_eq!(live(&run).2, before.2, "the potion shelf must not shrink");
+        // ④ 遗物：夹具里只有一件遗物，买走之后**补不出来**是允许的（池子空 ⇒ 那一格留空），
+        //    所以这条的判据是"不会 panic、不会报错"，而不是"格数不变"。
+        run.buy_relic(0, &pool, &RELICS).expect("buy the relic");
+    }
+
+    /// §340：**补货的商品不受 A16 涨价**（wiki：*"Any item re-stocked by The Courier will not be
+    /// affected by the 10% price increased 16 from Ascension 16+"*）。
+    ///
+    /// 判据用**基础价目带**：A16 下首次铺货是 `marked_up(price)`（×1.1），补货必须是原价。
+    /// 所以"补出来的价 ≤ 该稀有度的上界"这一条能把 `marked_up` 抓出来。
+    #[test]
+    fn restocked_items_are_not_marked_up_by_ascension_16() {
+        // ⚠️ `RunState::new` 的第三个参数是**金币**，不是 ascension —— 要 A16 得走
+        // `new_with_ascension`。第一版写成 `new(7, 80, 16, ..)`，于是"这局是 A16"当场为假。
+        let mut run = RunState::new_with_ascension(7, 80, 99, &DECK, 16).expect("an A16 run");
+        assert!(run.at_least(A_SHOP_PRICE), "the fixture must really be A16");
+        run.push_relic("the_courier", &TYPED_CARDS).expect("the_courier");
+        run.adjust_gold(4000);
+        run.pending = Pending::Shop;
+        let pool = restockable_pool();
+        run.stock_shop(&pool, &RELICS, &POTIONS).expect("stock the shop");
+
+        // 首次铺货确实涨价了（否则这条判据证明不了任何事）。
+        let shelved = run.shop().cards()[0];
+        let rarity = pool
+            .iter()
+            .find(|card| card.id == shelved.id.as_str())
+            .map_or(Rarity::Common, |card| card.rarity);
+        let (low, high) = card_price_band(rarity);
+        assert!(
+            shelved.price > high || shelved.price / 2 <= high,
+            "A16 marks the first stock up (shelf {} vs band {low}..={high})",
+            shelved.price
+        );
+
+        run.buy_card(0, PoolCard::plain(shelved.id.as_str()), &pool)
+            .expect("buy the first card");
+        let restocked = run.shop().cards()[0];
+        assert!(restocked.price >= 0, "the slot was restocked");
+        let rarity = pool
+            .iter()
+            .find(|card| card.id == restocked.id.as_str())
+            .map_or(Rarity::Common, |card| card.rarity);
+        let (low, high) = card_price_band(rarity);
+        assert!(
+            (low..=high).contains(&restocked.price),
+            "a restocked card costs the **base** band {low}..={high}, not the A16 markup \
+             (got {})",
+            restocked.price
+        );
+    }
+
+    /// §340：补货失败 ⇒ **整笔交易回滚**（金币、牌、货架一起），不留半个提交。
+    ///
+    /// 怎么构造：给一个**超过 `MAX_POOL`** 的卡池，`restock_card_slot` 的 `pool_fits` 就会
+    /// 返回 `PoolTooLarge` —— 而它在扣钱与给牌**之后**。真实内容触发不到这条路径（池子远小于
+    /// `MAX_POOL`），所以这是**纪律**判据：`RunState` 派生 `Copy + PartialEq + Eq`，
+    /// 于是"一个字节都没改"可以直接比整个结构体。
+    #[test]
+    fn a_failed_restock_unwinds_the_whole_purchase() {
+        let mut run = ironclad();
+        run.push_relic("the_courier", &TYPED_CARDS).expect("the_courier");
+        run.adjust_gold(4000);
+        run.pending = Pending::Shop;
+        run.stock_shop(&TYPED_CARDS, &RELICS, &POTIONS).expect("stock the shop");
+
+        // 320 是 `MAX_POOL`；321 条就够让 `pool_fits` 响亮失败。
+        let mut huge: Vec<PoolCard<'static>> = Vec::new();
+        for index in 0..=MAX_POOL {
+            huge.push(PoolCard {
+                id: if index == 0 { "strike" } else { "defend" },
+                rarity: Rarity::Common,
+                kind: CardKind::Skill,
+                upgraded: None,
+                colorless: false,
+            });
+        }
+        // 货架第 0 格未必是 `strike`（`stock_shop` 洗过），而 `buy_card` 要求"带来的牌就是
+        // 货架上那一张"（§270）—— 先把它读出来，否则会红在 `EmptyOffer` 而不是补货失败。
+        let shelved = run.shop().cards()[0].id.as_str().to_string();
+        let before = run;
+        let outcome = run.buy_card(0, PoolCard::plain(shelved.as_str()), &huge);
+        assert!(
+            matches!(outcome, Err(RunError::PoolTooLarge { .. })),
+            "the oversized pool must refuse the restock: {outcome:?}"
+        );
+        // ★ 判据是**整个结构体相等**：金币、牌组、货架、RNG 计数器全在里面。
+        assert!(
+            run == before,
+            "a refused restock must leave the run byte-identical (gold {} -> {}, deck {} -> {})",
+            before.gold(),
+            run.gold(),
+            before.deck().len(),
+            run.deck().len()
         );
     }
 

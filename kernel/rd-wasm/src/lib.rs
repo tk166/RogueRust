@@ -154,7 +154,11 @@ const ENERGY: i32 = 3;
 const HERO_ENERGY_REFILL: i32 = ENERGY;
 
 // =============================================================================================
-// The observation vector (`docs/spec/env-abi.md` §4) — 12 + 5 + 4×8 + 4×5 + 10×4 + 5 + 8 = 122
+// The observation vector (`docs/spec/env-abi.md` §4) — 12 + 5 + 6×8 + 6×5 + 10×4 + 5 + 8 = 148
+//
+// ⚠️ 这里原来写着 `4×8 + 4×5 … = 122`，而 `MAX_ENEMY_SLOTS` 从 4 涨到 6 之后表达式已经变成 148。
+// 表达式一直是对的，只有注释在说谎 —— 而"这条向量有多长"正是调用方唯一要读的数。
+// 唯一的权威是 `rd_env_observe_len()`；这条注释只是给人看的摘要，改常量时**必须**一起改。
 // =============================================================================================
 
 // Six, not four: the Slime Boss splits (1 -> 2), and a split plus an add would overflow four.
@@ -1627,8 +1631,9 @@ impl Session {
         out
     }
 
-    /// The full 122-slot vector. Unoccupied slots are `-1`, not `0` (`env-abi.md` §4: 0 is a real
-    /// value — "0 block", "0 stacks" — so it cannot mean "absent").
+    /// The full vector (`rd_env_observe_len()` slots — 148 today). Unoccupied slots are `-1`,
+    /// not `0` (`env-abi.md` §4: 0 is a real value — "0 block", "0 stacks" — so it cannot mean
+    /// "absent").
     fn compute_observation(&self) -> Vec<i32> {
         let mut obs = vec![-1i32; OBS_LEN];
         let roster = self.enemy_roster();

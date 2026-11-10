@@ -46,7 +46,7 @@
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
 | **合计** | 957 | 698 | 247 | 12 | 476 | 196 | 85 | 0 |
 
-扫描到的具名测试：**1221** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
+扫描到的具名测试：**1225** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
 
 事件：池里有 **39** 个位次、**36** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -361,7 +361,7 @@
 | decay | yes | the_turn_end_curses_do_their_own_thing | — | wiki:wiki_cards/decay.txt | — | CARD_WIKI+INV_CARDS/the_turn_end_curses_do_their_own_thing |
 | deep_breath | yes | deep_breath_shuffles_the_discard_pile_back_first | — | wiki:wiki_cards/deep_breath.txt | — | CARD_WIKI+INV_CARDS/deep_breath_shuffles_the_discard_pile_back_first |
 | deep_breath+ | yes | — | CARD_DIFF | wiki:wiki_cards/deep_breath.txt (via deep_breath) | — | INV_CARDS |
-| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+91) | — | wiki:wiki_cards/defend.txt | — | §2.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
+| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+92) | — | wiki:wiki_cards/defend.txt | — | §2.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
 | defend+ | yes | armaments_gains_block_then_upgrades_the_chosen_card, the_upgrade_eggs_upgrade_two_of_their_own_kind …(+2) | — | wiki:wiki_cards/defend.txt (via defend) | — | INV_CARDS/armaments_gains_block_then_upgrades_the_chosen_card |
 | demon_form | yes | demon_form_grows_strength_at_every_turn_start, a_shop_stocks_all_four_shelves_with_the_wikis_composition | — | wiki:wiki_cards/demon_form.txt | — | CARD_WIKI+INV_CARDS/demon_form_grows_strength_at_every_turn_start |
 | demon_form+ | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt (via demon_form) | — | INV_CARDS/demon_form_grows_strength_at_every_turn_start |
@@ -551,7 +551,7 @@
 | smite+ | yes | — | CARD_DIFF | wiki:wiki_cards/smite.txt (via smite) | — | INV_CARDS |
 | spot_weakness | yes | spot_weakness_follows_the_enemy_intent | — | wiki:wiki_cards/spot_weakness.txt | — | §242/CARD_WIKI+INV_CARDS/spot_weakness_follows_the_enemy_intent |
 | spot_weakness+ | yes | — | CARD_DIFF | wiki:wiki_cards/spot_weakness.txt (via spot_weakness) | — | INV_CARDS |
-| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+200) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+201) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+14) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
@@ -990,7 +990,7 @@
 | sundial | yes | the_shuffle_trigger_pays_the_abacus_and_sundial | — | — | — | §293/§294/the_shuffle_trigger_pays_the_abacus_and_sundial |
 | the_abacus | yes | the_shuffle_trigger_pays_the_abacus_and_sundial | — | — | — | §293/§294/the_shuffle_trigger_pays_the_abacus_and_sundial |
 | the_boot | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier | — | — | — | §262/§263/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
-| the_courier | yes | the_courier_restocks_the_slot_it_sells, shop_discounts_stack_multiplicatively_and_round_up | — | — | — | §272/§273/the_courier_restocks_the_slot_it_sells |
+| the_courier | yes | the_courier_restocks_the_slot_it_sells, shop_discounts_stack_multiplicatively_and_round_up …(+3) | — | — | — | §272/§273/the_courier_restocks_the_slot_it_sells |
 | the_specimen | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier | — | — | — | §262/§263/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
 | thread_and_needle | yes | the_relic_pool_fires_at_the_three_hooks_it_has, a_run_with_five_status_relics_keeps_all_five …(+1) | — | — | — | §320/the_relic_pool_fires_at_the_three_hooks_it_has |
 | tiny_chest | yes | tiny_chest_and_juzu_bracelet_change_the_roll | — | — | — | §271/§272/tiny_chest_and_juzu_bracelet_change_the_roll |
