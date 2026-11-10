@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 947 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 950 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -38,17 +38,17 @@
 |---|---|---|---|---|---|---|---|---|
 | 怪物 | 61 | 53 | 0 | 8 | 52 | 9 | 14 | 0 |
 | 敌人动作 | 166 | 81 | 85 | 0 | 143 | 23 | 59 | 0 |
-| 卡牌 | 293 | 165 | 128 | 0 | 281 | 12 | 18 | 0 |
+| 卡牌 | 295 | 166 | 129 | 0 | 281 | 14 | 18 | 0 |
 | 状态 | 148 | 137 | 6 | 5 | 0 | 148 | 1 | 0 |
 | 遭遇 | 63 | 43 | 20 | 0 | 0 | 0 | 0 | 0 |
-| 事件 | 31 | 31 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 事件 | 32 | 32 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 152 | 135 | 17 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 947 | 678 | 256 | 13 | 476 | 192 | 92 | 0 |
+| **合计** | 950 | 680 | 257 | 13 | 476 | 194 | 92 | 0 |
 
-扫描到的具名测试：**1189** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
+扫描到的具名测试：**1195** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
 
-事件：池里有 **34** 个位次、**31** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
+事件：池里有 **35** 个位次、**32** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
 同一页面的早期副本（内容同源，矩阵只用 `wiki_asc/` 那一份）：`wiki_book_of_stabbing.txt`、`wiki_lagavulin.txt`、`wiki_nemesis.txt`、`wiki_reptomancer.txt`、`wiki_slavers.txt`、`wiki_taskmaster.txt`
 
@@ -289,7 +289,7 @@
 | torch_head.tackle | yes | — | ENEMY_DIFF | wiki:wiki_asc/torch_head.txt (via torch_head) · 仅基础值 | 无升档：wiki Torch Head: Tackle is 7, no A-row | INV_ACTIONS+INV_NO_ASC |
 | transient.attack | yes | the_transient_scales_its_attack_and_fades_away | — | spec:INV_ACTIONS+INV_ASC_VARIANTS | — | §317/INV_ACTIONS+INV_ASC_VARIANTS/the_transient_scales_its_attack_and_fades_away |
 
-## 卡牌（293）
+## 卡牌（295）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -305,7 +305,7 @@
 | bandage_up | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable, strange_spoon_turns_about_half_of_the_exhausts_into_discards …(+1) | — | wiki:wiki_cards/bandage_up.txt | wiki 偏差：wiki 升级版治疗 6；内容没有 `bandage_up+` 这一行。（`Exhaust` 本身不是偏差：§219 起它由落区 `PlayedCardDestinationZone` 表达。） | §191/CARD_WIKI+INV_CARDS/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
 | barricade | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt | — | CARD_WIKI+INV_CARDS |
 | barricade+ | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt (via barricade) | — | INV_CARDS |
-| bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, warcry_draws_one_then_puts_the_chosen_card_on_top …(+42) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
+| bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, warcry_draws_one_then_puts_the_chosen_card_on_top …(+44) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
 | bash+ | yes | the_unknown_room_events_are_readable, the_upgrade_eggs_upgrade_two_of_their_own_kind …(+3) | — | wiki:wiki_cards/bash.txt (via bash) | — | INV_CARDS/the_unknown_room_events_are_readable |
 | battle_trance | yes | battle_trance_blocks_further_draws_only_this_turn, the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/battle_trance.txt | — | CARD_WIKI+INV_CARDS/battle_trance_blocks_further_draws_only_this_turn |
 | battle_trance+ | yes | — | CARD_DIFF | wiki:wiki_cards/battle_trance.txt (via battle_trance) | — | INV_CARDS |
@@ -349,7 +349,7 @@
 | clumsy | yes | — | CARD_DIFF | wiki:wiki_cards/clumsy.txt | — | CARD_WIKI+INV_CARDS |
 | combust | yes | — | CARD_DIFF | wiki:wiki_cards/combust.txt | — | CARD_WIKI+INV_CARDS |
 | combust+ | yes | — | CARD_DIFF | wiki:wiki_cards/combust.txt (via combust) | — | INV_CARDS |
-| conjure_blade | yes | conjure_blade_stores_the_energy_as_the_expungers_x, conjure_blade_with_no_energy_makes_a_zero_x_expunger | — | wiki:wiki_cards/conjure_blade.txt | — | §3.1/§255/CARD_WIKI+INV_CARDS/conjure_blade_stores_the_energy_as_the_expungers_x |
+| conjure_blade | yes | conjure_blade_stores_the_energy_as_the_expungers_x, conjure_blade_with_no_energy_makes_a_zero_x_expunger | — | wiki:wiki_cards/conjure_blade.txt | — | §255/CARD_WIKI+INV_CARDS/conjure_blade_stores_the_energy_as_the_expungers_x |
 | conjure_blade+ | yes | conjure_blade_stores_the_energy_as_the_expungers_x | — | wiki:wiki_cards/conjure_blade.txt (via conjure_blade) | — | INV_CARDS/conjure_blade_stores_the_energy_as_the_expungers_x |
 | corruption | yes | — | CARD_DIFF | wiki:wiki_cards/corruption.txt | wiki 偏差：wiki 的 Exhaust 指的是**被打出的那个技能**（"Exhaust it"），Corruption 自己进弃牌堆。 | CARD_WIKI+INV_CARDS |
 | corruption+ | yes | — | CARD_DIFF | wiki:wiki_cards/corruption.txt (via corruption) | wiki 偏差：wiki 的 Exhaust 指的是**被打出的那个技能**（"Exhaust it"），Corruption 自己进弃牌堆。 | INV_CARDS |
@@ -361,7 +361,7 @@
 | decay | yes | the_turn_end_curses_do_their_own_thing | — | wiki:wiki_cards/decay.txt | — | CARD_WIKI+INV_CARDS/the_turn_end_curses_do_their_own_thing |
 | deep_breath | yes | deep_breath_shuffles_the_discard_pile_back_first | — | wiki:wiki_cards/deep_breath.txt | — | CARD_WIKI+INV_CARDS/deep_breath_shuffles_the_discard_pile_back_first |
 | deep_breath+ | yes | — | CARD_DIFF | wiki:wiki_cards/deep_breath.txt (via deep_breath) | — | INV_CARDS |
-| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+87) | — | wiki:wiki_cards/defend.txt | — | §2.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
+| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+89) | — | wiki:wiki_cards/defend.txt | — | §2.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
 | defend+ | yes | armaments_gains_block_then_upgrades_the_chosen_card, the_upgrade_eggs_upgrade_two_of_their_own_kind …(+2) | — | wiki:wiki_cards/defend.txt (via defend) | — | INV_CARDS/armaments_gains_block_then_upgrades_the_chosen_card |
 | demon_form | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt | — | CARD_WIKI+INV_CARDS/demon_form_grows_strength_at_every_turn_start |
 | demon_form+ | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt (via demon_form) | — | INV_CARDS/demon_form_grows_strength_at_every_turn_start |
@@ -443,6 +443,8 @@
 | j.a.x.+ | yes | — | CARD_DIFF | wiki:wiki_cards/j.a.x..txt (via j.a.x.) | — | INV_CARDS |
 | jack_of_all_trades | yes | — | CARD_DIFF | wiki:wiki_cards/jack_of_all_trades.txt | — | CARD_WIKI+INV_CARDS |
 | jack_of_all_trades+ | yes | — | CARD_DIFF | wiki:wiki_cards/jack_of_all_trades.txt (via jack_of_all_trades) | — | INV_CARDS |
+| jax | yes | augmenter_test_jax_adds_the_card | — | spec:INV_CARDS | — | §3.1/§324/INV_CARDS/augmenter_test_jax_adds_the_card |
+| jax+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
 | juggernaut | yes | — | CARD_DIFF | wiki:wiki_cards/juggernaut.txt | — | CARD_WIKI+INV_CARDS |
 | juggernaut+ | yes | — | CARD_DIFF | wiki:wiki_cards/juggernaut.txt (via juggernaut) | — | INV_CARDS |
 | limit_break | yes | limit_break_doubles_strength_and_only_the_base_copy_exhausts | — | wiki:wiki_cards/limit_break.txt | — | CARD_WIKI+INV_CARDS/limit_break_doubles_strength_and_only_the_base_copy_exhausts |
@@ -549,7 +551,7 @@
 | smite+ | yes | — | CARD_DIFF | wiki:wiki_cards/smite.txt (via smite) | — | INV_CARDS |
 | spot_weakness | yes | spot_weakness_follows_the_enemy_intent | — | wiki:wiki_cards/spot_weakness.txt | — | §242/CARD_WIKI+INV_CARDS/spot_weakness_follows_the_enemy_intent |
 | spot_weakness+ | yes | — | CARD_DIFF | wiki:wiki_cards/spot_weakness.txt (via spot_weakness) | — | INV_CARDS |
-| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+190) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+192) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+14) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
@@ -671,7 +673,7 @@
 | standard.metallicize | yes | metallicize_grants_block_at_the_end_of_the_turn, plated_armor_and_metallicize_both_pay_block_at_turn_end …(+1) | — | spec:INV_STATUSES | — | §107/§194/INV_STATUSES/metallicize_grants_block_at_the_end_of_the_turn |
 | standard.mode_shift | yes | mode_shift_is_a_budget_drained_by_the_health_actually_lost | — | spec:INV_STATUSES | — | §195.1/INV_STATUSES/mode_shift_is_a_budget_drained_by_the_health_actually_lost |
 | standard.mummified_hand | yes | mummified_hand_makes_one_random_card_free_after_a_power | — | spec:INV_STATUSES | — | §300/INV_STATUSES/mummified_hand_makes_one_random_card_free_after_a_power |
-| standard.mutagenic_strength | yes | the_zero_infrastructure_batch_wires_the_right_carrier, the_combat_start_carriers_land_the_right_status | — | spec:INV_STATUSES | — | §267/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
+| standard.mutagenic_strength | yes | the_zero_infrastructure_batch_wires_the_right_carrier, mutagenic_strength_rides_its_own_carrier_status …(+2) | — | spec:INV_STATUSES | — | §267/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
 | standard.nightmare_pending | yes | nightmare_copies_into_the_aside_pile_and_next_turn_they_arrive | — | spec:INV_STATUSES | — | §227/§283/INV_STATUSES/nightmare_copies_into_the_aside_pile_and_next_turn_they_arrive |
 | standard.nilrys_codex | yes | nilrys_codex_asks_at_turn_end_and_sends_the_pick_to_the_draw_pile | — | spec:INV_STATUSES | — | §300/INV_STATUSES/nilrys_codex_asks_at_turn_end_and_sends_the_pick_to_the_draw_pile |
 | standard.no_block_from_cards | yes | — | CARD_DIFF | spec:INV_STATUSES | — | §244/§245/INV_STATUSES |
@@ -720,7 +722,7 @@
 | standard.stasis_ready | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_STATUSES | — | §195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
 | standard.stone_calendar | yes | the_eight_turn_shaped_relics_wire_their_own_status, the_turn_shaped_relic_statuses_fire_on_the_turn_the_wiki_names | — | spec:INV_STATUSES | — | §260/INV_STATUSES/the_eight_turn_shaped_relics_wire_their_own_status |
 | standard.strange_spoon | yes | — | — | spec:INV_STATUSES | — | §296/§302/INV_STATUSES |
-| standard.strength | yes | dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not, modifier_rows_match_exactly_and_through_the_documented_namespace_bridge …(+71) | — | spec:INV_STATUSES | — | §252/§313/INV_STATUSES/dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not |
+| standard.strength | yes | dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not, modifier_rows_match_exactly_and_through_the_documented_namespace_bridge …(+71) | — | spec:INV_STATUSES | — | §313/§324/INV_STATUSES/dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not |
 | standard.strike_dummy | yes | strike_dummy_only_boosts_cards_that_carry_the_strike_tag | — | spec:INV_STATUSES | — | §297/§302/INV_STATUSES/strike_dummy_only_boosts_cards_that_carry_the_strike_tag |
 | standard.sundial | yes | the_shuffle_trigger_pays_the_abacus_and_sundial | — | spec:INV_STATUSES | — | §292/§294/INV_STATUSES/the_shuffle_trigger_pays_the_abacus_and_sundial |
 | standard.the_abacus | yes | the_shuffle_trigger_pays_the_abacus_and_sundial | — | spec:INV_STATUSES | — | §292/§294/INV_STATUSES/the_shuffle_trigger_pays_the_abacus_and_sundial |
@@ -808,12 +810,13 @@
 | enc_two_orb_walkers | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §318 |
 | enc_two_thieves | yes | the_mugger_mugs_steals_fifteen_gold_and_escapes_with_it | — | — | — | §314/§315/the_mugger_mugs_steals_fifteen_gold_and_escapes_with_it |
 
-## 事件（31）
+## 事件（32）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
 | ancient_forge | yes | the_unknown_room_events_are_readable, an_event_that_edits_the_deck_owes_a_pick_first …(+3) | — | — | — | the_unknown_room_events_are_readable |
 | ancient_writing | yes | the_unknown_room_events_are_readable, an_event_choice_that_edits_the_deck_owes_a_pick | — | — | — | the_unknown_room_events_are_readable |
+| augmenter | yes | the_unknown_room_events_are_readable, transform_choose_owes_two_transforms_through_the_pickup_channel …(+1) | — | — | — | the_unknown_room_events_are_readable |
 | council_of_ghosts | yes | the_unknown_room_events_are_readable, a_card_payload_is_granted_as_many_times_as_its_amount …(+1) | — | — | — | the_unknown_room_events_are_readable |
 | dead_adventurer | yes | the_unknown_room_events_are_readable, an_event_can_turn_the_room_into_a_fight …(+4) | — | — | — | the_unknown_room_events_are_readable |
 | falling | yes | the_unknown_room_events_are_readable, falling_removes_a_card_of_the_named_kind …(+2) | — | — | — | the_unknown_room_events_are_readable |
@@ -886,7 +889,7 @@
 | du_vu_doll | yes | the_five_combat_start_relics_wire_their_own_carrier | — | — | — | §261/the_five_combat_start_relics_wire_their_own_carrier |
 | duality | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | ectoplasm | yes | the_pickup_number_relics_change_only_their_own_number, the_gold_and_shop_relics_change_only_their_own_number | — | — | — | §270/the_pickup_number_relics_change_only_their_own_number |
-| empty_cage | yes | the_pickup_picks_do_not_take_over_the_screen | — | — | — | §273/§274/the_pickup_picks_do_not_take_over_the_screen |
+| empty_cage | yes | the_pickup_picks_do_not_take_over_the_screen, transform_choose_refuses_an_empty_deck_and_an_existing_debt | — | — | — | §273/§274/the_pickup_picks_do_not_take_over_the_screen |
 | enchiridion | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §298/§299 |
 | eternal_feather | yes | the_eternal_feather_pays_per_whole_group_of_five_on_entering, the_new_relics_pay_out | — | — | — | §156/§157/the_eternal_feather_pays_per_whole_group_of_five_on_entering |
 | face_of_cleric | yes | face_of_cleric_raises_the_maximum_after_every_fight | — | — | — | §283/§292/face_of_cleric_raises_the_maximum_after_every_fight |
@@ -925,7 +928,7 @@
 | mercury_hourglass | yes | the_eight_turn_shaped_relics_wire_their_own_status | — | — | — | §260/the_eight_turn_shaped_relics_wire_their_own_status |
 | molten_egg | yes | the_add_card_relics_fire_at_the_one_add_point, taking_an_offer_applies_the_egg_relics | — | — | — | §270/the_add_card_relics_fire_at_the_one_add_point |
 | mummified_hand | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §299/§300 |
-| mutagenic_strength | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
+| mutagenic_strength | yes | the_zero_infrastructure_batch_wires_the_right_carrier, mutagenic_strength_rides_its_own_carrier_status | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | neows_lament | yes | neows_lament_covers_exactly_the_first_three_fights, neows_lament_gives_the_first_three_fights_one_hp_enemies | — | — | — | §300/§301/neows_lament_covers_exactly_the_first_three_fights |
 | nilrys_codex | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §299/§300 |
 | nloths_gift | yes | nloths_gift_triples_the_rare_band_and_never_passes_uncommon | — | — | — | §292/nloths_gift_triples_the_rare_band_and_never_passes_uncommon |

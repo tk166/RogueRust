@@ -153,6 +153,11 @@ INV_DECK = {"strike": 5, "defend": 4, "bash": 1}   # inv:§2.1
 
 # inv:§3.1 -- the 3 basic cards, as mechanically derived facts.
 INV_CARDS = {
+    # §324：Augmenter 的 J.A.X.（0 费无色特殊技能：失 3 血、+2 力量；`+` 行 +3）。
+    "jax": {"Cost": 0, "Tags": ["skill", "colorless"],
+            "Facts": [["loseHp", 3, "source"], ["status", "standard.strength", 2, "source"]]},
+    "jax+": {"Cost": 0, "Tags": ["skill", "colorless"],
+             "Facts": [["loseHp", 3, "source"], ["status", "standard.strength", 3, "source"]]},
     # ---- §255：Conjure Blade / Conjure Blade+（2 行）----------------------------------------
     "conjure_blade": {"Cost": 0, "Tags": ["skill", "x_cost", "watcher"], "Facts": [["card", "expunger", 1, "DrawPile", "source"]]},
     "conjure_blade+": {"Cost": 0, "Tags": ["skill", "x_cost", "watcher"], "Facts": [["card", "expunger", 1, "DrawPile", "source"]]},
@@ -5066,6 +5071,14 @@ def check_event_vocabulary(doc):
                         fail(where, "remove_all 的载荷取基础 id（不要 `+`），got %r" % (payload,))
                     if entry.get("Amount") not in (0, None):
                         fail(where, "remove_all 的 Amount 必须是 0（种类在词里）")
+                    counts["effects"] += 1
+                    continue
+                if kind == "transform_choose":
+                    # §324：`augmenter` 的 `[Become Test Subject]` —— 选 n 张各改造一次。
+                    if not (payload or "").isdigit() or not (1 <= int(payload) <= 5):
+                        fail(where, "transform_choose 的张数 %r 不在 1..=5" % (payload,))
+                    if entry.get("Amount") not in (0, None, int(payload or 0)):
+                        fail(where, "transform_choose 的 Amount 要么缺省、要么与词里的张数相同")
                     counts["effects"] += 1
                     continue
                 if kind == "remove_card_random":

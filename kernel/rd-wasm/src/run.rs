@@ -3510,7 +3510,9 @@ fn effect_code_of(effect: rd_run::state::EventEffect) -> i32 {
         // 同一条规矩：真正的信息在内容字符串里）。
         | EventEffect::UpgradeAll
         // §322：`remove_all:<id>` 同理 —— 哪一种牌在内容字符串里（且不是问句）。
-        | EventEffect::RemoveAllCards => -1,
+        | EventEffect::RemoveAllCards
+        // §324：`transform_choose:<n>` 的落点是**牌组选择器**（`rd_run_pickup_*` 那条既有通道）。
+        | EventEffect::OwedTransforms(_) => -1,
     }
 }
 
@@ -3527,6 +3529,8 @@ fn effect_amount(effect: rd_run::state::EventEffect) -> i32 {
         | EventEffect::LoseMaxHealthPercent(n)
         | EventEffect::HealPercent(n)
         | EventEffect::GoldCost(n) => n,
+        // §324："要选几张"就是数量。
+        EventEffect::OwedTransforms(count) => i32::from(count),
         // §285：区间金币的"数量"取**上界**（页面写"最多 N"）；下界在词里，页面不需要它。
         EventEffect::GoldRandom(_, high) => high,
         // §287：欠账金币的"数量"就是它本身（页面写"下一场战斗多得 N 金币"）。
@@ -10558,6 +10562,77 @@ mod tests {
 
     /// §286：**事件把房间变成一场战斗** —— `[Fight]` 之后 `fight_begin` 必须接受，并且按
     /// **精英**结算。
+    /// §324：`augmenter` —— 三个选项各走一遍（`?` 房上手动开事件）。
+    ///
+    /// ⚠️ 这三条**必须单线程跑**（验收就是 `--test-threads=1`）：
+    /// `run_slot()` 是进程级单例，并行时它们互相抢局。实测过：并行下
+    /// 一条报 `WrongPhase`、一条报 `-1 无文本`，单线程三条全绿 ——
+    /// “失败随顺序变化”就是这个形状的指纹。
+    fn augmenter_at(seed_range: std::ops::Range<i32>) -> Option<i32> {
+        for seed in seed_range {
+            if !walk_until_unknown(seed) || rd_run_begin_node() != 0 {
+                continue;
+            }
+            if run_slot()
+                .as_mut()
+                .expect("a run")
+                .state
+                .begin_event("augmenter", "augmenter")
+                .is_ok()
+            {
+                return Some(seed);
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn augmenter_test_jax_adds_the_card() {
+        let seed = augmenter_at(0..2000).expect("no `?` room");
+        let before = rd_run_deck_count();
+        assert_eq!(rd_run_choose(0), 0, "seed {seed}: Test J.A.X. -- {}", run_error_text());
+        assert_eq!(rd_run_deck_count(), before + 1, "seed {seed}: one card went in");
+        let state = &run_slot().as_ref().expect("a run").state;
+        assert_eq!(
+            state.deck().last().expect("a deck").as_str(),
+            "jax",
+            "seed {seed}: it is J.A.X."
+        );
+    }
+
+    #[test]
+    fn augmenter_become_test_subject_owes_two_transforms() {
+        let seed = augmenter_at(0..2000).expect("no `?` room");
+        let before = rd_run_deck_count();
+        assert_eq!(rd_run_choose(1), 0, "seed {seed}: Become Test Subject -- {}", run_error_text());
+        // 欠账与 `pending` 是两条通道：事件已经收尾，选择器还欠两次。
+        let session = run_slot().as_ref().expect("a run");
+        assert_eq!(session.state.pending(), rd_run::state::Pending::None, "seed {seed}");
+        assert_eq!(rd_run_pickup_picks(), 2, "seed {seed}: two transforms owed");
+        assert_eq!(rd_run_pickup_change(), 3, "seed {seed}: the debt is `Transform` (=3)");
+        assert_eq!(rd_run_pickup_card(0), 0, "seed {seed}: {}", run_error_text());
+        assert_eq!(rd_run_pickup_picks(), 1, "seed {seed}: one left");
+        assert_eq!(rd_run_pickup_card(0), 0, "seed {seed}: {}", run_error_text());
+        assert_eq!(rd_run_pickup_picks(), 0, "seed {seed}: the debt is gone");
+        assert_eq!(rd_run_deck_count(), before, "seed {seed}: transform keeps the size");
+    }
+
+    #[test]
+    fn augmenter_ingest_mutagens_grants_its_carrier() {
+        let seed = augmenter_at(0..2000).expect("no `?` room");
+        let before = run_slot().as_ref().expect("a run").state.relics().len();
+        assert_eq!(rd_run_choose(2), 0, "seed {seed}: Ingest Mutagens -- {}", run_error_text());
+        let session = run_slot().as_ref().expect("a run");
+        assert_eq!(session.state.relics().len(), before + 1, "seed {seed}: the relic is in the bag");
+        let bonus = session.state.combat_bonus();
+        assert!(
+            (0..bonus.status_count).any(|index| bonus.statuses[index]
+                .map(|entry| entry.id == "standard.mutagenic_strength")
+                .unwrap_or(false)),
+            "seed {seed}: +3 Strength rides `standard.mutagenic_strength`"
+        );
+    }
+
     /// §323：`Masked Bandits` 的 `[Fight!]` —— 三名 bandit（Pointy / Romeo / Bear）真的上场。
     #[test]
     fn masked_bandits_fight_brings_three_named_bandits() {

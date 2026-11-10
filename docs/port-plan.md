@@ -22830,3 +22830,50 @@ wiki 的 `Masked_Bandits` 是本作唯一一处"事件里打三个**不在任何
 事件 31（三幕池 10+14+10 = 34）、镜像 186,244 · core 148,836 B、
 `rd-core 811 / rd-run 209 / rd-wasm 167`、units 1187（下限 1186 → 1187）。
 **Act 2 事件 10/13 → 11/13**（余 `augmenter` 与明确不做的 `cursed_tome`）。
+
+## §324 `augmenter` —— Act 2 的 12/13（最后一条是明确不做）
+
+wiki 的三个选项：
+
+| 选项 | 效果 | 用什么实现 |
+|---|---|---|
+| `[Test J.A.X.]` | 牌组加一张 **J.A.X.**（0 费无色特殊技能：失 3 血、+2 力量；`+` 行 +3） | 新卡两行 + `card:jax` |
+| `[Become Test Subject]` | **选** 2 张，各改造一次 | 新原子 `transform_choose:<n>` |
+| `[Ingest Mutagens]` | **Mutagenic Strength**（开战 +3 力量；第一回合末失 3） | **早就有了**（见下） |
+
+⚠️ 旧笔记说这条是"两张**随机**变形"，**错**：wiki 的更新记录写的是
+*"now allows choosing 2 cards to Transform instead of selecting 3 at random"*。
+
+### `transform_choose:<n>`
+
+它是"N 次**待办**的改牌"，所以复用**拾取欠账**通道（`pickup_change` + `pickup_picks`）——
+那条通道本来就是"与 `pending` 无关的欠账"，页面也已经按它画选择器
+（`describePickupCard`）。**没有新 `Pending`、没有新屏、没有新状态字段。**
+两条拒绝都是"不静默吞额度"：牌组空 ⇒ `DeckEmpty`；**已经欠着**别人的改牌
+（`empty_cage` / `astrolabe`）⇒ `WrongPhase`（而不是覆盖它）。
+
+### 一个我自己造出来的重复（值得记）
+
+我按 wiki 给 `mutagenic_strength` 加了一条新 `RelicEffect::StartCombatStatuses`（复数），
+结果既有判据当场红：**这件遗物早就实现了** —— 内容里有 `standard.mutagenic_strength`
+这个状态（`TurnEnded` 触发器 + `mutagenic_strength_turns` 计数），`relic_effect()` 也早就
+把它映射过去了。于是我把新变体**整条撤掉**（不留死代码），判据改成钉住**既有**实现。
+教训：加"新遗物"之前先 `grep` 一遍 id —— 内容里可能已经躺着它。
+
+### 判据
+
+`rd-run` 三条：欠账通道两侧（`transform_choose:2` ⇒ 2 次、取两次清空、事件本身已收尾）、
+两条拒绝（空牌组 / 已有欠账，且都"一个字节不改"）、`mutagenic_strength` 走它自己的载体状态
+（并且没有这件遗物时没有它）。`rd-wasm` 三条端到端：三个选项各一遍 ——
+J.A.X. 真的进牌组、`[Become Test Subject]` 欠 2 次且 `rd_run_pickup_card` 两次后尺寸不变、
+`[Ingest Mutagens]` 挂上 `standard.mutagenic_strength`。
+
+负控两条各红在预期位置：欠账只记一次 / 覆盖别人的欠账。
+
+⚠️ **`run_slot()` 是进程级单例 ⇒ 这三条 wasm 判据必须单线程跑**（验收本来就是
+`--test-threads=1`）。并行时实测一条报 `WrongPhase`、一条报 `-1 无文本`，单线程三条全绿 ——
+"失败随顺序变化"就是共享单例的指纹，已写进测试注释。
+
+数字：卡 **295**（155 + 140，镜像 186,856 B）、遗物 **153**、事件 **32**（三幕池
+10+15+10 = 35）、`rd-core 811 / rd-run 212 / rd-wasm 170`、units 1193（下限 1187 → 1193）。
+**Act 2 事件 11/13 → 12/13**（第 13 条 `cursed_tome` 因 `necronomicon` 明确不做而不做）。

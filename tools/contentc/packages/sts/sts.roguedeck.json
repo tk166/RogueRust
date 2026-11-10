@@ -29937,6 +29937,168 @@
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "jax",
+      "PackageId": "sts",
+      "NameKey": "J.A.X.",
+      "DescriptionKey": "Lose 3 HP. Gain 2 Strength.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.loseHp",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 3
+                    }
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.strength"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "Rarity": "Special"
+    },
+    {
+      "Id": "jax+",
+      "PackageId": "sts",
+      "NameKey": "J.A.X.+",
+      "DescriptionKey": "Lose 3 HP. Gain 3 Strength.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.loseHp",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 3
+                    }
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.strength"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 3
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "Rarity": "Special"
     }
   ],
   "EnemyActions": [
@@ -79198,6 +79360,13 @@
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Shop"
+    },
+    {
+      "Id": "mutagenic_strength",
+      "DisplayName": "Mutagenic Strength",
+      "Rarity": "Event",
+      "RunPrograms": null,
+      "CombatRules": null
     }
   ],
   "Start": {
@@ -79605,6 +79774,11 @@
       "Id": "masked_bandits",
       "NameKey": "Masked Bandits",
       "Entry": "masked_bandits"
+    },
+    {
+      "Id": "augmenter",
+      "NameKey": "Augmenter",
+      "Entry": "augmenter"
     }
   ],
   "Potions": [
@@ -79952,6 +80126,9 @@
       },
       {
         "Id": "masked_bandits"
+      },
+      {
+        "Id": "augmenter"
       }
     ],
     "Events3": [
@@ -83184,6 +83361,42 @@
             },
             {
               "Effect": "relic:red_mask",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "augmenter",
+      "TextKey": "A man with an eyepatch and a devilish grin strides up. \"Interested in advancing science? I can make you stronger than any training.\"",
+      "Options": [
+        {
+          "Label": "Test J.A.X.",
+          "Effects": [
+            {
+              "Effect": "card:jax",
+              "Amount": 1
+            }
+          ],
+          "Next": ""
+        },
+        {
+          "Label": "Become Test Subject (transform 2)",
+          "Effects": [
+            {
+              "Effect": "transform_choose:2",
+              "Amount": 2
+            }
+          ],
+          "Next": ""
+        },
+        {
+          "Label": "Ingest Mutagens (relic)",
+          "Effects": [
+            {
+              "Effect": "relic:mutagenic_strength",
               "Amount": 0
             }
           ],

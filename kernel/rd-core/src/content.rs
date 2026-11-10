@@ -5497,13 +5497,13 @@ mod tests {
         let content = Content::parse(&bytes).expect("the image parses");
         assert_eq!(
             content.event_count(),
-            31,
+            32,
             "§280 补了 `the_cleric` / `the_moai_head`，§285 补了 `world_of_goop` / `wing_statue` /
              `the_joust`，§286 补了 `dead_adventurer`，§288 补了 `the_colosseum`，§290 补了 `the_nest`，
              §318 补了 `winding_halls` / `mysterious_sphere`（`scrap_pile` 改成 Scrap Ooze 的 9 段链），
              §319 补了 `falling`，§320 补了 `the_library` / `sensory_stone`，§321 补了 `mind_bloom` /
              `tomb_of_lord_red_mask`，§322 补了 `council_of_ghosts` / `pleading_vagrant` /
-             `old_beggar` / `vampires`，§323 补了 `masked_bandits`。pools 的**位次**比
+             `old_beggar` / `vampires`，§323 补了 `masked_bandits`，§324 补了 `augmenter`。pools 的**位次**比
              id 多，因为 `EventTables` 让 `purification_shrine` / `golden_idol` / `ancient_forge`
              跨幕复用（§133 / §143）"
         );
@@ -5629,6 +5629,8 @@ mod tests {
                 || effect == "upgrade_all"
                 // §322：按 id 全删（`vampires`。词法检查交给内容门）。
                 || prefix(effect, "remove_all:")
+                // §324：选 n 张各改造一次（`augmenter`）。
+                || prefix(effect, "transform_choose:")
                 || effect == "relic_random"
                 // §287/§288：下一场战斗的奖励修正（`Dead Adventurer` 的欠账、`The Colosseum`
                 // 的定数奖励）。词法的检查交给内容门，这里只回答"这个镜像里有没有它"。
@@ -5664,6 +5666,7 @@ mod tests {
             vec![
                 "ancient_forge",
                 "ancient_writing",
+                "augmenter",
                 // §322
                 "council_of_ghosts",
                 "dead_adventurer",

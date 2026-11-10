@@ -1003,6 +1003,13 @@ pub enum EventEffect {
     /// `[Land] Lose (a random Skill)` —— wiki 明写 random，所以它**不是** `DeckChange`：
     /// 没有问句，应用时就地掷一次（`RunStream::Event`）。
     RemoveCardRandom(CardKind),
+    /// §324：**玩家选 `n` 张、每张都改造成随机牌**（`transform_choose:<n>`）。
+    /// `augmenter` 的 `[Become Test Subject]` —— wiki：*"Choose and Transform 2 cards"*。
+    ///
+    /// 复用**拾取欠账**通道（`pickup_change` + `pickup_picks`）：那条通道本来就是
+    /// "与 `pending` 无关的 N 次待办"，页面也已经按它画选择器 —— 所以这里既不新增状态，
+    /// 也不新增屏。
+    OwedTransforms(u8),
     /// §321：**升级牌组里的每一张**（`upgrade_all`）。`mind_bloom` 的 `[I am Awake]`。
     ///
     /// 与 `UpgradeCard`（问玩家一张）的区别：这是一次结算，没有问句。内容里的 `+` 行是**另一张卡**，
@@ -1216,6 +1223,12 @@ impl EventEffect {
                     // §322：`remove_all:<id>` —— 把这一种牌**全**删掉（`vampires` 的 "Remove all
                     // Strikes"）。载荷是卡 id，与 `curse:` / `card:` 同一个形状。
                     "remove_all" => (Self::RemoveAllCards, Some(payload)),
+                    // §324：`augmenter` 的 `[Become Test Subject]` —— 选 n 张各改造一次（1..=5）。
+                    // ⚠️ 它必须在**带载荷**的那一支：裸词那支拿到的是整串，永远匹不上。
+                    "transform_choose" => match payload.parse::<u8>() {
+                        Ok(count) if (1..=5).contains(&count) => (Self::OwedTransforms(count), None),
+                        _ => return None,
+                    },
                     "relic_lose" => (Self::LoseRelic, Some(payload)),
                     // §278：`damage_pct:25` —— **数字在词里**（`Amount` 那一格与它无关），
                     // 因为 A15 的 35% 是另一条效果，而不是同一个数字换了值。
@@ -6555,6 +6568,20 @@ impl RunState {
                     .roll(RunStream::Event, found as u32)
                     .map_err(|_| RunError::EmptyRange)? as usize;
                 self.remove_at(eligible[roll] as usize);
+            }
+            // §324：`[Become Test Subject]` —— 欠 n 次改造（`pickup_*` 通道）。
+            //
+            // 两条拒绝都是为了"不静默吞掉一次额度"：牌组空（没有可指的牌）与**已经欠着**
+            // 别的改牌（`empty_cage` / `astrolabe` 的欠账会被这一条覆盖掉）。
+            EventEffect::OwedTransforms(count) => {
+                if self.deck_len == 0 {
+                    return Err(RunError::DeckEmpty);
+                }
+                if self.pickup_change.is_some() {
+                    return Err(RunError::WrongPhase);
+                }
+                self.pickup_change = Some(DeckChange::Transform);
+                self.pickup_picks = count;
             }
             // §321：升级牌组里的每一张（`upgrade_at` 已经是"没有 `+` 行 ⇒ 什么也不做"）。
             EventEffect::UpgradeAll => {
@@ -12835,6 +12862,90 @@ mod tests {
         run.resolve_event(EventEffect::RemoveAllCards, Some("strike"), &pool)
             .expect("nothing left to remove");
         assert_eq!(run.deck_len, 2);
+    }
+
+    /// §324：`transform_choose:2` 走的是**拾取欠账**通道（没有问句、与 `pending` 无关）。
+    #[test]
+    fn transform_choose_owes_two_transforms_through_the_pickup_channel() {
+        let pool = basic_pool();
+        let mut run = RunState::new(7, 80, 0, &["strike", "defend", "bash"])
+            .expect("a run");
+        run.begin_event("augmenter", "augmenter").expect("the event");
+        run.resolve_event(
+            EventEffect::parse("transform_choose:2", 2).expect("parses").0,
+            None,
+            &pool,
+        )
+        .expect("owing two transforms");
+        assert_eq!(run.pickup_change(), Some(DeckChange::Transform), "the debt kind");
+        assert_eq!(run.pickup_picks(), 2, "two of them");
+        // 事件本身**已经收尾**：欠账与 `pending` 是两条通道。
+        assert_eq!(run.pending(), Pending::None, "the room settled, the debt lives on");
+
+        // 取一次 ⇒ 还剩一次；再取一次 ⇒ 清空（两侧）。
+        run.pickup_card(0, &pool).expect("the first");
+        assert_eq!(run.pickup_picks(), 1);
+        assert_eq!(run.pickup_change(), Some(DeckChange::Transform));
+        run.pickup_card(0, &pool).expect("the second");
+        assert_eq!(run.pickup_picks(), 0);
+        assert_eq!(run.pickup_change(), None, "the debt is gone");
+        assert_eq!(run.deck_len, 3, "transform keeps the size");
+    }
+
+    /// §324：两条拒绝 —— 牌组空（没得选）与**已经欠着**（不覆盖别人的欠账）。
+    #[test]
+    fn transform_choose_refuses_an_empty_deck_and_an_existing_debt() {
+        let pool = basic_pool();
+        // ① 牌组空。
+        let mut empty = RunState::new(7, 80, 0, &[]).expect("a run");
+        empty.begin_event("augmenter", "augmenter").expect("the event");
+        let before = empty;
+        assert_eq!(
+            empty.resolve_event(EventEffect::OwedTransforms(2), None, &pool),
+            Err(RunError::DeckEmpty),
+            "nothing to point at"
+        );
+        assert!(empty == before, "not one byte moved");
+
+        // ② 已经欠着（`empty_cage` = 移除 2 张）。
+        let mut run = RunState::new(7, 80, 0, &["strike", "defend", "bash"]).expect("a run");
+        run.push_relic("empty_cage", &TYPED_CARDS).expect("empty cage");
+        assert_eq!(run.pickup_change(), Some(DeckChange::Remove), "the cage owes removals");
+        run.begin_event("augmenter", "augmenter").expect("the event");
+        let before = run;
+        assert_eq!(
+            run.resolve_event(EventEffect::OwedTransforms(2), None, &pool),
+            Err(RunError::WrongPhase),
+            "another relic's debt must not be overwritten"
+        );
+        assert!(run == before, "not one byte moved");
+        assert_eq!(run.pickup_change(), Some(DeckChange::Remove), "the cage's debt survives");
+        assert_eq!(run.pickup_picks(), 2);
+    }
+
+    /// §324：`mutagenic_strength` 早就在里了 —— 这条判据把它钉住，不让
+    /// “一件新遗物”被重复实现（我第一版就重复了：差点又加一条
+    /// `StartCombatStatuses`，而它与内容里的 `standard.mutagenic_strength` 重复）。
+    ///
+    /// 两侧：开战垫一条**它自己的**状态；没有这件遗物时没有它。
+    #[test]
+    fn mutagenic_strength_rides_its_own_carrier_status() {
+        let mut run = ironclad();
+        run.push_relic("mutagenic_strength", &TYPED_CARDS).expect("mutagenic strength");
+        let bonus = run.combat_bonus();
+        assert_eq!(bonus.status_count, 1, "one carrier status");
+        let entry = bonus.statuses[0].expect("an entry");
+        assert_eq!(
+            entry.id, "standard.mutagenic_strength",
+            "the content status owns both halves (+3 Strength, then -3 at turn end)"
+        );
+        let plain = ironclad().combat_bonus();
+        assert!(
+            (0..plain.status_count).all(|index| plain.statuses[index]
+                .map(|entry| entry.id != "standard.mutagenic_strength")
+                .unwrap_or(true)),
+            "a run without the relic has no such carrier"
+        );
     }
 
     /// §188: a list that fails **in the middle** must not half-apply.
