@@ -97,7 +97,9 @@
 //! 16. The zones' *behaviour*: draw-from-index-0, `ZonePlacement::Top`, `MoveCardToZone`,
 //!     `AddCard`'s de-duplication by card id, `AllCards`' concatenation order. Those are rules of
 //!     the live engine; this model only has to lay the piles out in the right order.
-//! 17. `hash_full` itself (§3-D4) - only `hash_golden`'s text is produced here.
+//! 17. ~~`hash_full` itself (§3-D4)~~ - **§334 已做**：`write_full_hash_input` 就是
+//!     `write_hash_input`（逐字节）+ `--full--` 之后一段模型文本，覆盖 §A 的 1-3 条与
+//!     `SourceCombatantId`。它**不改变**本文件的输出（`write_hash_input` 一个字节都没动）。
 //! 18. Everything OUT of v1 as a whole (spec §2.2): the run layer (map/rooms/rewards/shop/events),
 //!     runtime JSON, the positional system, simultaneous-team turns, consumables, Shred/Recipe,
 //!     the Blazor sandbox and the bot/FightPlanner.
@@ -141,6 +143,304 @@ use crate::writer::TextWriter;
 /// Returns nothing on purpose: [`TextWriter`] never writes half a field, so the only thing a
 /// caller can do with a failure is notice it via [`TextWriter::overflowed`]. A truncated
 /// fingerprint is worse than no fingerprint - it looks like a fingerprint.
+/// §334：`hash_full` 的输入文本 = [`write_hash_input`]（逐字节）+ `--full--` 之后的模型段。
+///
+/// 为什么是**追加**而不是另写一份：`hash_golden` 是参考规范文本的复刻，任何"顺手多写一行"
+/// 都会移动 85 份语料。追加段让两个指纹各自回答各自的问题 ——
+/// "与参考一致吗"（`hash_golden`）与"这一局真的相同吗"（`hash_full`）。
+///
+/// 段内顺序是**契约**（改顺序就换指纹），而且每条都写"有没有值"——`Option` 用 `none`/值，
+/// 与规范文本里三种"没有值"的拼法无关（那三种是**参考**的格式，这里是本移植自己的）。
+#[cfg(test)]
+mod full_hash_tests {
+    use super::*;
+    use crate::hash::{full_hash_hex, sha256, to_hex_lower};
+    use crate::state::{
+        CardDefinitionId, ChoiceSource, ChoiceThen, Combatant, CombatantDefinitionId, CombatantId,
+        StatusDefinitionId, StatusInstance, StatusInstanceId, StatusPolarity, TeamId,
+    };
+
+    fn arena() -> CombatState {
+        let id = |name: &str| CombatantId::new(name).unwrap();
+        let unit = |name: &str, team: &str| {
+            Combatant::new(
+                id(name),
+                CombatantDefinitionId::new(name).unwrap(),
+                TeamId::new(team).unwrap(),
+                40,
+                40,
+            )
+        };
+        let mut state = CombatState::new(crate::state::CombatId::new("c1").unwrap(), 7);
+        state.add_combatant(unit("hero", "player")).unwrap();
+        state.add_combatant(unit("ogre", "enemy")).unwrap();
+        state
+    }
+
+    fn golden(state: &CombatState) -> [u8; 64] {
+        let mut buf = [0u8; 1 << 16];
+        let text = {
+            let mut w = TextWriter::new(&mut buf);
+            write_hash_input(&mut w, state);
+            assert!(!w.overflowed());
+            w.as_str().to_string()
+        };
+        let mut hex = [0u8; 64];
+        to_hex_lower(&mut hex, &sha256(text.as_bytes()));
+        hex
+    }
+
+    fn full(state: &CombatState) -> [u8; 64] {
+        let mut buf = [0u8; 1 << 16];
+        let text = {
+            let mut w = TextWriter::new(&mut buf);
+            write_full_hash_input(&mut w, state);
+            assert!(!w.overflowed());
+            w.as_str().to_string()
+        };
+        let mut hex = [0u8; 64];
+        full_hash_hex(&mut hex, &text);
+        hex
+    }
+
+    /// ★ 这条是 `hash_full` 的全部理由：只在 `PendingChoice` 上不同的两个局面。
+    ///
+    /// `hash_golden` 相同（参考没有这个字段）而 `hash_full` 不同 —— 于是"同一串动作 ⇒
+    /// 同一局"这条回放判据终于能看见"选牌答案不一样"。
+    #[test]
+    fn a_pending_choice_moves_the_full_hash_but_not_the_golden_one() {
+        let mut bare = arena();
+        let mut choosing = arena();
+        let chooser = CombatantId::new("hero").unwrap();
+        let mut offered = crate::state::Bounded::new();
+        offered
+            .push(
+                CardDefinitionId::new("strike").unwrap(),
+                crate::state::Container::ChoiceOptions,
+            )
+            .unwrap();
+        choosing
+            .begin_choice(crate::state::PendingChoice {
+                chooser,
+                source: ChoiceSource::Offered,
+                min: 1,
+                max: 1,
+                then: ChoiceThen::ToHand,
+                offered,
+                candidates: crate::state::Bounded::new(),
+            })
+            .expect("the question opens");
+        assert!(bare.pending_choice().is_none());
+
+        assert_eq!(
+            golden(&bare),
+            golden(&choosing),
+            "hash_golden must NOT see PendingChoice (the reference has no such field)"
+        );
+        assert_ne!(
+            full(&bare),
+            full(&choosing),
+            "hash_full must see it -- that is the whole point"
+        );
+    }
+
+    /// 状态的 `source_combatant_id`（DoT 的出手方）也只在 `hash_full` 里。
+    #[test]
+    fn a_status_source_moves_the_full_hash_but_not_the_golden_one() {
+        let mut plain = arena();
+        let mut sourced = arena();
+        let hero = CombatantId::new("hero").unwrap();
+        let mut instance = StatusInstance::new(
+            StatusInstanceId::new("st_poison").unwrap(),
+            StatusDefinitionId::new("standard.poison").unwrap(),
+            StatusPolarity::Debuff,
+        )
+        .with_stacks(3);
+        instance.source_combatant_id = Some(hero);
+        sourced
+            .combatant_mut(&CombatantId::new("ogre").unwrap())
+            .unwrap()
+            .push_status(instance)
+            .unwrap();
+        let mut bare_instance = instance;
+        bare_instance.source_combatant_id = None;
+        plain
+            .combatant_mut(&CombatantId::new("ogre").unwrap())
+            .unwrap()
+            .push_status(bare_instance)
+            .unwrap();
+
+        assert_eq!(golden(&plain), golden(&sourced), "the hasher writes seven fields only");
+        assert_ne!(full(&plain), full(&sourced), "hash_full carries the source");
+    }
+
+    /// 本移植的 model-only 战斗事实（`ascension` / `heal_blocked` / `gold_gained` / `encounter`）。
+    #[test]
+    fn the_model_only_fight_facts_move_the_full_hash_only() {
+        let cases: &[fn(&mut CombatState)] = &[
+            |state| state.set_ascension(17),
+            |state| state.set_heal_blocked(true),
+            |state| state.gold_gained = 20,
+            |state| state.encounter = 3,
+        ];
+        for (index, mutate) in cases.iter().enumerate() {
+            let mut plain = arena();
+            let mut changed = arena();
+            mutate(&mut changed);
+            assert_eq!(
+                golden(&plain),
+                golden(&changed),
+                "case {index}: hash_golden must not move"
+            );
+            assert_ne!(
+                full(&plain),
+                full(&changed),
+                "case {index}: hash_full must move"
+            );
+        }
+    }
+
+    /// 超集的另一半：**改变 `hash_golden` 的变化，`hash_full` 也必须变**。
+    ///
+    /// 少了这条，"`hash_full` 只在模型段上有区别"就可能退化成"它根本不看规范文本"。
+    #[test]
+    fn everything_that_moves_the_golden_hash_also_moves_the_full_one() {
+        let mut plain = arena();
+        let mut changed = arena();
+        changed.random_seed = 99;
+        assert_ne!(golden(&plain), golden(&changed));
+        assert_ne!(full(&plain), full(&changed), "the full hash is a superset");
+
+        let mut round = arena();
+        round.current_round = 5;
+        assert_ne!(golden(&plain), golden(&round));
+        assert_ne!(full(&plain), full(&round));
+    }
+
+    /// `hash_full` 的文本以 `hash_golden` 的文本为**前缀**（追加而不是重写）。
+    #[test]
+    fn the_full_text_is_the_golden_text_plus_a_section() {
+        let state = arena();
+        let mut golden_buf = [0u8; 1 << 16];
+        let golden_text = {
+            let mut w = TextWriter::new(&mut golden_buf);
+            write_hash_input(&mut w, &state);
+            w.as_str().to_string()
+        };
+        let mut full_buf = [0u8; 1 << 16];
+        let full_text = {
+            let mut w = TextWriter::new(&mut full_buf);
+            write_full_hash_input(&mut w, &state);
+            w.as_str().to_string()
+        };
+        assert!(
+            full_text.starts_with(&golden_text),
+            "the full text must start with the golden text (append, not rewrite)"
+        );
+        assert!(full_text.contains("--full--\n"), "and then the model section");
+        assert!(full_text.contains("choice=none"), "with no pending choice, say so");
+    }
+}
+
+pub fn write_full_hash_input(w: &mut TextWriter<'_>, s: &CombatState) {
+    write_hash_input(w, s);
+    w.str("--full--\n");
+
+    // ① 本移植的 model-only 战斗事实。它们改变"以后会怎样"，参考没有这些字段。
+    w.str("ascension=").i32(i32::from(s.ascension)).char('\n');
+    w.str("encounter=").u32(s.encounter).char('\n');
+    w.str("heal_blocked=").u32(u32::from(s.heal_blocked)).char('\n');
+    w.str("summon_num=").i32(s.next_combatant_number).char('\n');
+    w.str("gold_carried=").i32(s.gold_carried_away).char('\n');
+    w.str("gold_gained=").i32(s.gold_gained).char('\n');
+
+    // ② 回合机的三个瞬时段。它们"看起来是瞬时"，但都会改变下一次选意图/推进回合的结果：
+    //    `vacated_seat` 决定席位交给谁、`extra_turn_for` 决定谁再来一次、
+    //    `forced_turn_ends` 是页面读的计数。所以进 `hash_full`。
+    w.str("vacated_seat=").opt_i32_blank(s.vacated_seat.map(i32::from)).char('\n');
+    w.str("extra_turn=").opt_str_none(s.extra_turn_for.as_ref().map(|id| id.as_str())).char('\n');
+    w.str("forced_ends=").i32(s.forced_turn_ends).char('\n');
+
+    // ③ 每回合的出牌数（§128 的 `cardsPlayedThisTurn` / `LastTurn`）。
+    w.str("played_this=").i32(s.cards_played_this_turn).char('\n');
+    w.str("played_last=").i32(s.cards_played_last_turn).char('\n');
+
+    // ④ 状态实例的 `source_combatant_id`（DoT 的出手方）。规范文本不写它（`AppendStatus`
+    //    只写七个字段），而"这一跳毒是谁下的"会改变力量加伤 ⇒ 它属于 `hash_full`。
+    //    按 `(combatant, 实例 id)` 逐条写，**顺序 = 状态表顺序**（与 `s=` 行一致）。
+    w.str("status_src=");
+    for combatant in s.combatants().iter() {
+        for instance in combatant.statuses() {
+            w.str(instance.id.as_str()).char('@');
+            match &instance.source_combatant_id {
+                Some(source) => {
+                    w.str(source.as_str());
+                }
+                None => {
+                    w.str("none");
+                }
+            }
+            w.char(',');
+        }
+    }
+    w.char('\n');
+
+    // ⑤ **待决的选牌**（§161.3）—— 这一条是 `hash_full` 存在的主要理由。
+    //
+    //    `PendingChoice` 决定"玩家现在能选什么、选完发生什么"。两个只在它上面不同的局面，
+    //    `hash_golden` 完全一样，而下一步的合法动作集不同 —— 回放判据看不见这种分叉。
+    match s.pending_choice() {
+        None => {
+            w.str("choice=none\n");
+        }
+        Some(choice) => {
+            w.str("choice=")
+                .str(choice.chooser.as_str())
+                .char(':')
+                .i32(i32::from(choice.source as u8))
+                .char(':')
+                .i32(i32::from(choice.min))
+                .char(':')
+                .i32(i32::from(choice.max))
+                .char(':')
+                .i32(choice_then_code(&choice.then))
+                .char('\n');
+            // `Offered` 的候选是**卡定义**；`candidates` 是收窄后的合法实例清单（§226）。
+            // 两个都写：前者决定"问什么"，后者决定"哪些能选"。
+            w.str("choice_offered=");
+            for definition in choice.offered.as_slice() {
+                w.str(definition.as_str()).char(',');
+            }
+            w.char('\n');
+            w.str("choice_candidates=");
+            for candidate in choice.candidates.as_slice() {
+                w.str(candidate.as_str()).char(',');
+            }
+            w.char('\n');
+        }
+    }
+}
+
+/// [`crate::state::ChoiceThen`] 的稳定编号（写进 `hash_full`，所以**不许重排**）。
+///
+/// `Copy` 带两个参数（`copies` / `into`），所以它比别的变体多写两格 —— 但为了指纹稳定，
+/// 这里把参数**编码进同一个数**：`code = 变体号 * 256 + copies`，`into` 单独一行。
+fn choice_then_code(then: &crate::state::ChoiceThen) -> i32 {
+    use crate::state::ChoiceThen;
+    match then {
+        ChoiceThen::Exhaust => 1,
+        ChoiceThen::DiscardThenDraw => 2,
+        ChoiceThen::ToHand => 3,
+        ChoiceThen::Copy { copies, .. } => 4 * 256 + i32::from(*copies),
+        ChoiceThen::ToHandPrinted => 5,
+        ChoiceThen::Upgrade => 6,
+        ChoiceThen::PlayChosen => 7,
+        ChoiceThen::ToHandFree => 8,
+        ChoiceThen::ToDrawPileBottomFree => 9,
+        ChoiceThen::ToDrawPileTop => 10,
+    }
+}
+
 pub fn write_hash_input(w: &mut TextWriter<'_>, s: &CombatState) {
     // 1. Scalars. Enums are always `(int)`, never names.
     w.str("id=").str(s.id.as_str()).char('\n');

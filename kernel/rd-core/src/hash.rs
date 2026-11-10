@@ -190,6 +190,19 @@ pub fn sha256(data: &[u8]) -> [u8; 32] {
     h.finalize()
 }
 
+/// §334：**完整**指纹（`write_full_hash_input` 的 SHA-256）—— `hash_golden` 的严格超集。
+///
+/// 为什么单独一个入口而不是给 `write_hash_input` 加参数：`hash_golden` 是参考规范文本的
+/// 逐字节复刻（85 份语料 + `golden-baseline` 闸门都建在它上面）。两个入口让"这条改动该不该
+/// 动基线"可以分开回答：`write_hash_input` 动 = 基线动；只有 `write_full_hash_input` 动 =
+/// 只影响"这一局是否相同"的判定。
+///
+/// ⚠️ `rd-core` 是 `no_std`：所以写进调用方给的 `[u8; 64]`，不返回 `String`
+/// （与 [`to_hex_lower`] 同一个形状）。
+pub fn full_hash_hex(out: &mut [u8; 64], text: &str) {
+    to_hex_lower(out, &sha256(text.as_bytes()));
+}
+
 /// Lowercase hex, 64 characters. Matches `Convert.ToHexString(...).ToLowerInvariant()`.
 pub fn to_hex_lower(out: &mut [u8; 64], digest: &[u8; 32]) {
     const HEX: &[u8; 16] = b"0123456789abcdef";
