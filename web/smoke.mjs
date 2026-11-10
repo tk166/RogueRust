@@ -127,6 +127,8 @@ const REQUIRED = [
   "rd_run_reward_card_id_into", "rd_run_reward_card_title_len", "rd_run_reward_card_title_into",
   "rd_run_take_card", "rd_run_skip_reward",
   "rd_env_card_kind", "rd_run_card_kind", "rd_run_node_resolved", "rd_run_boss_beaten",
+  // §345: 本幕 Boss 的**敌人 id**（显示层决定怎么念）。
+  "rd_run_boss_id_len", "rd_run_boss_id_into",
   // §344: 缺口 G1/G2/G9 —— 局终判据、幕尽动作、篝火回复量。
   "rd_run_over", "rd_run_over_why", "rd_run_end_act", "rd_run_rest_heal",
   // §343: 这家店的删卡服务还能不能用（wiki: "once per Shop"）。

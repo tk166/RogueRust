@@ -1129,6 +1129,50 @@ console.log(`  preview vs real   ${previewed} damage previewed, and the hero los
 console.log(`  target picking    a two-target card is not played directly (index -1)`);
 console.log(`  current vs max    distinguished on the hero after damage and on a struck enemy`);
 console.log(`  enemy statuses    count cell == obs[base+7], and bash makes it non-zero`);
+// ---------------------------------------------------------------------------------------------
+// §345: display names -- `prettifyId` / `displayName` / the replacement table.
+//
+// 这一层是**纯函数**，所以它能在 Node 里被钉住：内核给 id，屏幕上的名字由这里决定
+// （规避版权等用途正是靠那张表）。三条：美化规则、优先级、替换表真的能覆盖内核名。
+// ---------------------------------------------------------------------------------------------
+{
+  const cases = [
+    ["entropic_brew", "Entropic Brew"],
+    ["acid_slime_m", "Acid Slime M"],
+    ["defend+", "Defend+"],
+    ["standard.constricted", "Constricted"],
+    ["slime_boss", "Slime Boss"],
+    ["", ""],
+    [null, ""],
+  ];
+  for (const [input, want] of cases) {
+    const got = UI.prettifyId(input);
+    if (got !== want) fail(`prettifyId(${JSON.stringify(input)}) = ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+  }
+
+  // 优先级：替换表 > 内核名 > 美化 id。
+  const plain = UI.displayName("entropic_brew", "");
+  if (plain !== "Entropic Brew") fail(`displayName without a kernel name: ${plain}`);
+  const withKernel = UI.displayName("entropic_brew", "Entropic Brew (content)");
+  if (withKernel !== "Entropic Brew (content)") {
+    fail(`the kernel/content name must win over the prettifier: ${withKernel}`);
+  }
+  // ★ 替换表必须能**覆盖**内核名 —— 否则"屏幕上的名字与内核不同"这件事做不到。
+  UI.NAMES["slime_boss"] = "胶质巨像";
+  try {
+    const replaced = UI.displayName("slime_boss", "Slime Boss");
+    if (replaced !== "胶质巨像") {
+      fail(`the replacement table must override the kernel name, got ${replaced}`);
+    }
+  } finally {
+    delete UI.NAMES["slime_boss"];
+  }
+  // 空 id 不编名字（`""` 是"没有"，不是"未命名"）。
+  if (UI.displayName("", "Some Name") !== "Some Name") fail("an empty id must fall through");
+  if (UI.displayName("", "") !== "") fail("two empties must stay empty");
+}
+
+console.log(`  display names     prettifyId rules; table > kernel name > prettified id`);
 console.log(`  cell-for-cell     every printed quantity == its observation cell, at 5 moments`);
 console.log(`  energy below max  checked after paying a cost (the only moment they differ)`);
 console.log(`  downed enemies    none alive once the fight is won`);

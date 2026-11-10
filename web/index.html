@@ -531,7 +531,9 @@ const cardText = (h) =>
   readText((i) => ex.rd_env_card_text_len(i), (p, i) => ex.rd_env_card_text_into(i, p), h);
 // Both of these are presentation-only exports (the numbers live in the observation): the enemy id
 // comes from `ENCT`, the intent text from `EACT` + the program's own damage.
-const enemyName = (e) =>
+/// §345：敌人名 = 敌人 **id** 经显示层。内核给的本来就是 id（`acid_slime_m`）。
+const enemyName = (e) => RD_UI.displayName(rawEnemyName(e), "");
+const rawEnemyName = (e) =>
   readText((i) => ex.rd_env_enemy_name_len(i), (p, i) => ex.rd_env_enemy_name_into(i, p), e);
 /// §147: every status on a combatant, **by name** — the five observation axes are a frozen layout,
 /// not the whole world. `whom`: -1 = hero, 0..5 = enemy wall slot.
@@ -666,6 +668,9 @@ const runRead = {
   actionArg: (i, w) => ex.rd_run_action_arg(i, w),
   relicName: (i) =>
     readText((k) => ex.rd_run_relic_name_len(k), (p, k) => ex.rd_run_relic_name_into(k, p), i),
+  // §345：遗物的 **id** —— 显示层用它查替换表（`RD_UI.NAMES`）。
+  relicId: (i) =>
+    readText((k) => ex.rd_run_relic_id_len(k), (p, k) => ex.rd_run_relic_id_into(k, p), i),
   potionName: (i) =>
     readText((k) => ex.rd_run_potion_id_len(k), (p, k) => ex.rd_run_potion_id_into(k, p), i),
 };
@@ -808,12 +813,17 @@ function renderTopBar() {
     `gold <b>${gold}</b> · deck <b>${deck}</b>` + ascNote + overflowNote;
   const chips = [];
   for (let index = 0; index < relics; index++) {
-    chips.push(`<span class="chip relic">${esc(runRead.relicName(index) || "relic")}</span>`);
+    // §345：遗物的 `DisplayName` 是**内容**的名字；替换表（`RD_UI.NAMES`）优先。
+    const relicId = runRead.relicId(index);
+    chips.push(
+      `<span class="chip relic">${esc(RD_UI.displayName(relicId, runRead.relicName(index)))}</span>`
+    );
   }
   // The potion belt (`inv:§9.3`, three slots). Each held potion is a chip with a drop button.
   const potions = ex.rd_run_potion_count();
   for (let index = 0; index < Math.max(0, potions); index++) {
-    const id = runRead.potionName(index) || "potion";
+    // §345：内核给 **id**，这里给名字（替换表 → 美化 id）。原来直接把 id 印在屏幕上。
+    const id = RD_UI.displayName(runRead.potionName(index), "");
     // §158: `max_hp` (Fruit Juice) and `potion_fill` (Entropic Brew) are about the **run** and the
     // wiki lets you drink them in most rooms -- so the button can no longer key off "am I in a
     // fight". The ABI answers for a single bottle so this list does not become a second one.
@@ -943,7 +953,12 @@ function runSnapshot() {
     gold: ex.rd_run_observe(4),
     deckCount: ex.rd_run_deck_count(),
     relicCount: ex.rd_run_observe(6),
-    bossName: "Slime Boss",
+    // §345（缺口 G5）：本幕 Boss 的**敌人 id**（`slime_boss` / `the_guardian` / …）经显示层。
+    // 原来是写死的 "Slime Boss" —— 第二、三幕会显示错的 Boss 名。
+    bossName: RD_UI.displayName(
+      readText(() => ex.rd_run_boss_id_len(), (ptr) => ex.rd_run_boss_id_into(ptr)),
+      ""
+    ),
     offers: [],
     shopCards: [],
     // §332：无色货架与药水货架（与上面两排同一形状）。
@@ -1002,33 +1017,37 @@ function runSnapshot() {
       // §343：这家店的删卡服务还能不能用（wiki: "once per Shop"）。`1` 能 / `0` 用过了。
       snapshot.removalAvailable = ex.rd_run_removal_available();
       for (let slot = 0; slot < ex.rd_run_shop_card_count(); slot++) {
+        const cardId = shopCardId(slot);
         snapshot.shopCards.push({
-          id: shopCardId(slot),
-          // No title export exists for shop stock; `describe` falls back to the id.
-          title: "",
+          id: cardId,
+          // §345：内核给 **id**，这里给名字（原来 `title` 是空串 ⇒ 面板把 id 印出来）。
+          title: RD_UI.displayName(cardId, ""),
           chip: kindChip(runKind(2, slot)),
           price: ex.rd_run_shop_card_price(slot),
         });
       }
       // §332：无色货架与药水货架（与上面两排同一形状）。
       for (let slot = 0; slot < ex.rd_run_shop_colorless_count(); slot++) {
+        const colorlessId = shopColorlessId(slot);
         snapshot.shopColorless.push({
-          id: shopColorlessId(slot),
-          title: "",
+          id: colorlessId,
+          title: RD_UI.displayName(colorlessId, ""),
           price: ex.rd_run_shop_colorless_price(slot),
         });
       }
       for (let slot = 0; slot < ex.rd_run_shop_potion_count(); slot++) {
+        const potionId = shopPotionId(slot);
         snapshot.shopPotions.push({
-          id: shopPotionId(slot),
-          title: "",
+          id: potionId,
+          title: RD_UI.displayName(potionId, ""),
           price: ex.rd_run_shop_potion_price(slot),
         });
       }
       for (let slot = 0; slot < ex.rd_run_shop_relic_count(); slot++) {
+        const relicId = shopRelicId(slot);
         snapshot.shopRelics.push({
-          id: shopRelicId(slot),
-          title: "",
+          id: relicId,
+          title: RD_UI.displayName(relicId, ""),
           price: ex.rd_run_shop_relic_price(slot),
         });
       }
@@ -1886,7 +1905,8 @@ function render(verdict, reward) {
     return `
       <div class="enemy-panel${down}${aimable ? " enemy-target" : ""}${
         e.alive && e.intentDamage !== null && e.intentDamage > 0 ? " threat" : ""}"
-           data-enemy-panel="${e.slot}" ${aimable ? `data-target-slot="${e.slot}"` : ""}>
+           data-enemy-panel="${e.slot}" data-enemy-id="${esc(rawEnemyName(e.slot))}" ${
+             aimable ? `data-target-slot="${e.slot}"` : ""}>
       <div class="row"><span class="name">${esc(e.name)}${e.minion ? ' <span class="chip minion" title="召唤出来的随从">召唤</span>' : ""}${e.alive ? "" : " (down)"}</span>
         <span class="name">${e.hp} / ${e.hpMax}</span></div>
       <div class="bar"><i style="width:${Math.max(0, 100 * e.hp / Math.max(1, e.hpMax))}%"></i></div>

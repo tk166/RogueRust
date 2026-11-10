@@ -57,6 +57,55 @@
     return out;
   }
 
+  // ---------------------------------------------------------------------------------------------
+  // Display names (§345)
+  //
+  // **内核给 id，显示层给名字。** 这是有意的：最终要能"屏幕上的名字与内核的名字不同"
+  // （规避版权等用途、本地化、以及纯粹的品味），而那件事只能发生在**显示层** ——
+  // 一旦内核把"Slime Boss"写进 ABI，改名的成本就从"改一张表"变成"改内容 + 重编镜像"。
+  //
+  // 所以：ABI 一律给 id（药水 id、商店四排 id、遗物 id、Boss 的敌人 id），这里决定怎么念。
+  // ---------------------------------------------------------------------------------------------
+
+  /// 替换表：**id → 屏幕上的名字**。命中的条目**覆盖**内核/内容给的名字。
+  ///
+  /// 空表是**正常状态**：美化规则（`prettifyId`）已经能把 `entropic_brew` 念成
+  /// "Entropic Brew"。要改名（版权、本地化、某个名字太丑）就往这里加一行 ——
+  /// 加在这里而不是内核里，是因为**同一个内核要能喂两套名字**（比如正式版与试玩版）。
+  const NAMES = {
+    // 例：`slime_boss: "胶质巨像",`  // 屏幕上一个字都不提原版
+  };
+
+  /// `id` → 一个能念的字符串。**只是兜底**，不是"内容的正式名字"。
+  ///
+  /// | 输入 | 输出 | 规则 |
+  /// |---|---|---|
+  /// | `entropic_brew` | `Entropic Brew` | 按 `_` 分词、每词首字母大写 |
+  /// | `acid_slime_m` | `Acid Slime M` | 单字母词整体大写 |
+  /// | `defend+` | `Defend+` | `+` 是升级标记，属于后缀 |
+  /// | `standard.constricted` | `Constricted` | 去掉内容命名空间 |
+  function prettifyId(id) {
+    if (!id) return "";
+    let text = String(id);
+    const dot = text.lastIndexOf(".");
+    if (dot >= 0) text = text.slice(dot + 1);
+    let plus = "";
+    while (text.endsWith("+")) { plus += "+"; text = text.slice(0, -1); }
+    const words = text.split(/[_\s]+/).filter(Boolean).map((word) =>
+      word.length <= 1 ? word.toUpperCase() : word.charAt(0).toUpperCase() + word.slice(1));
+    return words.join(" ") + plus;
+  }
+
+  /// 屏幕上的名字：**替换表 → 内核/内容给的名字 → 美化 id**。
+  ///
+  /// `kernelName` 是可选的第二来源（遗物的 `DisplayName`、卡的 `NameKey`）。
+  /// 顺序不能反：替换表必须能覆盖内核的名字，否则"改名"这件事做不到。
+  function displayName(id, kernelName) {
+    if (id && Object.prototype.hasOwnProperty.call(NAMES, id)) return NAMES[id];
+    if (kernelName) return kernelName;
+    return prettifyId(id);
+  }
+
   const H = {
     ROUND: 0, TURN: 1, PHASE: 2, RESULT: 3, HP: 4, HP_MAX: 5, BLOCK: 6, WARD: 7,
     ENERGY: 8, ENERGY_MAX: 9, HAND: 10, ENEMIES: 11,
@@ -537,6 +586,8 @@
     OFF_HERO_STATUS, OFF_ENEMY, OFF_ENEMY_STATUS, OFF_HAND, OFF_PILES, X_COST_DISPLAY,
     MAX_ENEMY_SLOTS, MAX_HAND_SLOTS, STATUS_AXES, H,
     RESULT_NAMES, INTENT_KINDS, ACTION_PLAY, ACTION_END_TURN,
+    // §345：显示层名字（替换表 + 美化 id）
+    NAMES, prettifyId, displayName,
     // pure describers
     playOptions, endTurnAction,
     describeHero, describeEnemies, describeHand, describeStatus, describe,

@@ -671,6 +671,13 @@ const report = await evaluate(`(async () => {
     const shown = [...panelEl.querySelectorAll("[data-enemy-panel]")];
     return shown.map((el) => (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 40));
   };
+  /// §345：每个面板的**敌人 id**（内核给的那个）。显示名是显示层的事，判据只关心身份 ——
+  /// 原来按"面板文本的第一个词"取名字，在页面开始印显示名（"Bronze Orb"）之后分不出谁是谁。
+  const enemyIds = () => {
+    const panelEl = document.getElementById("enemies");
+    return [...panelEl.querySelectorAll("[data-enemy-panel]")]
+      .map((el) => el.getAttribute("data-enemy-id") || "");
+  };
   // Only ever click the page's own button. Stepping the ABI directly was the first attempt and it
   // **desynced** the page from the session: the end-turn button is disabled exactly while an enemy
   // is acting, so stepping anyway ran a second END_TURN on top of a turn the page had not painted --
@@ -697,6 +704,7 @@ const report = await evaluate(`(async () => {
       // entries have to be distinguishable (the page keys them by slot, the kernel by id).
       await fightFor(6);
       out.act2.after = enemySlots();
+      out.act2.afterIds = enemyIds();
       out.act2.threw = lastError();
     }
   }
@@ -1327,11 +1335,13 @@ want(!act2.threw, `act 2: a step threw: ${act2.threw}`);
 // §205: a summoned combatant has to be **named**. It is not in the fight plan (only the boss is), so
 // the name has to come from the live combatant -- before this, both orbs painted as "enemy #1/#2"
 // and nothing in the suite noticed, because "3 entries" was the whole assertion.
-const summonedNames = (act2.after || []).map((entry) => entry.split(/\s+/)[0].trim());
-want(summonedNames.filter((name) => name === "bronze_orb").length === 2,
-  `act 2: both summoned orbs must be named bronze_orb; got ${JSON.stringify(summonedNames)}`);
-want(!summonedNames.some((name) => /^enemy #/.test(name)),
-  `act 2: a summoned enemy still has no name: ${JSON.stringify(summonedNames)}`);
+// §345：查 **id**（`data-enemy-id`），不查显示名的第一个词 —— 显示名由显示层的映射表决定，
+// 判据关心的是"这一格确实有身份"（原来是按面板文本的第一个词，页面一印显示名就分不清了）。
+const summonedIds = act2.afterIds || [];
+want(summonedIds.filter((id) => id === "bronze_orb").length === 2,
+  `act 2: both summoned orbs must carry the id bronze_orb; got ${JSON.stringify(summonedIds)}`);
+want(!summonedIds.some((id) => id === "" || id === null),
+  `act 2: a summoned enemy still has no id: ${JSON.stringify(summonedIds)}`);
 want(act3.build === 0, `act 3: the reptomancer fight did not build (${act3.build}) ${act3.error || ""}`);
 want((act3.opening || []).length === 3,
   `act 3: boss + two preset daggers; got ${JSON.stringify(act3.opening)}`);
