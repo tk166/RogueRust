@@ -76,16 +76,51 @@ try {
     const wide = formation.computeCombatFormation(slots, desktop);
     const upper = wide.enemies.filter((e) => e.row === 0).length;
     const lower = wide.enemies.filter((e) => e.row === 1).length;
-    if (upper !== Math.ceil(n / 2) || lower !== Math.floor(n / 2)) rowOk = false;
+    // 规则：**n ≤ 4 只占一排**，n > 4 才分两排（每排至多 3 名）。
+    const wantUpper = n <= 4 ? n : Math.ceil(n / 2);
+    const wantLower = n - wantUpper;
+    if (upper !== wantUpper || lower !== wantLower) rowOk = false;
   }
   check(formationOk, "队形：0–6 个敌人在横竖屏都生成正确数量");
   check(slotOk, "队形：业务 slot 原样带出（不按数组下标重编号）");
-  check(rowOk, "队形：横屏上行 ceil(n/2)、下行 floor(n/2)");
+  check(rowOk, "队形：横屏 n≤4 一排、n>4 两排（每排 ≤3）");
   check(heroOk, "队形：我方永远在左侧");
 
   const portrait2 = formation.computeCombatFormation([0, 1], portrait);
   const gap2 = Math.abs(portrait2.enemies[0].y - portrait2.enemies[1].y);
   check(gap2 >= 1.3, "竖屏两个敌人的纵向间距放得下三行标签", `gap=${gap2.toFixed(2)}`);
+
+  // ⚠️ 回归守卫：横屏 n=2 曾经"每排各 1 名、x 都是 mid" ⇒ 两个怪上下叠成一条竖线，
+  // 横屏看起来像竖屏（截图抓到的就是这个）。现在必须**同一排、不同 x**。
+  const wide2 = formation.computeCombatFormation([0, 1], desktop);
+  check(
+    wide2.enemies.every((enemy) => enemy.row === 0),
+    "队形：横屏 2 个敌人**同一排**（不是上下叠）",
+    JSON.stringify(wide2.enemies.map((enemy) => ({ slot: enemy.slot, row: enemy.row })))
+  );
+  check(
+    Math.abs(wide2.enemies[0].x - wide2.enemies[1].x) > 0.5,
+    "队形：横屏 2 个敌人的 x 明显分开",
+    JSON.stringify(wide2.enemies.map((enemy) => Number(enemy.x.toFixed(2))))
+  );
+  check(
+    Math.abs(wide2.enemies[0].y - wide2.enemies[1].y) < 1e-9,
+    "队形：横屏 2 个敌人的 y 相同（同一排）",
+    JSON.stringify(wide2.enemies.map((enemy) => Number(enemy.y.toFixed(2))))
+  );
+  const wide4 = formation.computeCombatFormation([0, 1, 2, 3], desktop);
+  check(
+    wide4.enemies.every((enemy) => enemy.row === 0),
+    "队形：横屏 4 个敌人也只用一排",
+    JSON.stringify(wide4.enemies.map((enemy) => enemy.row))
+  );
+  const wide5 = formation.computeCombatFormation([0, 1, 2, 3, 4], desktop);
+  check(
+    wide5.enemies.filter((enemy) => enemy.row === 0).length === 3 &&
+      wide5.enemies.filter((enemy) => enemy.row === 1).length === 2,
+    "队形：横屏 5 个敌人 = 3+2",
+    JSON.stringify(wide5.enemies.map((enemy) => enemy.row))
+  );
 
   let threw6 = false;
   try {
@@ -340,7 +375,7 @@ try {
     console.error(`UI_PURE FAIL: ${bad} 条`);
     process.exit(1);
   }
-  console.log(`UI_PURE PASS formation=0..6 hit=5 machine=4 layout=6 decode=8 choice=6 i18n=7`);
+  console.log(`UI_PURE PASS formation=0..6 hit=5 machine=4 layout=6 decode=8 choice=6 i18n=7 rows=4`);
 } catch (error) {
   await rm(out, { recursive: true, force: true }).catch(() => {});
   console.error(`UI_PURE ERROR: ${error.message}`);

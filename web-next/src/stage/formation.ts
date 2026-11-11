@@ -72,8 +72,15 @@ export function computeCombatFormation(slots: readonly number[], view: CombatVie
     };
   }
 
-  // 横屏：两排至多 3 名；单敌人只占一排，不虚构第二排对象。
-  const upperCount = Math.ceil(n / 2);
+  // 横屏：**n ≤ 4 只占一排**，n > 4 才分两排（每排至多 3 名）。
+  //
+  // ⚠️ 参考包原来写的是 `ceil(n/2)` / `floor(n/2)`，于是 **n = 2 时"每排各 1 名"**，
+  // 而每排只有一名时 `rowX` 返回同一个 `mid` ⇒ 两个怪**上下叠在一条竖线上**，
+  // 横屏看起来像竖屏（`docs/ui-p2-real/1280x800-wasm.png` 就是这么来的）。
+  // 那不是迁移腐坏，是这条公式在小数量下的退化；而闸门当时断言的正是 `ceil/floor`，
+  // 等于把错的规则"验证"了一遍。
+  const singleRow = n <= 4;
+  const upperCount = singleRow ? n : Math.ceil(n / 2);
   const lowerCount = n - upperCount;
   const rightMin = view.halfW * 0.12;
   const rightMax = view.halfW * 0.78;
@@ -94,7 +101,8 @@ export function computeCombatFormation(slots: readonly number[], view: CombatVie
       return {
         slot,
         x: rowX(withinRow, count),
-        y: row === 0 ? view.halfH * 0.25 : -view.halfH * 0.16,
+        // 只有一排时**竖直居中**（否则一排会贴在战场上半部，下半部空着）。
+        y: lowerCount === 0 ? 0 : row === 0 ? view.halfH * 0.25 : -view.halfH * 0.16,
         z: -0.35,
         scale: 0.95,
         row,

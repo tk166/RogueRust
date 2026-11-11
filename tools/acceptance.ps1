@@ -90,7 +90,7 @@ function Invoke-Gate {
                      # 纯状态机回归：修复后的三条断言（判据是 PASS 串本身）
                      '(P1_REVIEW13_REPRO PASS)',
                      # 纯函数回归：队形/命中/状态机
-                     '(UI_PURE PASS formation=0\.\.6 hit=\d+ machine=\d+ layout=\d+ decode=\d+ choice=\d+ i18n=\d+)',
+                     '(UI_PURE PASS formation=0\.\.6 hit=\d+ machine=\d+ layout=\d+ decode=\d+ choice=\d+ i18n=\d+ rows=\d+)',
                      # P2：真 wasm 接线
                      '(UI_WASM PASS exports=\d+ content=0x[0-9a-f]{8} hand=\d+ enemies=\d+)',
                      # P2：主页面接真 wasm 之后 UI 与内核一致
@@ -396,7 +396,7 @@ Write-Output "`n[27/31] UI 纯函数回归：队形 0–6 敌 / 屏幕命中 / �
 # 几十秒且只能覆盖一两种组合。与闸门 25/26 分开：红了要能一眼看出坏在纯逻辑、接线还是渲染。
 $results += Invoke-Gate -Name 'ui-pure' -Exe 'C:\Program Files\nodejs\node.exe' `
   -ArgLine (Join-Path $ROOT 'native\ui_pure_check.mjs') -Workdir $ROOT `
-  -MustMatch 'UI_PURE PASS formation=0\.\.6 hit=\d+ machine=\d+ layout=\d+ decode=\d+ choice=\d+ i18n=\d+' `
+  -MustMatch 'UI_PURE PASS formation=0\.\.6 hit=\d+ machine=\d+ layout=\d+ decode=\d+ choice=\d+ i18n=\d+ rows=\d+' `
   -TimeoutSec 180
 
 Write-Output "`n[28/31] P2 WASM 接线：装载校验 / 观察解码 / 动作表 / 走一步 / 拒绝不变 / 打到终局"
