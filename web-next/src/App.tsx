@@ -75,8 +75,6 @@ export function App() {
   }, []);
   const commits = useRef<CommitLogEntry[]>([]);
   const rebounds = useRef<string[]>([]);
-  // 上一帧的 hover 槽位：`pointerup` 落空时用它兜底（R3F 的 onPointerUp 只对命中的对象触发）。
-  const hoverRef = useRef(-1);
 
   const liftedSlot = state.phase === "idle" ? -1 : state.handSlot;
 
@@ -151,31 +149,6 @@ export function App() {
     [modalOpen, scene, store, flash]
   );
 
-  const onHover = useCallback(
-    (slot: number) => {
-      if (modalOpen) return;
-      hoverRef.current = slot;
-      setHoveredEnemySlot((previous) => previous === slot ? previous : slot);
-      // [P1-UX] 有活动手指时由 window.pointermove 统一计算真实距离，避免 R3F 事件使用 999px 假距离。
-      if (activePointer.current) return;
-      const current = store.peek();
-      if (current.phase === "targeting") store.send({ type: "move", hoverSlot: slot, distance: 999 });
-    },
-    [modalOpen, store]
-  );
-
-  const onRelease = useCallback(
-    (slot: number) => {
-      if (modalOpen) return;
-      // [P1-UX] 有活动指针时 window.pointerup 会完成事务；阻止 R3F 与 window 双提交。
-      if (activePointer.current) return;
-      const current = store.peek();
-      if (current.phase === "idle") return;
-      store.send({ type: "up", hoverSlot: slot, distance: 999 });
-    },
-    [modalOpen, store]
-  );
-
   // [P1-UX] 全局指针跟踪：即使松开时已经离开 WebGL mesh，动作仍能完成或被正确取消。
   useEffect(() => {
     const clearPointer = () => {
@@ -184,22 +157,37 @@ export function App() {
         window.clearTimeout(p.longPressTimer);
       activePointer.current = null;
     };
-    const currentTarget = (x: number, y: number) => {
-      // [P1-UX] 命中范围由 Stage 的屏幕投影提供；不要复制三维队形公式。
-      const legal = new Set(store.peek().options.filter((o) => o.slot >= 0).map((o) => o.slot));
-      return enemyAtScreen(layout.enemies, x, y, legal);
-    };
+    // [P1-UX] 命中范围由 Stage 的屏幕投影提供；不要复制三维队形公式。
+    const legalSlots = () =>
+      new Set(store.peek().options.filter((o) => o.slot >= 0).map((o) => o.slot));
+    const allEnemySlots = () => new Set(layout.enemies.map((e) => e.slot));
+    /** 指针下的敌人（**任意**敌人，视觉用）。 */
+    const underPointer = (x: number, y: number) => enemyAtScreen(layout.enemies, x, y, allEnemySlots());
+    /** 指针下是否是**合法目标**（提交与绿环用）。 */
+    const currentTarget = (x: number, y: number) => enemyAtScreen(layout.enemies, x, y, legalSlots());
+
     const onMove = (event: PointerEvent) => {
+      if (modalOpen) return;
+      // ⚠️ 常驻（不再只在按住时跑）：hover 高亮也走**同一个**屏幕命中函数。
+      // 以前 hover 来自 R3F 的射线、提交来自 hitTest，两者几何不同 ⇒ 边缘自相矛盾。
+      setHoveredEnemySlot(underPointer(event.clientX, event.clientY));
+      setHoverCardSlot(cardAtScreen(layout.cards, event.clientX, event.clientY));
+
       const p = activePointer.current;
-      if (!p || p.id !== event.pointerId || modalOpen) return;
-      const distance = Math.hypot(event.clientX - p.startX, event.clientY - p.startY);
-      if (distance >= 8 && p.longPressTimer !== null) {
+      if (p && p.id !== event.pointerId) return; // 第二根手指不改变第一根的目标
+      const distance = p
+        ? Math.hypot(event.clientX - p.startX, event.clientY - p.startY)
+        : 999; // 没有按住时"位移"无意义；只有 target 生效（点选后再点敌人）
+      if (p && distance >= 8 && p.longPressTimer !== null) {
         window.clearTimeout(p.longPressTimer);
         p.longPressTimer = null;
       }
-      const target = currentTarget(event.clientX, event.clientY);
-      hoverRef.current = target;
-      store.send({ type: "move", hoverSlot: target, distance });
+      if (store.peek().phase === "idle") return;
+      store.send({
+        type: "move",
+        hoverSlot: currentTarget(event.clientX, event.clientY),
+        distance,
+      });
     };
     const onUp = (event: PointerEvent) => {
       if (modalOpen) return;
@@ -269,6 +257,8 @@ export function App() {
       rebounds: () => rebounds.current,
       detailSlot: () => detailSlot,
       modalOpen: () => modalOpen,
+      hoveredCard: () => hoverCardSlot,
+      hoveredEnemy: () => hoveredEnemySlot,
       openDetail: onDetail,
       setModal: (open: boolean) => setModalOpen(open),
       // `?debug` 才装（闸门要造"只剩一个敌人"的局面）。生产路径没有这个钩子。
@@ -283,7 +273,7 @@ export function App() {
           }
         : undefined,
     });
-  }, [store, scene, detailSlot, modalOpen, onDetail]);
+  }, [store, scene, detailSlot, modalOpen, hoverCardSlot, hoveredEnemySlot, onDetail]);
 
   return (
     <div className="app">
@@ -314,9 +304,6 @@ export function App() {
           followPointer={activePointer.current !== null && state.phase !== "idle"}
           legalTargets={state.options.filter((o) => o.slot >= 0).map((o) => o.slot)}
           onCardDown={onCardDown}
-          onCardHover={setHoverCardSlot}
-          onHover={onHover}
-          onRelease={onRelease}
         />
         <Hud
           hp={scene.hero.hp}

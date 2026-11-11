@@ -69,13 +69,10 @@ export interface StageProps {
   followPointer: boolean;
   legalTargets: readonly number[];
   onCardDown: (slot: number, pointer: { id: number; type: string; x: number; y: number }) => void;
-  onCardHover: (slot: number) => void;
-  onHover: (slot: number) => void;
-  onRelease: (slot: number) => void;
 }
 export function Stage({
   scene, liftedSlot, hoverSlot, hoverCardSlot, hoveredEnemySlot, phase, followPointer,
-  legalTargets, onCardDown, onCardHover, onHover, onRelease,
+  legalTargets, onCardDown,
 }: StageProps) {
   const { camera, size, pointer } = useThree();
   // `?still`：冻结呼吸与插值，让证据截图逐字节可复现（见文件头）。
@@ -176,7 +173,10 @@ export function Stage({
       const targetX = lifted ? (followPointer ? scratch.pointerWorld.x : previewX) : local.x;
       const targetY = lifted ? (followPointer ? scratch.pointerWorld.y - 0.1 : previewY)
         : local.y + (hovered ? 0.11 : 0);
-      const targetZ = lifted ? LIFT_Z : hovered ? 1.32 : local.z;
+      // ⚠️ hover **不改 z**：手牌 `depthTest=false` + 固定 renderOrder ⇒ 绘制顺序与 z 无关，
+      // 而透视下 z 变大只会让牌更大更低（"轻抬"变成"放大并往下掉"，底边直接掉出视口）。
+      // 叠放顺序交给下面的 per-card renderOrder。
+      const targetZ = lifted ? LIFT_Z : local.z;
       const targetAngle = lifted ? 0 : local.angle;
       const targetScale = lifted ? 1.32 : hovered ? 1.11 : 1;
       // [P1-UX] 用 deltaTime 而非每帧固定系数，避免 30 / 60 / 120 Hz 手感不同。
@@ -303,20 +303,14 @@ export function Stage({
         const targeted = eligible && hoverSlot === enemy.slot;
         const hovered = hoveredEnemySlot === enemy.slot;
         const illegalHover = phase === "targeting" && hovered && !eligible && !dead;
+        // ⚠️ 敌人身上**不再挂** onPointerMove / onPointerUp：hover 与落点都由 `App` 的
+        // window 监听经 `hitTest`（屏幕命中）统一算。这里再挂一份就是"同一个事实两个来源"
+        // —— 两者几何不同（真 mesh vs 半径+14px），边缘会出现"绿环亮着但没有 hover 高亮"。
         return (
           <group
             key={`${enemy.id}-${enemy.slot}`}
             ref={(node) => {
               enemyRefs.current[index] = node;
-            }}
-            onPointerMove={(event) => {
-              event.stopPropagation();
-              onHover(enemy.slot);
-            }}
-            onPointerOut={() => onHover(-1)}
-            onPointerUp={(event) => {
-              event.stopPropagation();
-              onRelease(enemy.slot);
             }}
           >
             {index % 2 === 0 ? (
@@ -356,22 +350,6 @@ export function Stage({
         );
       })}
 
-      {/* 空白处兜底：指针不在敌人身上时命中它 ⇒ hoverSlot = -1 */}
-      <mesh
-        position={[0, 0, -3]}
-        onPointerMove={(event) => {
-          event.stopPropagation();
-          onHover(-1);
-        }}
-        onPointerUp={(event) => {
-          event.stopPropagation();
-          onRelease(-1);
-        }}
-      >
-        <planeGeometry args={[60, 60]} />
-        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
-      </mesh>
-
       {/* 手牌：牌身 + 边框。**文字不在这里**（见 `TextOverlay`）。 */}
       {scene.hand.map((card, index) => (
         <group
@@ -386,7 +364,10 @@ export function Stage({
               —— 闸门读到的是"按第 3 张却打出了第 2 张"。视觉是装饰，命中要有静止的目标。 */}
           {/* 手牌是 **UI**：depthTest=false + renderOrder 让牌永远画在世界之上。
               否则地台（水平面，一直延伸到相机前）会挡住牌的下半截 —— 截图里"牌只剩一条"。 */}
-          <mesh raycast={() => null} renderOrder={10}>
+          <mesh
+            raycast={() => null}
+            renderOrder={index === liftedSlot ? 30 : index === hoverCardSlot ? 25 : 10 + index}
+          >
             <boxGeometry args={[CARD_W, CARD_H, 0.03]} />
             {/* ⚠️ 卡面必须**亮过背景**：第一版用了 #3a2226 这类深色，在 #0b0f14 的背景上
                 整手牌只剩几根边框线（截图里几乎看不见牌）。深色主题里"牌"要靠明度差立起来。 */}
@@ -399,7 +380,9 @@ export function Stage({
               depthWrite={false}
             />
           </mesh>
-          <CardEdge />
+          <CardEdge
+            order={index === liftedSlot ? 31 : index === hoverCardSlot ? 26 : 11 + index}
+          />
         </group>
       ))}
 
@@ -411,10 +394,6 @@ export function Stage({
           ref={(node) => {
             hitRefs.current[index] = node;
           }}
-          onPointerOver={(event) => {
-            if (event.pointerType === "mouse" || event.pointerType === "pen") onCardHover(index);
-          }}
-          onPointerOut={() => onCardHover(-1)}
           onPointerDown={(event) => {
             if (event.button !== 0) return; // 右键用于查看详情，不应进入出牌状态。
             event.stopPropagation();
@@ -433,11 +412,14 @@ export function Stage({
   );
 }
 
-/** 牌框：单独一个组件，这样 `BoxGeometry` 只创建一次（内联在 map 里会每帧 new）。 */
-function CardEdge() {
+/**
+ * 牌框。`BoxGeometry` 每个实例创建一次（不是每帧）—— **不是**全手牌共享一份：
+ * 每张牌都挂一个 `CardEdge` 实例，各自 `useMemo`。十张牌无所谓，正式实现应提到外面共享。
+ */
+function CardEdge({ order }: { order: number }) {
   const geometry = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(CARD_W, CARD_H, 0.03)), []);
   return (
-    <lineSegments geometry={geometry} raycast={() => null} renderOrder={11}>
+    <lineSegments geometry={geometry} raycast={() => null} renderOrder={order}>
       <lineBasicMaterial color="#c8dcf0" depthTest={false} depthWrite={false} />
     </lineSegments>
   );

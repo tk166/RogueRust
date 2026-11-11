@@ -58,13 +58,19 @@ export function TextOverlay({ scene, liftedSlot, hoverCardSlot, detailSlot, moda
         const slot = Number(node.dataset.card);
         const screen = bySlot.get(slot);
         if (!screen) continue;
-        node.style.transform = `translate3d(${screen.x}px, ${screen.y}px, 0) translate(-50%, -50%)`;
+        const compact = screen.visibleW < COMPACT_BELOW_PX && !screen.lifted;
+        // ⚠️ 锚点：紧凑态用 `hitX`（**露出来那条**的中心），不是牌心。
+        // 叠放顺序是右压左，牌心可能被右邻盖住 —— 文字放牌心等于把费用数字塞到邻居底下。
+        // 展开/抬起时整张牌都露着（`visibleW === w`，此时 hitX === x），用哪个都一样。
+        const anchorX = compact ? screen.hitX : screen.x;
+        node.style.transform = `translate3d(${anchorX}px, ${screen.y}px, 0) translate(-50%, -50%)`;
         // 文字框用**露出来的那条**宽度，不是整张牌的宽度（见 `CardScreen.visibleW`）。
         node.style.width = `${screen.visibleW}px`;
         node.style.height = `${screen.h}px`;
-        node.style.zIndex = String(screen.lifted ? 20 : 10 + slot);
+        // 与 3D 侧的 per-card renderOrder 对齐：抬起 > hover > 静止（否则牌上去了文字还在下面）。
+        node.style.zIndex = String(screen.lifted ? 30 : slot === hoverCardSlot ? 25 : 10 + slot);
         // 窄到放不下标题 ⇒ 只留费用（闸门读这个 class 来断言"要么读得到、要么明确收起"）。
-        node.classList.toggle("is-compact", screen.visibleW < COMPACT_BELOW_PX && !screen.lifted);
+        node.classList.toggle("is-compact", compact);
       }
       for (const node of Array.from(layer.querySelectorAll<HTMLElement>("[data-enemy]"))) {
         const slot = Number(node.dataset.enemy);

@@ -281,6 +281,144 @@ check(
   `${beforeUntargetedOnEnemy.block} -> ${afterUntargetedOnEnemy.block}`
 );
 
+// ── 3c. hover 与合法目标同源（本轮修的"两个来源"）────────────────────────
+// 以前 hover 来自 R3F 射线、提交来自 hitTest，几何不同（真 mesh vs 半径 +14px）⇒ 边缘自相矛盾。
+// 现在两者都由 `enemyAtScreen` 回答，只是喂的**允许集合**不同（任意 vs 合法）。
+const hoverCardAt = await cardPoint(8); // 柄击：**定向**牌
+const grabbedHover = await mouseHold(hoverCardAt, enemy0At, { steps: 4 });
+check(
+  grabbedHover.phase === "pressed" && grabbedHover.handSlot === 8,
+  "按下命中的是第 8 张牌（柄击）",
+  JSON.stringify(grabbedHover)
+);
+const hoverState = await evaluate("({ s: window.__p1.state(), h: window.__p1.hovered() })");
+check(
+  hoverState.h.enemy === 0 && hoverState.s.hoverSlot === 0,
+  "定向牌拖到敌人 0 上方：视觉 hover 与合法目标是**同一个**敌人",
+  JSON.stringify(hoverState)
+);
+
+// ⚠️ 牙齿：把指针放到**敌人轮廓外、触摸半径内**（`r + 10`）。
+// 旧的双源实现在这里必然矛盾：R3F 射线打不到 mesh（hover=-1），而 hitTest 的接受半径是
+// `r + 14`（hoverSlot=0）。中间点测不出来 —— 那条断言在旧实现下也会绿。
+const enemy0Edge = await evaluate(`(() => {
+  const enemy = window.__p1.layout().enemies.find((e) => e.slot === 0);
+  return enemy ? { x: Math.round(enemy.x + enemy.r + 10), y: Math.round(enemy.y), r: Math.round(enemy.r) } : null;
+})()`);
+check(Boolean(enemy0Edge), "拿到敌人 0 的轮廓外一点");
+await page.send("Input.dispatchMouseEvent", {
+  type: "mouseMoved",
+  x: enemy0Edge.x,
+  y: enemy0Edge.y,
+  button: "left",
+  buttons: 1,
+});
+await sleep(60);
+const hoverEdge = await evaluate("({ s: window.__p1.state(), h: window.__p1.hovered() })");
+check(
+  hoverEdge.h.enemy === 0 && hoverEdge.s.hoverSlot === 0,
+  "指针在敌人轮廓外、触摸半径内：hover 与合法目标**仍然一致**（单源，旧实现会矛盾）",
+  JSON.stringify({ hover: hoverEdge.h.enemy, target: hoverEdge.s.hoverSlot, at: enemy0Edge })
+);
+
+// 移到空白（**不松开**）：两者都清空
+await page.send("Input.dispatchMouseEvent", {
+  type: "mouseMoved",
+  x: empty.x,
+  y: empty.y,
+  button: "left",
+  buttons: 1,
+});
+await sleep(60);
+const hoverEmpty = await evaluate("({ s: window.__p1.state(), h: window.__p1.hovered() })");
+check(
+  hoverEmpty.h.enemy === -1 && hoverEmpty.s.hoverSlot === -1,
+  "移到空白处：hover 与合法目标都清空",
+  JSON.stringify(hoverEmpty)
+);
+await mouseRelease(empty); // 定向牌在空白处 ⇒ 回弹，不提交
+
+// 无目标牌压在敌人上：**hover 命中、但不是合法目标** —— 两个不同的问题，同一个函数回答。
+const shrugAt = await cardPoint(7); // 耸肩：**无目标**牌
+const grabbedShrug = await mouseHold(shrugAt, enemy0At, { steps: 4 });
+check(
+  grabbedShrug.phase === "pressed" && grabbedShrug.handSlot === 7,
+  "按下命中的是第 7 张牌（耸肩）",
+  JSON.stringify(grabbedShrug)
+);
+const shrugHover = await evaluate("({ s: window.__p1.state(), h: window.__p1.hovered() })");
+check(
+  shrugHover.h.enemy === 0 && shrugHover.s.hoverSlot === -1,
+  "无目标牌压在敌人上：hover 命中，但它不是合法目标（不是两个来源）",
+  JSON.stringify(shrugHover)
+);
+
+// Esc 取消：不提交、清空 hover（Review P1-D 的"取消不提交"）
+const commitsBeforeEsc = (await evaluate("window.__p1.commits()")).length;
+await page.send("Input.dispatchKeyEvent", {
+  type: "keyDown",
+  key: "Escape",
+  code: "Escape",
+  windowsVirtualKeyCode: 27,
+  nativeVirtualKeyCode: 27,
+});
+await page.send("Input.dispatchKeyEvent", {
+  type: "keyUp",
+  key: "Escape",
+  code: "Escape",
+  windowsVirtualKeyCode: 27,
+  nativeVirtualKeyCode: 27,
+});
+await sleep(80);
+const afterEsc = await evaluate("({ s: window.__p1.state(), h: window.__p1.hovered(), c: window.__p1.commits() })");
+check(
+  afterEsc.s.phase === "idle" && afterEsc.c.length === commitsBeforeEsc,
+  "Esc 取消：回到 idle 且不提交",
+  JSON.stringify({ phase: afterEsc.s.phase, commits: afterEsc.c.length })
+);
+check(afterEsc.h.enemy === -1, "Esc 取消：hover 也清空", JSON.stringify(afterEsc.h));
+
+// ── 3d. 点选路径（不拖拽）：按下同一张牌原地松开 ⇒ targeting；再点敌人 ⇒ 提交 ──
+// 敌人身上的 onPointerUp 已被拆掉（落点统一由 window.pointerup 算），这条路必须实测。
+const tapAt = await cardPoint(0);
+const tapPress = await mousePress(tapAt);
+check(
+  tapPress.phase === "pressed" && tapPress.handSlot === 0,
+  "点选路径：按下第 0 张牌",
+  JSON.stringify(tapPress)
+);
+await mouseRelease(tapAt); // 原地松开 ⇒ 位移 0 ⇒ 点按语义
+const afterTap = await evaluate("window.__p1.state()");
+check(
+  afterTap.phase === "targeting",
+  "点选路径：原地松开后进入 targeting（未出牌）",
+  JSON.stringify(afterTap)
+);
+const commitsBeforeTapTarget = (await evaluate("window.__p1.commits()")).length;
+await page.send("Input.dispatchMouseEvent", {
+  type: "mousePressed",
+  x: enemy1At.x,
+  y: enemy1At.y,
+  button: "left",
+  buttons: 1,
+  clickCount: 1,
+});
+await page.send("Input.dispatchMouseEvent", {
+  type: "mouseReleased",
+  x: enemy1At.x,
+  y: enemy1At.y,
+  button: "left",
+  buttons: 0,
+  clickCount: 1,
+});
+await sleep(80);
+commits = await evaluate("window.__p1.commits()");
+check(
+  commits.length === commitsBeforeTapTarget + 1 && commits.at(-1)?.targetSlot === 1,
+  "点选路径：再点敌人 1 ⇒ 提交到敌人 1",
+  JSON.stringify(commits.at(-1))
+);
+
 // ── 4. 只剩一个敌人时，定向牌仍**必须**落在敌人身上（与旧页面的有意分歧）──
 const hasDebug = await evaluate("Boolean(window.__p1.debug)");
 check(hasDebug, "`?debug` 钩子存在（造单敌局面用）");
@@ -387,6 +525,29 @@ check(
   readability.compactCount >= 5,
   "窄屏下多数牌收起为紧凑态（390px 放不下 10 个中文标题的实测结论）",
   `compact=${readability.compactCount}/10, minVisibleW=${readability.minVisibleW}px`
+);
+
+// ── UX-2：紧凑态的文字必须落在**露出来那条**的中心（hitX），不是牌心 ─────────
+// 叠放顺序是右压左，牌心可能被右邻盖住 —— 文字放牌心等于把费用数字塞到邻居底下。
+const anchorDrift = await evaluate(`(() => {
+  const cards = window.__p1.layout().cards;
+  const bySlot = new Map(cards.map((c) => [c.slot, c]));
+  const worst = [];
+  for (const node of document.querySelectorAll("[data-card]")) {
+    if (!node.classList.contains("is-compact")) continue;
+    const slot = Number(node.dataset.card);
+    const screen = bySlot.get(slot);
+    if (!screen) continue;
+    const rect = node.getBoundingClientRect();
+    worst.push({ slot, drift: Math.round(Math.abs((rect.left + rect.right) / 2 - screen.hitX)) });
+  }
+  return worst;
+})()`);
+check(anchorDrift.length > 0, "紧凑态至少有一张牌（否则这条断言没有样本）", JSON.stringify(anchorDrift));
+check(
+  anchorDrift.every((item) => item.drift <= 2),
+  "紧凑态文字锚点落在露出条中心（与 hitX 偏差 <= 2px）",
+  JSON.stringify(anchorDrift)
 );
 
 await mkdir(OUT_DIR, { recursive: true });

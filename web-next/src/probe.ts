@@ -17,6 +17,9 @@ export interface ProbeOptions {
   rebounds: () => string[];
   detailSlot: () => number;
   modalOpen: () => boolean;
+  /** 指针下的卡牌与敌人（视觉用）。由 `App` 提供，闸门用它验证"与合法目标同源"。 */
+  hoveredCard: () => number;
+  hoveredEnemy: () => number;
   openDetail: (slot: number) => void;
   setModal: (open: boolean) => void;
   /** 只在 `?debug` 下存在：闸门需要造出"只剩一个敌人"的局面。 */
@@ -46,6 +49,14 @@ export interface Probe {
   rebounds: () => string[];
   detailSlot: () => number;
   modalOpen: () => boolean;
+  /**
+   * 指针下的卡牌与敌人（**视觉**用，任意敌人）。
+   *
+   * 与 `state().hoverSlot` 是两个不同的问题：`hoverSlot` 只认**合法目标**（提交与绿环用），
+   * 这里认**任意**敌人（高亮与红圈用）。两者必须由**同一个**屏幕命中函数回答 ——
+   * 闸门断言它们在合法目标上一致。
+   */
+  hovered: () => { card: number; enemy: number };
   openDetail: (slot: number) => void;
   setModal: (open: boolean) => void;
   /** 手牌文字的字号（闸门断言可读性用）。 */
@@ -121,6 +132,7 @@ export function installProbe(options: ProbeOptions): void {
     rebounds: () => options.rebounds().slice(),
     detailSlot: () => options.detailSlot(),
     modalOpen: () => options.modalOpen(),
+    hovered: () => ({ card: options.hoveredCard(), enemy: options.hoveredEnemy() }),
     openDetail: options.openDetail,
     setModal: options.setModal,
     typeScale: () => ({
