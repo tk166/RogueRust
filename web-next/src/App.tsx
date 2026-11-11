@@ -65,14 +65,14 @@ export function App() {
     });
   }, []);
 
-  // 状态机 → 副作用（提交/回弹）。**只在结果变化时触发一次**，所以用一个 ref 记住上一条结果。
-  const lastResultRef = useRef<string>("");
+  // 状态机 → 副作用（提交/回弹）。按**事件序号**去重，不按内容去重：
+  // 同一张牌打同一个敌人的两次操作 payload 完全相同，用 JSON 当身份会把第二次吞掉（§352 P1-A）。
+  const lastResultSeq = useRef(0);
   useEffect(() => {
     const result = state.lastResult;
     if (!result) return;
-    const key = JSON.stringify(result);
-    if (key === lastResultRef.current) return;
-    lastResultRef.current = key;
+    if (state.resultSeq === lastResultSeq.current) return;
+    lastResultSeq.current = state.resultSeq;
     if (result.kind === "commit") {
       const card = scene.hand[result.handSlot];
       applyCommit({
@@ -85,7 +85,7 @@ export function App() {
     } else {
       rebounds.current.push(result.why);
     }
-  }, [state.lastResult, scene.hand, applyCommit]);
+  }, [state.lastResult, state.resultSeq, scene.hand, applyCommit]);
 
   // ── 输入接线：全部走同一个状态机 ────────────────────────────────────────────
   const onCardDown = useCallback(
