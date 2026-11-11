@@ -18,6 +18,13 @@ interface P2Probe {
   endTurn: () => unknown;
   stepRaw: (index: number) => unknown;
   names: () => unknown;
+  potions: () => unknown;
+  usePotion: (slot: number, target: number) => unknown;
+  choice: () => unknown;
+  choicePick: (index: number, on: boolean) => unknown;
+  choiceClear: () => unknown;
+  choiceConfirm: () => unknown;
+  beats: () => unknown;
   run: () => unknown;
   findPlay: (handSlot: number, targetSlot: number) => unknown;
 }
@@ -102,12 +109,17 @@ const probe: P2Probe = {
    * 真实 wasm 跑出来的，不是猜的）。关键顺序：**每跳顶部先看 `pending`**，站在未结算节点上
    * 才 `begin_node` —— 反过来就会"落到商店那格立刻 leave 掉"或卡在选牌屏。
    */
-  startFight(seed: number) {
+  startFight(seed: number, potionId?: string) {
     const host = state.host;
     if (!host) throw new Error("先 load()");
     const trail: unknown[] = [];
     host.startRun(seed, 0);
     trail.push({ step: "start", run: host.run() });
+    // 夹具：先把药水塞进背包，进战斗后再喝 —— 这样能造出**真实**的问句局面
+    // （Elixir / Liquid Memories 一类会问"要消耗/取回哪几张"）。
+    if (potionId) {
+      trail.push({ step: "grantPotion", id: potionId, code: host.grantPotion(potionId) });
+    }
 
     const fightNodeKinds = new Set([1, 2, 7]); // monster / elite / boss
     const isFightNode = () => {
@@ -176,6 +188,60 @@ const probe: P2Probe = {
       before.length === after.length && before.every((value, i) => value === after[i]);
     state.store?.refresh();
     return { code, unchanged, accepted: code === STEP_ACCEPTED };
+  },
+
+  potions() {
+    const host = state.host;
+    if (!host) throw new Error("先 load()");
+    const count = host.potionCount();
+    const out: { index: number; id: string }[] = [];
+    for (let index = 0; index < count; index += 1) out.push({ index, id: host.potionId(index) });
+    return out;
+  },
+
+  usePotion(slot: number, target: number) {
+    const host = state.host;
+    if (!host) throw new Error("先 load()");
+    const before = host.combatObservation();
+    const code = host.usePotion(slot, target);
+    const after = host.combatObservation();
+    const unchanged =
+      before.length === after.length && before.every((value, i) => value === after[i]);
+    state.store?.refresh();
+    return { code, unchanged, choice: host.choice(), snapshot: summarise() };
+  },
+
+  choice: () => state.host?.choice() ?? null,
+
+  choicePick(index: number, on: boolean) {
+    const host = state.host;
+    if (!host) throw new Error("先 load()");
+    const code = host.choicePick(index, on);
+    return { code, choice: host.choice() };
+  },
+
+  choiceClear() {
+    const host = state.host;
+    if (!host) throw new Error("先 load()");
+    return { code: host.choiceClear(), choice: host.choice() };
+  },
+
+  choiceConfirm() {
+    const host = state.host;
+    if (!host) throw new Error("先 load()");
+    const before = host.combatObservation();
+    const code = host.choiceConfirm();
+    const after = host.combatObservation();
+    const unchanged =
+      before.length === after.length && before.every((value, i) => value === after[i]);
+    state.store?.refresh();
+    return { code, unchanged, choice: host.choice(), snapshot: summarise() };
+  },
+
+  beats() {
+    const host = state.host;
+    if (!host) throw new Error("先 load()");
+    return host.beats();
   },
 
   names() {

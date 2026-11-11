@@ -225,3 +225,94 @@ export function decodeAction(index: number, kind: number, arg0: number, arg1: nu
   if (kind === 1) return { index, kind: "endTurn", handSlot: -1, targetSlot: -1 };
   throw new RangeError(`unknown action kind ${kind}`);
 }
+
+// ── 待决选牌（`rd_env_choice_*`）────────────────────────────────────────────
+//
+// ⚠️ 这一族**不在** 148 格观察向量里，是会话级的独立查询。所以它由 host 单独读、单独解，
+// 不塞进 `CombatSnapshot` —— 两者生命周期不同：向量每步都变，问句只在"要你选牌"时存在。
+
+/** 选项从哪来：`1` 一个牌堆，`2` 三个候选定义。 */
+export type ChoiceSource = 1 | 2;
+/**
+ * 回答之后怎么处理选中的牌。
+ *
+ * ⚠️ **十个取值**，编号是 ABI（`rd_env_choice_kind` 的 match 分支）。我第一版只写了 0/1/2 还
+ * 用 `as` 强转 —— 直到夹具真的喝了一瓶 Attack Potion，`kind` 返回 **3**（拿进手牌）才发现。
+ * 每个编号对应一句不同的话，所以内核给"新数字"而不是复用（Rust 侧注释 §161.4/§226/§227/§250/§254/§304）。
+ */
+export const CHOICE_THEN = {
+  none: 0,
+  exhaust: 1,
+  discardThenDraw: 2,
+  toHand: 3,
+  copy: 4,
+  upgrade: 5,
+  toDrawPileTop: 6,
+  toHandFree: 7,
+  toDrawPileBottomFree: 8,
+  playChosen: 9,
+  toHandPrinted: 10,
+} as const;
+
+export type ChoiceKind =
+  | 0
+  | 1
+  | 2
+  | 3
+  | 4
+  | 5
+  | 6
+  | 7
+  | 8
+  | 9
+  | 10;
+
+export interface ChoiceOption {
+  readonly index: number;
+  /** 定义 id（`rd_env_pile_card_id_*`）。 */
+  readonly id: string;
+  /** 显示名（`rd_env_pile_card_title_*`）。 */
+  readonly title: string;
+  readonly selected: boolean;
+}
+
+export interface PendingChoice {
+  readonly source: ChoiceSource;
+  readonly kind: ChoiceKind;
+  readonly min: number;
+  readonly max: number;
+  /** 问句里"这张牌的副本数"（Elixir 一类），`1` 是常态。 */
+  readonly copies: number;
+  readonly options: readonly ChoiceOption[];
+}
+
+// ── 演出 beat（`rd_env_beat_*`）─────────────────────────────────────────────
+//
+// 13 种 kind 的**编号是 ABI**（`BEAT_*` 常量），不是 Rust enum 的 `as i32`。
+export const BEAT = {
+  damage: 1,
+  block: 2,
+  heal: 3,
+  statusChanged: 4,
+  statusRemoved: 5,
+  statusPrevented: 6,
+  downed: 7,
+  escaped: 8,
+  cardPlayed: 9,
+  turnStarted: 10,
+  turnEnded: 11,
+  summoned: 12,
+  destroyed: 13,
+} as const;
+
+export interface Beat {
+  readonly kind: number;
+  /** 行为者的**墙位槽**：`-1` 英雄、`0..5` 敌人、`-2` 没有。 */
+  readonly actor: number;
+  readonly target: number;
+  readonly flags: number;
+  readonly a: number;
+  readonly b: number;
+  readonly c: number;
+  readonly def: string;
+}

@@ -12,7 +12,17 @@
 // 3. **哨兵语义**：没有局/没有战斗会话时的几个 `-1`/`-3`（这几条都曾经搞错过）；
 // 4. **指纹**：wasm 的 sha256 + 内容指纹，记下来供诊断与"是不是同一份构建"。
 
-import { decodeAction, decodeCombat, type CombatAction, type CombatSnapshot } from "./snapshot";
+import {
+  decodeAction,
+  decodeCombat,
+  type Beat,
+  type ChoiceKind,
+  type ChoiceOption,
+  type ChoiceSource,
+  type CombatAction,
+  type CombatSnapshot,
+  type PendingChoice,
+} from "./snapshot";
 
 /** ABI 声明的长度。**只用于比对**模块自己报的数（不是写死给解码器用）。 */
 export const ABI_RUN_OBSERVE_LEN = 19;
@@ -55,6 +65,32 @@ const REQUIRED_EXPORTS = [
   "rd_env_enemy_name_len",
   "rd_env_enemy_name_into",
   "rd_env_scratch_buf",
+  "rd_run_grant_potion",
+  "rd_run_potion_count",
+  "rd_run_potion_id_len",
+  "rd_run_potion_id_into",
+  "rd_env_use_potion",
+  "rd_env_choice_pending",
+  "rd_env_choice_source",
+  "rd_env_choice_kind",
+  "rd_env_choice_min",
+  "rd_env_choice_max",
+  "rd_env_choice_count",
+  "rd_env_choice_copies",
+  "rd_env_choice_pick",
+  "rd_env_choice_selected",
+  "rd_env_choice_clear",
+  "rd_env_choice_confirm",
+  "rd_env_pile_len",
+  "rd_env_pile_card_id_len",
+  "rd_env_pile_card_id_into",
+  "rd_env_pile_card_title_len",
+  "rd_env_pile_card_title_into",
+  "rd_env_beat_count",
+  "rd_env_beat_field",
+  "rd_env_beat_def_len",
+  "rd_env_beat_def_into",
+  "rd_env_beats_dropped",
 ] as const;
 
 /** `rd_env_step` 的返回码（`env-abi.md` §5）。 */
@@ -313,6 +349,136 @@ export class WasmHost {
 
   fightEnd(): number {
     return (this.ex.rd_run_fight_end as () => number)();
+  }
+
+  // ── 药水（夹具用：`?debug` 下造"会问句"的局面）──────────────────────────────
+  /**
+   * 把一段 ASCII 写进模块的 scratch（`rd_env_scratch_buf`）。
+   *
+   * 存在的理由：`rd_run_grant_potion(ptr, len)` 收的是**指针 + 长度**（不是 `_len/_into` 那一对），
+   * 所以调用方得自己把 id 写进它的内存。写 scratch 是唯一不需要猜 `__heap_base` 的办法。
+   */
+  private writeScratch(text: string): number {
+    const bytes = new TextEncoder().encode(text);
+    const ptr = Number((this.ex.rd_env_scratch_buf as () => number)());
+    if (bytes.length > SCRATCH_CAPACITY) {
+      throw new RangeError(`文本 ${bytes.length} 字节，超过 1 KiB scratch`);
+    }
+    new Uint8Array(this.ex.memory.buffer, ptr, bytes.length).set(bytes);
+    return bytes.length;
+  }
+
+  /** 给玩家一瓶药水（调试钩子，与旧页面 `?debug` 的 `givePotion` 同一纪律）。 */
+  grantPotion(id: string): number {
+    const len = this.writeScratch(id);
+    const ptr = Number((this.ex.rd_env_scratch_buf as () => number)());
+    return (this.ex.rd_run_grant_potion as (ptr: number, len: number) => number)(ptr, len);
+  }
+
+  potionCount(): number {
+    return (this.ex.rd_run_potion_count as () => number)();
+  }
+
+  potionId(index: number): string {
+    return this.readText(
+      () => (this.ex.rd_run_potion_id_len as (index: number) => number)(index),
+      (ptr) => (this.ex.rd_run_potion_id_into as (index: number, ptr: number) => number)(index, ptr)
+    );
+  }
+
+  /** 喝一瓶药水。`target` 是目标墙位槽（不需要目标的药水传 `-1`）。 */
+  usePotion(slot: number, target: number): number {
+    return (this.ex.rd_env_use_potion as (slot: number, target: number) => number)(slot, target);
+  }
+
+  // ── 待决选牌（`rd_env_choice_*`）──────────────────────────────────────────
+  /**
+   * 读当前问句。没有问句返回 `null`。
+   *
+   * ⚠️ 选项来自 `rd_env_pile_*` 的 **zone 3**（"问句的来源牌区"）：`source === 2`（三选一）时
+   * 那三条是**候选定义**、没有牌堆；`source === 1` 时是一个真牌堆。所以"有没有牌堆"必须看
+   * `source`，不能拿 `pile_len(3) === 0` 去猜（§161.5 的教训：两个词表各认一半就会漂）。
+   */
+  choice(): PendingChoice | null {
+    const call = (name: string) => (this.ex[name] as () => number)();
+    if (call("rd_env_choice_pending") !== 1) return null;
+    const count = call("rd_env_choice_count");
+    const options: ChoiceOption[] = [];
+    const selected = this.ex.rd_env_choice_selected as (index: number) => number;
+    for (let index = 0; index < count; index += 1) {
+      options.push({
+        index,
+        id: this.readText(
+          () => (this.ex.rd_env_pile_card_id_len as (zone: number, i: number) => number)(3, index),
+          (ptr) =>
+            (this.ex.rd_env_pile_card_id_into as (zone: number, i: number, ptr: number) => number)(
+              3,
+              index,
+              ptr
+            )
+        ),
+        title: this.readText(
+          () => (this.ex.rd_env_pile_card_title_len as (zone: number, i: number) => number)(3, index),
+          (ptr) =>
+            (this.ex.rd_env_pile_card_title_into as (zone: number, i: number, ptr: number) => number)(
+              3,
+              index,
+              ptr
+            )
+        ),
+        selected: selected(index) === 1,
+      });
+    }
+    return {
+      source: call("rd_env_choice_source") as ChoiceSource,
+      kind: call("rd_env_choice_kind") as ChoiceKind,
+      min: call("rd_env_choice_min"),
+      max: call("rd_env_choice_max"),
+      copies: call("rd_env_choice_copies"),
+      options,
+    };
+  }
+
+  /** 勾/取消勾一个选项。`0` 成功，`-1` 没有这个选项。 */
+  choicePick(index: number, on: boolean): number {
+    return (this.ex.rd_env_choice_pick as (index: number, on: number) => number)(index, on ? 1 : 0);
+  }
+
+  choiceClear(): number {
+    return (this.ex.rd_env_choice_clear as () => number)();
+  }
+
+  /** 回答问句：`0` 接受、`-1` 没有问句、`-2` 被拒（数量不对）。 */
+  choiceConfirm(): number {
+    return (this.ex.rd_env_choice_confirm as () => number)();
+  }
+
+  // ── 演出 beat ─────────────────────────────────────────────────────────────
+  /** 本步的演出日志（`rd_env_beat_*`）。`beats_dropped > 0` 表示内核丢了 beat。 */
+  beats(): { beats: Beat[]; dropped: number } {
+    const call = (name: string) => (this.ex[name] as () => number)();
+    const count = call("rd_env_beat_count");
+    const field = this.ex.rd_env_beat_field as (index: number, which: number) => number;
+    const beats: Beat[] = [];
+    for (let index = 0; index < count; index += 1) {
+      const hasDef = field(index, 7) === 1;
+      beats.push({
+        kind: field(index, 0),
+        actor: field(index, 1),
+        target: field(index, 2),
+        flags: field(index, 3),
+        a: field(index, 4),
+        b: field(index, 5),
+        c: field(index, 6),
+        def: hasDef
+          ? this.readText(
+              () => (this.ex.rd_env_beat_def_len as (index: number) => number)(index),
+              (ptr) => (this.ex.rd_env_beat_def_into as (index: number, ptr: number) => number)(index, ptr)
+            )
+          : "",
+      });
+    }
+    return { beats, dropped: call("rd_env_beats_dropped") };
   }
 
   // ── 组合：读一份完整快照 ──────────────────────────────────────────────────

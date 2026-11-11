@@ -147,6 +147,25 @@ UI_WASM_UI PASS mode=wasm hand=4 energy=2 enemy0=28->22 dom-synced=1
 两处竞态（都是"读得太早"，会变成假红）：视图就绪 ≠ 布局就绪（`layout().cards` 由 `useFrame`
 每帧写）；`endTurn()` 之后要等 React 重渲染再读 `view()`。
 
+## 5b. 第三步（已完成）：待决选牌 + beat + 定向夹具
+
+`rd_env_choice_kind` 有**十个**取值（1 消耗 / 2 弃抽 / 3 拿回手牌 / 4 复制 / 5 升级 / 6 放牌堆顶 /
+7 拿进手牌免费 / 8 放牌堆底免费 / 9 立刻打出 / 10 按印刷价拿进手牌）。我第一版只写了 0/1/2 还用
+`as` 强转 —— 夹具真喝了一瓶 Attack Potion，`kind` 返回 3 才暴露。现在十值联合 + 一张动词表，
+闸门 27 断言"十种都能写出句子且互不相同"。
+
+**真夹具用 Elixir 造问句**（会问句的牌都不在起手牌里，随机抽不算夹具）：
+`rd_run_grant_potion` + `rd_env_use_potion` ⇒ `source=1 kind=1 min=0 max=5`，勾一张确认 ⇒
+**消耗堆 0→1、手牌 5→4**。
+
+**beat** 接了 13 种 kind，出牌后的提示条文案来自内核叙述（实测 `bash`：
+`cardPlayed` → `damage 8` → `statusChanged vulnerable +2`），`beats_dropped > 0` 会明说。
+
+**定向夹具**：同名卡（打最后一张、只少一张、槽位压实）、0 能量（动作表里没有买不起的牌）、
+敌人槽位稳定（`[0,1]`→`[0,1]`，死掉的敌人仍在向量里 `alive=false`）。
+**X 费扣能量当前不可达**（起手牌不含、药水候选不含），只覆盖解码层 —— 这条写进闸门输出，
+不静默跳过。
+
 ## 6. 还没做的
 
 - **卡名是定义 id**（`bash` / `strike` / `defend`）：`rd_env_card_name_*` 返回定义 id，本地化是后续的事；

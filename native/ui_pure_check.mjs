@@ -43,6 +43,7 @@ try {
       "src/stage/combatLayout.ts",
       "src/stage/layout.ts",
       "src/wasm/snapshot.ts",
+      "src/view/choiceText.ts",
     ],
     { cwd: WEB_NEXT, stdio: "pipe" }
   );
@@ -50,6 +51,7 @@ try {
   const formation = await import(pathToFileURL(join(out, "stage/formation.js")).href);
   const combat = await import(pathToFileURL(join(out, "stage/combatLayout.js")).href);
   const snapshotMod = await import(pathToFileURL(join(out, "wasm/snapshot.js")).href);
+  const choiceText = await import(pathToFileURL(join(out, "view/choiceText.js")).href);
   const hit = await import(pathToFileURL(join(out, "input/hitTest.js")).href);
   const machine = await import(pathToFileURL(join(out, "input/pointerMachine.js")).href);
 
@@ -220,6 +222,43 @@ try {
   }
   check(threwMismatch, "解码：header 敌人计数与槽位不符 ⇒ RangeError（不渲染幽灵敌人）");
 
+  // ── 选牌句子：`kind` **十种**每种都要有自己的一句话 ─────────────────────
+  // 第一版只写了 kind 0/1/2（还 `as` 强转），夹具一喝 Attack Potion 就返回 3 ⇒ 这里穷举。
+  const sentenceFor = (source, kind, min, max, copies = 0) =>
+    choiceText.choiceSentence({ source, kind, min, max, copies, options: [] });
+  const kinds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  const sentences = kinds.map((kind) => sentenceFor(1, kind, 1, 1));
+  check(
+    sentences.every((line) => typeof line === "string" && line.length > 0),
+    "十种 kind 都能写出句子",
+    JSON.stringify(sentences)
+  );
+  check(
+    new Set(sentences).size === kinds.length,
+    "十种 kind 的句子**互不相同**（同句 = 页面把两件事说成一件）",
+    JSON.stringify(sentences.filter((line, index) => sentences.indexOf(line) !== index))
+  );
+  check(
+    sentenceFor(2, 3, 1, 1).includes("候选") && sentenceFor(1, 3, 1, 1).includes("牌堆"),
+    "同样的 kind 3，source 不同句子不同（三选一 vs 从牌堆拿）",
+    JSON.stringify([sentenceFor(2, 3, 1, 1), sentenceFor(1, 3, 1, 1)])
+  );
+  check(
+    sentenceFor(1, 1, 1, 1).includes("1 张") && sentenceFor(1, 1, 1, 3).includes("1–3 张"),
+    "数量：min == max 写 n 张，否则写 m–n 张",
+    JSON.stringify([sentenceFor(1, 1, 1, 1), sentenceFor(1, 1, 1, 3)])
+  );
+  check(
+    sentenceFor(2, 4, 1, 1, 2).includes("2 份"),
+    "复制问句写出份数（copies 来自内核，不由 `+` 推断）",
+    sentenceFor(2, 4, 1, 1, 2)
+  );
+  check(
+    sentenceFor(1, 99, 1, 1).includes("未知"),
+    "未知 kind ⇒ 说实话（不猜一句像话的）",
+    sentenceFor(1, 99, 1, 1)
+  );
+
   // ── 状态机 ──────────────────────────────────────────────────────────────
   const targeted = [
     { slot: 0, actionIndex: 1, label: "a" },
@@ -263,7 +302,7 @@ try {
     console.error(`UI_PURE FAIL: ${bad} 条`);
     process.exit(1);
   }
-  console.log(`UI_PURE PASS formation=0..6 hit=5 machine=4 layout=6 decode=8`);
+  console.log(`UI_PURE PASS formation=0..6 hit=5 machine=4 layout=6 decode=8 choice=6`);
 } catch (error) {
   await rm(out, { recursive: true, force: true }).catch(() => {});
   console.error(`UI_PURE ERROR: ${error.message}`);

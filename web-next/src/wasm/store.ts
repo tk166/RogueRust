@@ -8,7 +8,7 @@
 
 import type { WasmHost } from "./host";
 import { STEP_ACCEPTED, STEP_BROKEN, STEP_FINISHED, STEP_REJECTED } from "./host";
-import type { CombatAction, CombatSnapshot } from "./snapshot";
+import type { Beat, CombatAction, CombatSnapshot, PendingChoice } from "./snapshot";
 
 export interface DispatchResult {
   readonly accepted: boolean;
@@ -19,6 +19,9 @@ export interface DispatchResult {
   readonly action: CombatAction | null;
   readonly before: CombatSnapshot;
   readonly after: CombatSnapshot;
+  /** 这一步的演出日志（`rd_env_beat_*`）；`dropped > 0` 表示内核丢了 beat。 */
+  readonly beats: readonly Beat[];
+  readonly beatsDropped: number;
 }
 
 type Listener = () => void;
@@ -92,6 +95,8 @@ export class GameStore {
     if (code === STEP_ACCEPTED) this.acceptedCount += 1;
     // 无论接受与否都重读：接受后必须与内核一致；被拒绝时重读也等于再确认一次"没变"。
     this.current = this.host.snapshot();
+    // beat 是"这一步发生了什么"的权威叙述；接受时才有内容。
+    const { beats, dropped } = code === STEP_ACCEPTED ? this.host.beats() : { beats: [], dropped: 0 };
     for (const listener of this.listeners) listener();
 
     return {
@@ -102,6 +107,8 @@ export class GameStore {
       action,
       before,
       after: this.current,
+      beats,
+      beatsDropped: dropped,
     };
   }
 
@@ -121,6 +128,40 @@ export class GameStore {
 
   findEndTurn(): CombatAction | null {
     return this.actions().find((action) => action.kind === "endTurn") ?? null;
+  }
+
+  // ── 待决选牌：**只有** store 能回答问句（组件不碰导出）────────────────────
+  /** 当前问句；没有就 `null`。 */
+  choice(): PendingChoice | null {
+    return this.host.choice();
+  }
+
+  /** 勾/取消勾。返回内核的返回码（`-1` = 没有这个选项）。 */
+  pickChoice(index: number, on: boolean): number {
+    return this.host.choicePick(index, on);
+  }
+
+  clearChoice(): number {
+    return this.host.choiceClear();
+  }
+
+  /**
+   * 回答问句。
+   *
+   * ⚠️ `-2` 是"数量不对被拒"（不是"没有问句"）：界面要能显示原因并让玩家继续勾。
+   * 拒绝时**不**刷新快照 —— 问句还在，选中的牌也还在。
+   */
+  confirmChoice(): { code: number; accepted: boolean; unchanged: boolean } {
+    const before = this.host.combatObservation();
+    const code = this.host.choiceConfirm();
+    const after = this.host.combatObservation();
+    const unchanged =
+      before.length === after.length && before.every((value, index) => value === after[index]);
+    if (code === 0) {
+      this.current = this.host.hasCombatSession() ? this.host.snapshot() : null;
+      for (const listener of this.listeners) listener();
+    }
+    return { code, accepted: code === 0, unchanged };
   }
 
   /** 诊断用：`STEP_BROKEN` 表示内核驱动坏了（不是"玩家操作非法"）。 */

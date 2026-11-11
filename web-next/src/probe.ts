@@ -9,6 +9,7 @@ import type { ScreenLayout } from "./stage/layout";
 import type { MockScene } from "./mock/scene";
 import type { CombatView } from "./view/combatView";
 import type { WasmDiagnostics } from "./wasm/host";
+import type { PendingChoice } from "./wasm/snapshot";
 import type { CommitLogEntry } from "./App";
 
 export interface ProbeOptions {
@@ -27,6 +28,10 @@ export interface ProbeOptions {
   detailSlot: () => number;
   modalOpen: () => boolean;
   /** 指针下的卡牌与敌人（视觉用）。由 `App` 提供，闸门用它验证"与合法目标同源"。 */
+  choice: () => PendingChoice | null;
+  choicePick: (index: number, on: boolean) => void;
+  choiceConfirm: () => void;
+  choiceClear: () => void;
   hoveredCard: () => number;
   hoveredEnemy: () => number;
   openDetail: (slot: number) => void;
@@ -83,6 +88,18 @@ export interface Probe {
   wasmDiagnostics: () => WasmDiagnostics | null;
   wasmError: () => string | null;
   endTurn: () => { accepted: boolean; code: number | null };
+  /** 待决选牌的问句（`null` = 没有）。 */
+  choice: () => {
+    source: number;
+    kind: number;
+    min: number;
+    max: number;
+    copies: number;
+    options: { index: number; id: string; title: string; selected: boolean }[];
+  } | null;
+  choicePick: (index: number, on: boolean) => void;
+  choiceConfirm: () => void;
+  choiceClear: () => void;
   /** 手牌文字的字号（闸门断言可读性用）。 */
   typeScale: () => Record<string, { title: number; rules: number }>;
   /** 帧率采样：在 `ms` 毫秒内数 rAF。headless 是软件光栅，数字只做记录，不当判据。 */
@@ -158,6 +175,22 @@ export function installProbe(options: ProbeOptions): void {
     detailSlot: () => options.detailSlot(),
     modalOpen: () => options.modalOpen(),
     hovered: () => ({ card: options.hoveredCard(), enemy: options.hoveredEnemy() }),
+    choice: () => {
+      const choice = options.choice();
+      return choice
+        ? {
+            source: choice.source,
+            kind: choice.kind,
+            min: choice.min,
+            max: choice.max,
+            copies: choice.copies,
+            options: choice.options.map((option) => ({ ...option })),
+          }
+        : null;
+    },
+    choicePick: options.choicePick,
+    choiceConfirm: options.choiceConfirm,
+    choiceClear: options.choiceClear,
     view: () => {
       const view = options.view();
       return {

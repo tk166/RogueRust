@@ -9,6 +9,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { Hud } from "./hud/Hud";
 import { initialScene, liveEnemySlots, type MockCard, type MockScene } from "./mock/scene";
 import { viewFromMock, viewFromWasm, type CombatView } from "./view/combatView";
+import { ChoiceModal } from "./overlay/ChoiceModal";
+import { describeBeats } from "./view/beatText";
+import type { PendingChoice } from "./wasm/snapshot";
 import { WasmHost } from "./wasm/host";
 import { GameStore } from "./wasm/store";
 import { TextOverlay } from "./overlay/TextOverlay";
@@ -113,6 +116,10 @@ export function App() {
   /** 真 wasm 的宿主与商店；`null` = 还没装载好（或装载失败）。 */
   const [wasm, setWasm] = useState<{ host: WasmHost; game: GameStore } | null>(null);
   const [wasmError, setWasmError] = useState<string | null>(null);
+  /** 待决选牌的问句（`rd_env_choice_*`）。`null` = 没有问句。 */
+  const [choice, setChoice] = useState<PendingChoice | null>(null);
+  /** 上一次"确认"被拒的原因（内核 `-2`：数量不对）。 */
+  const [choiceRefusal, setChoiceRefusal] = useState<string | null>(null);
   /** wasm 侧的视图；Mock 侧由 `scene` 派生。 */
   const [wasmView, setWasmView] = useState<CombatView | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -174,6 +181,7 @@ export function App() {
         if (cancelled) return;
         setWasm({ host, game });
         setWasmView(viewFromWasm(game.getSnapshot()!, host));
+        setChoice(game.choice());
       } catch (error) {
         if (!cancelled) setWasmError(error instanceof Error ? error.message : String(error));
       }
@@ -189,6 +197,8 @@ export function App() {
     const rebuild = () => {
       const snapshot = wasm.game.getSnapshot();
       setWasmView(snapshot ? viewFromWasm(snapshot, wasm.host) : null);
+      // 问句是**会话级**查询（不在 148 格里），与快照一起重读。
+      setChoice(wasm.game.choice());
     };
     rebuild();
     return wasm.game.subscribe(rebuild);
@@ -240,8 +250,13 @@ export function App() {
           flash("动作已过期 · 状态未改变", "warning");
         } else {
           const outcome = wasm.game.dispatch(action);
-          if (outcome.accepted) flash("已出牌 · 动作已提交", "success");
-          else flash("内核拒绝了这一步 · 状态未改变", "warning");
+          if (outcome.accepted) {
+            // 演出文案来自内核的 beat（不再靠观察向量 diff 猜"发生了什么"）。
+            const line = describeBeats(outcome.beats, outcome.beatsDropped);
+            flash(line || "已出牌", "success");
+          } else {
+            flash("内核拒绝了这一步 · 状态未改变", "warning");
+          }
         }
       }
       commits.current.push({
@@ -349,6 +364,8 @@ export function App() {
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        // ⚠️ 有问句时 Esc 什么都不做：动作表此时为空，关掉弹窗等于把玩家扔进"点不动"的界面。
+        if (choice) return;
         if (modalOpen) setModalOpen(false);
         else if (detailSlot >= 0) setDetailSlot(-1);
         else cancel();
@@ -376,6 +393,39 @@ export function App() {
     if (activePointer.current?.longPressTimer != null) window.clearTimeout(activePointer.current.longPressTimer);
     if (noticeTimer.current !== null) window.clearTimeout(noticeTimer.current);
   }, []);
+
+  // ── 待决选牌：勾选 / 清空 / 确认 ─────────────────────────────────────────
+  const onChoicePick = useCallback(
+    (index: number, on: boolean) => {
+      if (!wasm) return;
+      wasm.game.pickChoice(index, on);
+      setChoice(wasm.game.choice());
+      setChoiceRefusal(null);
+    },
+    [wasm]
+  );
+
+  const onChoiceClear = useCallback(() => {
+    if (!wasm) return;
+    wasm.game.clearChoice();
+    setChoice(wasm.game.choice());
+    setChoiceRefusal(null);
+  }, [wasm]);
+
+  const onChoiceConfirm = useCallback(() => {
+    if (!wasm) return;
+    const outcome = wasm.game.confirmChoice();
+    if (outcome.accepted) {
+      setChoiceRefusal(null);
+      setChoice(wasm.game.choice());
+      flash("已确认选择", "success");
+    } else if (outcome.code === -2) {
+      // `-2` = 数量不对被拒（问句还在，选中的牌也还在）⇒ 让玩家继续勾，不要静默。
+      setChoiceRefusal("数量不对：请按上面要求的张数选择");
+    } else {
+      setChoiceRefusal("内核拒绝了这次确认");
+    }
+  }, [wasm, flash]);
 
   // 点开详情：双击抬起（P1 的第三档可读性）
   const onDetail = useCallback(
@@ -410,6 +460,10 @@ export function App() {
       rebounds: () => rebounds.current,
       detailSlot: () => detailSlot,
       modalOpen: () => modalOpen,
+      choice: () => choice,
+      choicePick: onChoicePick,
+      choiceConfirm: onChoiceConfirm,
+      choiceClear: onChoiceClear,
       hoveredCard: () => hoverCardSlot,
       hoveredEnemy: () => hoveredEnemySlot,
       openDetail: onDetail,
@@ -426,7 +480,8 @@ export function App() {
           }
         : undefined,
     });
-  }, [store, scene, view, wasm, wasmError, detailSlot, modalOpen, hoverCardSlot, hoveredEnemySlot, onDetail]);
+  }, [store, scene, view, wasm, wasmError, detailSlot, modalOpen, hoverCardSlot, hoveredEnemySlot,
+      onDetail, choice, onChoicePick, onChoiceConfirm, onChoiceClear]);
 
   return (
     <div className="app">
@@ -500,6 +555,16 @@ export function App() {
             hoverCardSlot >= 0 ? "左键选牌或拖动 · 右键查看详情" :
             "左侧为我方，右侧为敌人 · 点击或拖动手牌")}
         </div>
+      )}
+
+      {choice && !modalOpen && (
+        <ChoiceModal
+          choice={choice}
+          onPick={onChoicePick}
+          onConfirm={onChoiceConfirm}
+          onClear={onChoiceClear}
+          refusal={choiceRefusal}
+        />
       )}
 
       {modalOpen && (
