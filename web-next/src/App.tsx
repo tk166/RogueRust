@@ -28,6 +28,52 @@ export function optionsFor(card: MockCard, scene: MockScene, handSlot: number): 
   }));
 }
 
+/**
+ * `?debug` 下的测试局面：`enemies=N`（1..6）与 `hand=N`（1..12）。
+ *
+ * ⚠️ 两个参数**各自独立**判断。第一版写成"先看 enemies，没有就 return"，而 hand 的处理在
+ * 那个早退之后 —— 于是 `?debug&hand=12`（不带 enemies）永远执行不到（§4.19 的
+ * "守卫装在切口下游"）。抽成纯函数也是为了能单测"URL 怎么解释"。
+ *
+ * 只在 `?debug` 存在时生效；正式路径不暴露造怪/造牌。
+ */
+export function debugScene(search: string): MockScene {
+  const base = initialScene();
+  const query = new URLSearchParams(search);
+  if (!query.has("debug")) return base;
+
+  let scene = base;
+  const handRaw = query.get("hand");
+  if (handRaw !== null) {
+    const handCount = Number(handRaw);
+    if (Number.isInteger(handCount) && handCount >= 1 && handCount <= 12) {
+      scene = {
+        ...scene,
+        hand: Array.from({ length: handCount }, (_, i) => scene.hand[i % scene.hand.length]),
+      };
+    }
+  }
+  const enemyRaw = query.get("enemies");
+  if (enemyRaw !== null) {
+    const count = Number(enemyRaw);
+    if (Number.isInteger(count) && count >= 1 && count <= 6) {
+      scene = {
+        ...scene,
+        enemies: Array.from({ length: count }, (_, i) => ({
+          ...scene.enemies[i % scene.enemies.length],
+          slot: i,
+          id: `debug_enemy_${i}`,
+          name: `演示敌人 ${i + 1}`,
+          hp: 25 + i * 4,
+          maxHp: 25 + i * 4,
+          intent: `攻击 ${6 + i}`,
+        })),
+      };
+    }
+  }
+  return scene;
+}
+
 export interface CommitLogEntry {
   readonly handSlot: number;
   readonly actionIndex: number;
@@ -38,23 +84,7 @@ export interface CommitLogEntry {
 export function App() {
   const store = useMemo(() => new MachineStore(), []);
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
-  const [scene, setScene] = useState<MockScene>(() => {
-    const base = initialScene();
-    // [P1-LAYOUT] ?debug&enemies=N 下制造 1~6 敌人的测试局面，默认不改变游戏。
-    const query = new URLSearchParams(window.location.search);
-    const raw = query.get("enemies");
-    if (!query.has("debug") || raw === null) return base;
-    const count = Number(raw);
-    if (!Number.isInteger(count) || count < 1 || count > 6) return base;
-    return {
-      ...base,
-      enemies: Array.from({ length: count }, (_, i) => ({
-        ...base.enemies[i % base.enemies.length], slot: i,
-        id: `debug_enemy_${i}`, name: `演示敌人 ${i + 1}`,
-        hp: 25 + i * 4, maxHp: 25 + i * 4, intent: `攻击 ${6 + i}`,
-      })),
-    };
-  });
+  const [scene, setScene] = useState<MockScene>(() => debugScene(window.location.search));
   const [modalOpen, setModalOpen] = useState(false);
   const [detailSlot, setDetailSlot] = useState(-1);
   // [P1-UX] Hover 仅为表现层状态，不影响游戏规则与 Action 列表。

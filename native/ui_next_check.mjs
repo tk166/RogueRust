@@ -655,6 +655,7 @@ const portraitLayout = await evaluate(`(() => {
   const rect = hint ? hint.getBoundingClientRect() : null;
   return {
     width: l.width, height: l.height,
+    regions: l.regions,
     cards: l.cards.map((c) => ({ slot: c.slot, top: Math.round(c.y - c.h / 2), bottom: Math.round(c.y + c.h / 2) })),
     enemies: l.enemies.map((e) => ({ slot: e.slot, x: Math.round(e.x), y: Math.round(e.y), r: Math.round(e.r) })),
     hintTop: rect ? Math.round(rect.top) : null,
@@ -676,11 +677,112 @@ for (let i = 1; i < sorted.length; i += 1) {
   if (gap < need) tooClose = { upper: sorted[i - 1].slot, lower: sorted[i].slot, gap, need };
 }
 check(tooClose === null, "竖屏相邻敌人间距放得下三行标签", JSON.stringify(tooClose));
+
+// 敌人必须整个落在**战场区**里（`regions.combatTop..combatBottom`）—— 这是区域模型
+// 真正被用上的地方：队形若把敌人推进 HUD 或手牌区，这条会红。
+const combatStrays = portraitLayout.regions
+  ? portraitLayout.enemies.filter((enemy) => {
+      const top = enemy.y - enemy.r;
+      const bottom = enemy.y + enemy.r;
+      return top < portraitLayout.regions.combatTop || bottom > portraitLayout.regions.combatBottom;
+    })
+  : [];
 check(
-  (portraitLayout.hintTop ?? 0) >= 96,
-  "窄屏提示气泡在 HUD 下方（HUD 是 uikit 的 3D 层，DOM 量不到 ⇒ 这条用布局常量）",
-  `hintTop=${portraitLayout.hintTop}`
+  portraitLayout.regions !== null && combatStrays.length === 0,
+  "竖屏敌人整个落在战场区内（regions.combatTop..combatBottom）",
+  JSON.stringify({ strays: combatStrays, regions: portraitLayout.regions })
 );
+// 手牌底边不许越过操作栏
+const handOverrun = portraitLayout.regions
+  ? portraitLayout.cards.filter((card) => card.bottom > portraitLayout.regions.actionsTop)
+  : [];
+check(
+  portraitLayout.regions !== null && handOverrun.length === 0,
+  "竖屏手牌底边不越过操作栏（regions.actionsTop）",
+  JSON.stringify({ overrun: handOverrun, actionsTop: portraitLayout.regions?.actionsTop })
+);
+// ⚠️ 对比的是 `computeCombatLayout().regions.hudBottom`（**同一个**函数算出来的），
+// 不是硬编码常数 —— 否则提示条位置与断言又成了"两份认识"。
+// uikit 的 HUD 是 3D 画的、DOM 量不到，所以模型与真机的一致性靠截图人工复核。
+check(
+  portraitLayout.regions !== null && (portraitLayout.hintTop ?? 0) >= portraitLayout.regions.hudBottom,
+  "窄屏提示气泡在 HUD 下方（对比 regions.hudBottom）",
+  `hintTop=${portraitLayout.hintTop}, hudBottom=${portraitLayout.regions?.hudBottom}`
+);
+
+// ── 10. 手牌数量夹具：1 / 3 / 12（Review UX-6）──────────────────────────────
+// 手牌数量改变扇形宽度与紧凑态判定；只测 10 张等于把边界全漏掉。
+const handCases = [
+  { count: 1, label: "1 张（扇形退化成一个点，不能除零）" },
+  { count: 3, label: "3 张" },
+  { count: 12, label: "12 张（上限，最右那张仍要点得到）" },
+];
+for (const handCase of handCases) {
+  await page.send("Page.navigate", {
+    url: `http://127.0.0.1:${page.port}/web-next/dist/index.html?debug&still&hand=${handCase.count}`,
+  });
+  // ⚠️ 判据是"这一页真的换成 hand=N 了"，不是"有个探针在"：导航未提交时
+  // `window.__p1` 还是**旧页面**的，照着它判断会对着旧布局断言。
+  let ready = false;
+  for (let attempt = 0; attempt < 150; attempt += 1) {
+    ready = await evaluate(
+      `Boolean(window.__p1 && window.__p1.ready && window.__p1.hand().length === ${handCase.count}` +
+        ` && window.__p1.layout().frames > 10)`
+    );
+    if (ready) break;
+    await sleep(100);
+  }
+  check(ready, `hand=${handCase.count}：页面重新就绪（手牌数已切换）`);
+  const info = await evaluate(`(() => {
+    const l = window.__p1.layout();
+    const hand = window.__p1.hand();
+    return {
+      handCount: hand.length,
+      cards: l.cards.map((c) => ({
+        slot: c.slot,
+        x: Math.round(c.x), y: Math.round(c.y),
+        top: Math.round(c.y - c.h / 2), bottom: Math.round(c.y + c.h / 2),
+        hitX: Math.round(c.hitX),
+        visibleW: Math.round(c.visibleW),
+      })),
+      regions: l.regions,
+      width: l.width, height: l.height,
+    };
+  })()`);
+  check(info.handCount === handCase.count, `${handCase.label}：手牌数量正确`, `got ${info.handCount}`);
+  check(
+    info.cards.length === handCase.count && Number.isFinite(info.cards[0]?.x) && Number.isFinite(info.cards[0]?.y),
+    `${handCase.label}：每张牌都有有限的投影坐标（没有 NaN / 除零）`,
+    JSON.stringify(info.cards.slice(0, 2))
+  );
+  const outside = info.cards.filter(
+    (card) => card.x < 0 || card.x > info.width || card.top < 0 || card.bottom > info.height - 6
+  );
+  check(outside.length === 0, `${handCase.label}：每张牌的整个矩形都在视口内`, JSON.stringify(outside));
+  const hitOutside = info.cards.filter((card) => card.hitX < 0 || card.hitX > info.width);
+  check(hitOutside.length === 0, `${handCase.label}：每张牌的命中点都在视口内`, JSON.stringify(hitOutside));
+
+  // 最右那张必须点得到（叠放是右压左，它本来就该在最上面）。
+  const lastSlot = handCase.count - 1;
+  const lastPoint = await evaluate(`(() => {
+    const card = window.__p1.layout().cards.find((c) => c.slot === ${lastSlot});
+    return card ? { x: card.hitX, y: card.hitY } : null;
+  })()`);
+  check(Boolean(lastPoint), `${handCase.label}：拿到最右那张的命中点`);
+  const pressedLast = lastPoint ? await mousePress(lastPoint) : { phase: "missing", handSlot: -1 };
+  check(
+    pressedLast.phase === "pressed" && pressedLast.handSlot === lastSlot,
+    `${handCase.label}：最右那张（slot ${lastSlot}）点得到`,
+    JSON.stringify(pressedLast)
+  );
+  if (lastPoint) await mouseRelease(lastPoint);
+}
+
+// 回到默认局面，别把后续状态带走（这一段之后没有别的断言，但保持干净）。
+await page.send("Page.navigate", {
+  url: `http://127.0.0.1:${page.port}/web-next/dist/index.html?debug&still`,
+});
+await sleep(300);
 
 await page.close();
 

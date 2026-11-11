@@ -97,6 +97,7 @@ export function installProbe(options: ProbeOptions): void {
     layout: () => ({
       cards: options.layout.cards.map((card) => ({ ...card })),
       enemies: options.layout.enemies.map((enemy) => ({ ...enemy })),
+      regions: options.layout.regions ? { ...options.layout.regions } : null,
       width: options.layout.width,
       height: options.layout.height,
       frames: options.layout.frames,

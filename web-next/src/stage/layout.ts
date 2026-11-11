@@ -15,6 +15,13 @@ export interface CardScreen {
   w: number;
   h: number;
   /**
+   * **牌面看起来有多宽**：上、下两条边投影长度的均值。
+   *
+   * 为什么不是 `w`：`w` 是四个角的外接矩形，牌斜着摆时比牌面宽（±15° 时约宽 30%）。
+   * 文字要落在**牌面上**，所以用这个；`w` 只用来算占位与叠放。
+   */
+  faceW: number;
+  /**
    * **露出来的宽度**：`min(w, 相邻牌中心的间距)`。
    *
    * 为什么不是 `w`：390px 宽的手机上，每张牌仍然有约 105px 的矩形，但相邻牌只隔约 33px
@@ -45,10 +52,22 @@ export interface EnemyScreen {
 export interface ScreenLayout {
   cards: CardScreen[];
   enemies: EnemyScreen[];
+  /**
+   * 版面区域（CSS 像素）：HUD / 战场 / 手牌 / 操作栏。
+   * 由 `computeCombatLayout` 算出，**闸门用它断言**，不读硬编码常数。
+   */
+  regions: import("./combatLayout").CombatRegions | null;
   width: number;
   height: number;
   /** 已渲染的帧数；闸门等它 > 0 才算"投影有效"。 */
   frames: number;
 }
 
-export const layout: ScreenLayout = { cards: [], enemies: [], width: 0, height: 0, frames: 0 };
+export const layout: ScreenLayout = {
+  cards: [],
+  enemies: [],
+  regions: null,
+  width: 0,
+  height: 0,
+  frames: 0,
+};

@@ -184,6 +184,29 @@ P1 的代码里有五处**看起来对、实际错**，全部是闸门用真浏�
 **z 根本不影响叠放**，透视下只会让牌更大更低（底边掉出视口 817 > 800）。改成 per-card
 `renderOrder`（静止 `10+i` / hover 25 / 抬起 30），hover 只抬 y。
 
+## 4e. 版面收进一个纯函数（§355）
+
+`stage/combatLayout.ts` 现在是版面的**唯一来源**：相机距离、可见范围、手牌扇形
+（`fanSpread` / `fanCenterY` / `fanArc`）、以及四块区域 `regions`（HUD / 战场 / 手牌 / 操作栏，
+CSS 像素）。手牌的中心高度由"**底边贴着操作栏**"反推 —— 之前那个 `-halfH * 0.66` 是量出来的
+魔法数，现在它有推导了。
+
+三个直接后果：
+
+1. **提示条位置由模型驱动**（`--hint-top` = `regions.hudBottom + 6`），CSS 不再有第二份 HUD 高度；
+   闸门也拿同一个值断言（原来写死 `hintTop >= 96`）。
+2. **闸门能断言"东西没跑到别人的区域里"**：敌人整个落在 `combatTop..combatBottom`、
+   手牌底边不越过 `actionsTop`、气泡在 `hudBottom` 之下。这些断言都用同一个函数算出来的值。
+3. **手牌数量 1–12 张都是纯函数的一部分**：`?debug&hand=N` + 闸门跑 1/3/12 三档
+   （12 张时 stride ≈ 29px、全部紧凑态、最右那张仍点得到）。
+
+另两项审阅遗留一起做掉：**四角投影**（原来只投中心 + 一个未旋转的角，牌斜 15° 时宽高会偏；
+现在取四角外接矩形，另给文字一个 `faceW` = 牌面宽度）与 **`CardEdge` 几何体共享**
+（原来十张牌十份 `EdgesGeometry`）。
+
+⚠️ 一个已知的版面取舍：操作栏按**整条带子**预留（56px 全宽），所以左下角有空白。要与 StS
+一样让手牌贴底，得把底部按左右分区而不是整条带子 —— 留给 P2。
+
 ## 5. 一条产品决策（与旧页面的**有意**分歧）
 
 旧 `web/ui_render.js::actionFor()` 在"该牌只有一条合法动作"时，拖到**任何位置**都算数：
@@ -220,6 +243,7 @@ web-next/
                                 + dismiss：长按看详情与出牌互斥
   src/input/hitTest.ts          屏幕空间命中（指针在 mesh 外松开也能判定目标）
   src/stage/formation.ts        左右阵营队形（纯函数，0–6 敌，业务 slot 不重编号）
+  src/stage/combatLayout.ts     版面唯一来源：相机/扇形/四块区域（纯函数，含安全区）
   src/stage/Stage.tsx           场景、相机适配、扇形、命中面、每帧投影
   src/stage/layout.ts           投影结果（卡牌/敌人的屏幕坐标 + visibleW + hitX）
   src/overlay/TextOverlay.tsx   DOM 文字覆盖层（三档字号、紧凑态）

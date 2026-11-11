@@ -90,7 +90,7 @@ function Invoke-Gate {
                      # 纯状态机回归：修复后的三条断言（判据是 PASS 串本身）
                      '(P1_REVIEW13_REPRO PASS)',
                      # 纯函数回归：队形/命中/状态机
-                     '(UI_PURE PASS formation=0\.\.6 hit=\d+ machine=\d+)')) {
+                     '(UI_PURE PASS formation=0\.\.6 hit=\d+ machine=\d+ layout=\d+)')) {
     $m = [regex]::Match($out, $pat)
     if ($m.Success) { $evidence = $m.Value; break }
   }
@@ -388,7 +388,7 @@ Write-Output "`n[27/27] UI 纯函数回归：队形 0–6 敌 / 屏幕命中 / �
 # 几十秒且只能覆盖一两种组合。与闸门 25/26 分开：红了要能一眼看出坏在纯逻辑、接线还是渲染。
 $results += Invoke-Gate -Name 'ui-pure' -Exe 'C:\Program Files\nodejs\node.exe' `
   -ArgLine (Join-Path $ROOT 'native\ui_pure_check.mjs') -Workdir $ROOT `
-  -MustMatch 'UI_PURE PASS formation=0\.\.6 hit=\d+ machine=\d+' `
+  -MustMatch 'UI_PURE PASS formation=0\.\.6 hit=\d+ machine=\d+ layout=\d+' `
   -TimeoutSec 180
 
 Write-Output "`n" + ("-" * 78)

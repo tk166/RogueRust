@@ -40,12 +40,14 @@ try {
       "src/input/pointerMachine.ts",
       "src/input/hitTest.ts",
       "src/stage/formation.ts",
+      "src/stage/combatLayout.ts",
       "src/stage/layout.ts",
     ],
     { cwd: WEB_NEXT, stdio: "pipe" }
   );
 
   const formation = await import(pathToFileURL(join(out, "stage/formation.js")).href);
+  const combat = await import(pathToFileURL(join(out, "stage/combatLayout.js")).href);
   const hit = await import(pathToFileURL(join(out, "input/hitTest.js")).href);
   const machine = await import(pathToFileURL(join(out, "input/pointerMachine.js")).href);
 
@@ -94,6 +96,54 @@ try {
     threwDup = error instanceof RangeError;
   }
   check(threwDup, "重复 slot ⇒ RangeError");
+
+  // ── 版面区域模型（UX-3）────────────────────────────────────────────────
+  const portraitView = { width: 390, height: 844 };
+  const wideView = { width: 1280, height: 800 };
+  let ordered = true;
+  let outerInside = true;
+  let strideOk = true;
+  let finite = true;
+  for (const view of [portraitView, wideView]) {
+    for (const n of [1, 2, 3, 5, 10, 12]) {
+      const L = combat.computeCombatLayout(view, n);
+      const r = L.regions;
+      if (!(r.hudTop <= r.hudBottom && r.hudBottom < r.combatTop && r.combatTop < r.combatBottom
+        && r.combatBottom <= r.handBottom && r.handBottom < r.actionsTop && r.actionsTop < view.height)) {
+        ordered = false;
+      }
+      // 最外侧那张牌的外缘必须留在视口内
+      const outerEdge = L.fanSpread + combat.CARD_W / 2;
+      if (outerEdge > L.halfW + 1e-6) outerInside = false;
+      if (!Number.isFinite(L.fanCenterY) || !Number.isFinite(L.fanSpread)) finite = false;
+      if (n > 1) {
+        const pxPerWorld = combat.pxPerWorldAt(L.cameraDistance, combat.FAN_Z, view.height);
+        const stridePx = ((2 * L.fanSpread) / (n - 1)) * pxPerWorld;
+        // 至少露出 20px（紧凑态阈值），除非"装得下"与"露出够宽"不可兼得
+        const maxStridePx = ((2 * (L.halfW * 0.98 - combat.CARD_W / 2)) / (n - 1)) * pxPerWorld;
+        if (stridePx < Math.min(20, maxStridePx) - 0.5) strideOk = false;
+      }
+    }
+  }
+  check(ordered, "版面区域严格有序（HUD < 战场 < 手牌 < 操作栏），1–12 张手牌 × 两种视口");
+  check(outerInside, "手牌 1–12 张时最外侧那张的外缘仍在视口内");
+  check(strideOk, "手牌 1–12 张时牌与牌之间至少露出 20px（或已到可用的上限）");
+  check(finite, "手牌 1 张时不除零（fanSpread / fanCenterY 都是有限值）");
+
+  const safe = combat.computeCombatLayout({ width: 390, height: 844, safeTop: 44, safeBottom: 34 }, 10);
+  check(
+    safe.regions.hudBottom === 44 + 86 && safe.regions.actionsTop === 844 - 34 - 56,
+    "安全区把 HUD 往下推、把操作栏往上推",
+    JSON.stringify(safe.regions)
+  );
+
+  let threwViewport = false;
+  try {
+    combat.computeCombatLayout({ width: 0, height: 844 }, 10);
+  } catch (error) {
+    threwViewport = error instanceof RangeError;
+  }
+  check(threwViewport, "非法视口（宽 0）⇒ RangeError");
 
   // ── 屏幕命中 ────────────────────────────────────────────────────────────
   const enemies = [
@@ -154,7 +204,7 @@ try {
     console.error(`UI_PURE FAIL: ${bad} 条`);
     process.exit(1);
   }
-  console.log(`UI_PURE PASS formation=0..6 hit=5 machine=4`);
+  console.log(`UI_PURE PASS formation=0..6 hit=5 machine=4 layout=6`);
 } catch (error) {
   await rm(out, { recursive: true, force: true }).catch(() => {});
   console.error(`UI_PURE ERROR: ${error.message}`);

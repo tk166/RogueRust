@@ -220,7 +220,9 @@ body,
 }
 .gesture-hint {
   position: absolute;
-  top: calc(env(safe-area-inset-top, 0px) + 14px);
+  /* 位置由 `computeCombatLayout().regions.hudBottom` 通过 `--hint-top` 驱动（见 TextOverlay）。
+     兜底值只在第一帧之前生效。 */
+  top: var(--hint-top, 14px);
   left: 50%;
   transform: translateX(-50%);
   max-width: min(94vw, 680px);
@@ -257,7 +259,7 @@ body,
 @media (max-width: 600px) {
   /* ⚠️ 窄屏的 HUD 是两行（HP/BLK/EN 会换行），高约 96px。气泡留在 top:14px 会正好盖住
      BLK 与 EN —— 截图上就是这么糊在一起的。宽屏 HUD 只有一行且靠左，气泡居中，不冲突。 */
-  .gesture-hint { font-size: 11px; padding: 5px 10px; top: calc(env(safe-area-inset-top, 0px) + 100px); }
+  .gesture-hint { font-size: 11px; padding: 5px 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .gesture-hint { transition: none; }
