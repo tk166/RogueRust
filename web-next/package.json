@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "build": "node scripts/sync-wasm.mjs && tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "wasm": "node scripts/sync-wasm.mjs"
   },
   "dependencies": {
     "@react-three/fiber": "^9.8.2",

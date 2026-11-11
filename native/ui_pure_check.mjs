@@ -42,12 +42,14 @@ try {
       "src/stage/formation.ts",
       "src/stage/combatLayout.ts",
       "src/stage/layout.ts",
+      "src/wasm/snapshot.ts",
     ],
     { cwd: WEB_NEXT, stdio: "pipe" }
   );
 
   const formation = await import(pathToFileURL(join(out, "stage/formation.js")).href);
   const combat = await import(pathToFileURL(join(out, "stage/combatLayout.js")).href);
+  const snapshotMod = await import(pathToFileURL(join(out, "wasm/snapshot.js")).href);
   const hit = await import(pathToFileURL(join(out, "input/hitTest.js")).href);
   const machine = await import(pathToFileURL(join(out, "input/pointerMachine.js")).href);
 
@@ -161,6 +163,63 @@ try {
     "手牌命中按**露出条**中心（hitX），不按被遮住的牌心");
   check(hit.cardAtScreen(cards, 10, 100) === -1, "手牌外不命中");
 
+  // ── 观察向量解码（合成向量，不需要 wasm）────────────────────────────────
+  // 布局与 `kernel/rd-wasm/src/lib.rs` 的 `OFF_*` 一致：header 12 / 英雄状态 5 /
+  // 敌人 6×8 / 敌人状态 6×5 / 手牌 10×4 / 牌堆 5 / 保留 8 = 148。
+  const OBS = 148;
+  const makeObs = () => {
+    const obs = new Int32Array(OBS).fill(-1);
+    for (let index = 135; index < 140; index += 1) obs[index] = 0; // 牌堆是计数，0 有意义
+    return obs;
+  };
+  const decode = snapshotMod.decodeCombat;
+
+  const obs = makeObs();
+  obs[0] = 3; // round
+  obs[1] = 2; // turn
+  obs[2] = 1; // phase inProgress
+  obs[3] = 0; // ongoing
+  obs[4] = 61; obs[5] = 80; obs[6] = 5; obs[8] = 2; obs[9] = 3;
+  obs[10] = 2; // hand count
+  obs[11] = 1; // enemy count
+  obs[12] = 2; // hero strength
+  // 敌人槽 0：alive, hp 30/44, block 4, ward -1, intent 1/9, statuses 1
+  obs[17] = 1; obs[18] = 30; obs[19] = 44; obs[20] = 4; obs[21] = -1; obs[22] = 1; obs[23] = 9; obs[24] = 1;
+  // 手牌：槽 0 数字费 3；槽 1 是 X 费（-2）
+  obs[95] = 1; obs[96] = 3; obs[97] = 7; obs[98] = 0;
+  obs[99] = 1; obs[100] = snapshotMod.X_COST_DISPLAY; obs[101] = 8; obs[102] = 0;
+  obs[135] = 4; obs[136] = 2; obs[137] = 1;
+
+  const decoded = decode(obs, [
+    snapshotMod.decodeAction(0, 0, 0, 0),
+    snapshotMod.decodeAction(1, 1, -1, -1),
+  ]);
+  check(decoded.round === 3 && decoded.turn === 2 && decoded.phase === "inProgress", "解码：头部字段");
+  check(decoded.hero.hp === 61 && decoded.hero.block === 5 && decoded.hero.energy === 2, "解码：英雄");
+  check(decoded.hero.statuses.strength === 2, "解码：英雄状态轴（ABI 顺序）");
+  check(decoded.enemies.length === 1 && decoded.enemies[0].hp === 30, "解码：只解出**存在**的敌人槽（其余是 -1）");
+  check(decoded.enemies[0].intentKind === 1 && decoded.enemies[0].intentDamage === 9, "解码：敌人意图");
+  check(
+    decoded.hand.length === 2 && decoded.hand[0].cost === 3 && decoded.hand[1].cost === "X",
+    "解码：数字费与 X 费（-2 ⇒ \"X\"）",
+    JSON.stringify(decoded.hand.map((card) => card.cost))
+  );
+  check(
+    decoded.piles.draw === 4 && decoded.piles.hand === 2 && decoded.piles.discard === 1,
+    "解码：牌堆计数（0 有意义，不是 -1）"
+  );
+  check(decoded.actions[1].kind === "endTurn" && decoded.actions[1].handSlot === -1, "解码：动作表 endTurn");
+
+  const mismatch = makeObs();
+  mismatch[11] = 2; // header 说 2 个敌人，但一个槽都没有
+  let threwMismatch = false;
+  try {
+    decode(mismatch, []);
+  } catch (error) {
+    threwMismatch = error instanceof RangeError;
+  }
+  check(threwMismatch, "解码：header 敌人计数与槽位不符 ⇒ RangeError（不渲染幽灵敌人）");
+
   // ── 状态机 ──────────────────────────────────────────────────────────────
   const targeted = [
     { slot: 0, actionIndex: 1, label: "a" },
@@ -204,7 +263,7 @@ try {
     console.error(`UI_PURE FAIL: ${bad} 条`);
     process.exit(1);
   }
-  console.log(`UI_PURE PASS formation=0..6 hit=5 machine=4 layout=6`);
+  console.log(`UI_PURE PASS formation=0..6 hit=5 machine=4 layout=6 decode=8`);
 } catch (error) {
   await rm(out, { recursive: true, force: true }).catch(() => {});
   console.error(`UI_PURE ERROR: ${error.message}`);

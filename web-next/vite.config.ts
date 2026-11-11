@@ -19,6 +19,13 @@ export default defineConfig({
   build: {
     target: "es2022",
     outDir: "dist",
+    rollupOptions: {
+      // 两个入口：主页面（3D UI）与 P2 的 ABI 接线探针页。
+      input: {
+        main: "index.html",
+        p2: "p2.html",
+      },
+    },
     // 不内联：把每个 chunk 的字节数留在产物里，好让"压缩传输体积"是个**量出来的**数字。
     assetsInlineLimit: 0,
     sourcemap: false,

@@ -56,3 +56,8 @@ web/*.wasm
 web-next/node_modules/
 # 子集字体是 `native/ui_font_measure.py` 的产物，字节数记在 font-measure.json 里
 docs/ui-next-p1/subset-*
+# P2：`web-next` 用的 wasm 是**复制**自 `web/rd_wasm.wasm` 的（唯一构建产物），不入库
+web-next/public/rd_wasm.wasm
+web-next/public/wasm.json
+web-next/dist/rd_wasm.wasm
+web-next/dist/wasm.json
