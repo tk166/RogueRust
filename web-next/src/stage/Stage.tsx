@@ -65,6 +65,8 @@ export interface StageProps {
 
 export function Stage({ scene, liftedSlot, hoverSlot, onCardDown, onHover, onRelease }: StageProps) {
   const { camera, size, pointer } = useThree();
+  // `?still`：冻结呼吸与插值，让证据截图逐字节可复现（见文件头）。
+  const still = typeof window !== "undefined" && window.location.search.includes("still");
   const heroRef = useRef<THREE.Group>(null);
   const groundRef = useRef<THREE.Mesh>(null);
   const enemyRefs = useRef<(THREE.Group | null)[]>([]);
@@ -84,7 +86,7 @@ export function Stage({ scene, liftedSlot, hoverSlot, onCardDown, onHover, onRel
   );
 
   useFrame(({ clock }) => {
-    const t = clock.getElapsedTime();
+    const t = still ? 0 : clock.getElapsedTime();
 
     // ── 视图：相机距离按宽高比算，然后所有位置由 halfH/halfW 派生 ─────────────
     const aspect = size.height > 0 ? size.width / size.height : 1;
@@ -135,7 +137,8 @@ export function Stage({ scene, liftedSlot, hoverSlot, onCardDown, onHover, onRel
       const targetAngle = lifted ? 0 : local.angle;
       const targetScale = lifted ? 1.32 : 1;
       // 指数趋近：既跟随又不会抖动。抬起的牌跟得快，回落跟得慢一点（回弹手感）。
-      const k = lifted ? 0.45 : 0.3;
+      // `still` 下直接吸附（k = 1）：截图不该拍到"恰好走到一半"的位置。
+      const k = still ? 1 : lifted ? 0.45 : 0.3;
       group.position.x += (targetX - group.position.x) * k;
       group.position.y += (targetY - group.position.y) * k;
       group.position.z += (targetZ - group.position.z) * k;

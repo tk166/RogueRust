@@ -35,7 +35,7 @@ function check(ok, label, detail = "") {
 
 const page = await openPage({
   page: "web-next/dist/index.html",
-  query: "debug",
+  query: "debug&still",
   gate: GATE,
   waitFor: "Boolean(window.__p1 && window.__p1.ready)",
 });
