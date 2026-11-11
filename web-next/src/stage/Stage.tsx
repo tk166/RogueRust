@@ -15,10 +15,12 @@
 //    所以：相机距离按宽高比拉远，所有元素的位置由 `halfH`（可见半高）算出来。
 
 import { useFrame, useThree } from "@react-three/fiber";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { MockScene } from "../mock/scene";
 import { layout, type CardScreen, type EnemyScreen } from "./layout";
+import { computeCombatFormation } from "./formation";
+import type { Phase } from "../input/pointerMachine";
 
 const CARD_W = 0.62;
 const CARD_H = 0.86;
@@ -43,7 +45,9 @@ export function fanTransform(index: number, count: number, spread: number, halfH
   return {
     x: t * spread,
     // 弧线：两端略高，中间略低（像手里握着的一把牌）。
-    y: -halfH * 0.72 + Math.abs(t) * halfH * 0.05,
+    // ⚠️ 0.72 会让中间那张牌的底边压到底部操作栏下面（390×844 实测卡底 804、操作栏 790 起）。
+    // 手牌在 z≈0.9，比 z=0 平面更靠近相机 ⇒ 透视下更大更低，所以不能按 z=0 的比例推。
+    y: -halfH * 0.66 + Math.abs(t) * halfH * 0.05,
     // ⚠️ z **只随序号单调递增**（越靠右越靠前），**不要**写成 `0.9 + |t| * 0.12`：
     // 那样是对称的，两端在最前、中间 z 最小，窄屏互相压住时中间那张会被完全盖住，
     // 于是"看不见的牌也点不到"（闸门 25 抓到的就是这一条）。
@@ -58,12 +62,21 @@ export interface StageProps {
   /** 抬起的牌（拖拽/选中中）；其余牌回落到手牌位置。 */
   liftedSlot: number;
   hoverSlot: number;
-  onCardDown: (slot: number) => void;
+  /** [P1-UX] 视觉上悬停与业务上的目标选择是两种正交状态。 */
+  hoverCardSlot: number;
+  hoveredEnemySlot: number;
+  phase: Phase;
+  followPointer: boolean;
+  legalTargets: readonly number[];
+  onCardDown: (slot: number, pointer: { id: number; type: string; x: number; y: number }) => void;
+  onCardHover: (slot: number) => void;
   onHover: (slot: number) => void;
   onRelease: (slot: number) => void;
 }
-
-export function Stage({ scene, liftedSlot, hoverSlot, onCardDown, onHover, onRelease }: StageProps) {
+export function Stage({
+  scene, liftedSlot, hoverSlot, hoverCardSlot, hoveredEnemySlot, phase, followPointer,
+  legalTargets, onCardDown, onCardHover, onHover, onRelease,
+}: StageProps) {
   const { camera, size, pointer } = useThree();
   // `?still`：冻结呼吸与插值，让证据截图逐字节可复现（见文件头）。
   const still = typeof window !== "undefined" && window.location.search.includes("still");
@@ -85,7 +98,28 @@ export function Stage({ scene, liftedSlot, hoverSlot, onCardDown, onHover, onRel
     []
   );
 
-  useFrame(({ clock }) => {
+  // [P1-UX] 瞄准连线只有 2 个顶点；每帧改 BufferAttribute，不创建新 Mesh/React 节点。
+  // 线只是演出，不参与射线，不改变 WASM 的目标选择与命中判定。
+  const aimLine = useMemo(() => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(6), 3));
+    const material = new THREE.LineBasicMaterial({
+      color: "#8dffcb", transparent: true, opacity: 0.90,
+      depthTest: false, depthWrite: false,
+    });
+    const beam = new THREE.Line(geometry, material);
+    beam.renderOrder = 19;
+    beam.frustumCulled = false;
+    beam.visible = false;
+    beam.raycast = () => {}; // 从不遮挡敌人或手牌射线。
+    return beam;
+  }, []);
+  useEffect(() => () => {
+    aimLine.geometry.dispose();
+    (aimLine.material as THREE.Material).dispose();
+  }, [aimLine]);
+
+  useFrame(({ clock }, delta) => {
     const t = still ? 0 : clock.getElapsedTime();
 
     // ── 视图：相机距离按宽高比算，然后所有位置由 halfH/halfW 派生 ─────────────
@@ -100,21 +134,24 @@ export function Stage({ scene, liftedSlot, hoverSlot, onCardDown, onHover, onRel
     const halfH = tan * distance;
     const halfW = halfH * aspect;
 
-    // ── 呼吸：证明这是活的 3D 场景 ─────────────────────────────────────────
+    // [P1-LAYOUT] 队形由纯函数统一计算。以后接真实 WASM 时替换数据源即可；
+    // 战场仍然是 "我方在左、敌人在右"，竖屏右侧单列，横屏右侧两行（每行至多三名）。
+    const formation = computeCombatFormation(
+      scene.enemies.map((enemy) => enemy.slot),
+      { width: size.width, height: size.height, halfW, halfH }
+    );
     const groundY = -halfH * 0.5;
     if (groundRef.current) groundRef.current.position.y = groundY;
     if (heroRef.current) {
-      heroRef.current.position.set(0, -halfH * 0.3 + 0.02 * Math.sin(t * 1.6), 0.15);
-    }
-    const enemyX = Math.min(1.35, halfW * 0.6);
-    const enemyY = -halfH * 0.05;
-    for (const [index, group] of enemyRefs.current.entries()) {
-      if (!group) continue;
-      group.position.set(
-        (index === 0 ? -1 : 1) * enemyX,
-        enemyY + 0.03 * Math.sin(t * 1.3 + index * 1.7),
-        -0.4
+      heroRef.current.position.set(
+        formation.hero.x, formation.hero.y + 0.025 * Math.sin(t * 1.6), formation.hero.z
       );
+    }
+    for (const [index, group] of enemyRefs.current.entries()) {
+      const place = formation.enemies[index];
+      if (!group || !place) continue;
+      group.position.set(place.x, place.y + 0.025 * Math.sin(t * 1.3 + index * 1.7), place.z);
+      group.scale.setScalar(place.scale);
     }
 
     // ── 指针在 LIFT_Z 平面上的世界坐标（拖起的牌跟随它）──────────────────────
@@ -131,14 +168,19 @@ export function Stage({ scene, liftedSlot, hoverSlot, onCardDown, onHover, onRel
       if (!group) return;
       const local = fanTransform(index, scene.hand.length, spread, halfH);
       const lifted = index === liftedSlot;
-      const targetX = lifted ? scratch.pointerWorld.x : local.x;
-      const targetY = lifted ? scratch.pointerWorld.y - 0.1 : local.y;
-      const targetZ = lifted ? LIFT_Z : local.z;
+      const hovered = index === hoverCardSlot && phase === "idle";
+      // [P1-UX] 鼠标悬停轻抬；按下/拖拽显著抬起；点按目标牌后，预览固定在战场偏左下，
+      // 不会在松开手指后继续粘着上一指针位置，从而挡住右侧敌人。
+      const previewX = formation.portrait ? -halfW * 0.16 : -halfW * 0.22;
+      const previewY = -halfH * 0.28;
+      const targetX = lifted ? (followPointer ? scratch.pointerWorld.x : previewX) : local.x;
+      const targetY = lifted ? (followPointer ? scratch.pointerWorld.y - 0.1 : previewY)
+        : local.y + (hovered ? 0.11 : 0);
+      const targetZ = lifted ? LIFT_Z : hovered ? 1.32 : local.z;
       const targetAngle = lifted ? 0 : local.angle;
-      const targetScale = lifted ? 1.32 : 1;
-      // 指数趋近：既跟随又不会抖动。抬起的牌跟得快，回落跟得慢一点（回弹手感）。
-      // `still` 下直接吸附（k = 1）：截图不该拍到"恰好走到一半"的位置。
-      const k = still ? 1 : lifted ? 0.45 : 0.3;
+      const targetScale = lifted ? 1.32 : hovered ? 1.11 : 1;
+      // [P1-UX] 用 deltaTime 而非每帧固定系数，避免 30 / 60 / 120 Hz 手感不同。
+      const k = still ? 1 : 1 - Math.exp(-(lifted ? 22 : hovered ? 16 : 13) * Math.min(delta, 0.1));
       group.position.x += (targetX - group.position.x) * k;
       group.position.y += (targetY - group.position.y) * k;
       group.position.z += (targetZ - group.position.z) * k;
@@ -181,7 +223,7 @@ export function Stage({ scene, liftedSlot, hoverSlot, onCardDown, onHover, onRel
       const neighbour = cards[index + 1];
       const stride = neighbour ? Math.abs(neighbour.x - card.x) : card.w;
       // 抬起的牌在最前面，整张都露着 ⇒ 文字用整张牌宽（否则规则会被压成很窄的一列）。
-      card.visibleW = card.lifted ? card.w : Math.min(card.w, Math.max(stride, 1));
+      card.visibleW = (card.lifted || card.slot === hoverCardSlot) ? card.w : Math.min(card.w, Math.max(stride, 1));
       card.hitX = card.x - (card.w - card.visibleW) / 2;
       card.hitY = card.y;
     }
@@ -196,7 +238,7 @@ export function Stage({ scene, liftedSlot, hoverSlot, onCardDown, onHover, onRel
       scratch.projected.copy(scratch.world).project(camera);
       const cx = (scratch.projected.x * 0.5 + 0.5) * size.width;
       const cy = (-scratch.projected.y * 0.5 + 0.5) * size.height;
-      scratch.offset.set(0.44, 0, 0);
+      scratch.offset.set(0.44 * (formation.enemies[index]?.scale ?? 1), 0, 0);
       scratch.corner.copy(scratch.world).add(scratch.offset).project(camera);
       const rx = (scratch.corner.x * 0.5 + 0.5) * size.width;
       enemies.push({ slot: enemy.slot, x: cx, y: cy, r: Math.abs(rx - cx) });
@@ -204,12 +246,25 @@ export function Stage({ scene, liftedSlot, hoverSlot, onCardDown, onHover, onRel
     layout.enemies = enemies;
     layout.width = size.width;
     layout.height = size.height;
+    // [P1-UX] 只在 "目标合法且真的被指向" 时画瞄准线，避免误导玩家。
+    const aimTarget = formation.enemies.find((p) => p.slot === hoverSlot);
+    const aimCard = liftedSlot >= 0 ? cardRefs.current[liftedSlot] : null;
+    const aimActive = phase === "targeting" && legalTargets.includes(hoverSlot) && !!aimTarget && !!aimCard;
+    aimLine.visible = aimActive;
+    if (aimActive && aimTarget && aimCard) {
+      const pos = aimLine.geometry.getAttribute("position") as THREE.BufferAttribute;
+      pos.setXYZ(0, aimCard.position.x, aimCard.position.y, 1.7);
+      pos.setXYZ(1, aimTarget.x, aimTarget.y, 0.52);
+      pos.needsUpdate = true;
+    }
     layout.frames += 1;
   });
 
   return (
     <>
       <color attach="background" args={["#0b0f14"]} />
+      {/* [P1-UX] 瞄准连线共享整个场景的坐标系，目标被遮挡也不会错误发动作。 */}
+      <primitive object={aimLine} />
       <ambientLight intensity={0.55} />
       <directionalLight position={[3, 6, 4]} intensity={1.15} />
       <directionalLight position={[-4, 3, -2]} intensity={0.35} color="#7fb0ff" />
@@ -243,10 +298,14 @@ export function Stage({ scene, liftedSlot, hoverSlot, onCardDown, onHover, onRel
       {/* 敌人：两个不同形状，证明"不同敌人"在 3D 里是可见的 */}
       {scene.enemies.map((enemy, index) => {
         const dead = enemy.hp <= 0;
-        const targeted = hoverSlot === enemy.slot;
+        // [P1-UX] "可选目标"与"已命中目标"分别提示；死亡/非法目标不显示绿色。
+        const eligible = phase === "targeting" && legalTargets.includes(enemy.slot) && !dead;
+        const targeted = eligible && hoverSlot === enemy.slot;
+        const hovered = hoveredEnemySlot === enemy.slot;
+        const illegalHover = phase === "targeting" && hovered && !eligible && !dead;
         return (
           <group
-            key={enemy.id}
+            key={`${enemy.id}-${enemy.slot}`}
             ref={(node) => {
               enemyRefs.current[index] = node;
             }}
@@ -254,16 +313,17 @@ export function Stage({ scene, liftedSlot, hoverSlot, onCardDown, onHover, onRel
               event.stopPropagation();
               onHover(enemy.slot);
             }}
+            onPointerOut={() => onHover(-1)}
             onPointerUp={(event) => {
               event.stopPropagation();
               onRelease(enemy.slot);
             }}
           >
-            {index === 0 ? (
+            {index % 2 === 0 ? (
               <mesh>
                 <sphereGeometry args={[0.44, 12, 9]} />
                 <meshStandardMaterial
-                  color={dead ? "#2b3239" : targeted ? "#7ddc8a" : "#4c9a5a"}
+                  color={dead ? "#2b3239" : targeted ? "#7ddc8a" : hovered ? "#78c786" : "#4c9a5a"}
                   roughness={0.45}
                   flatShading
                   emissive={targeted ? "#1f5c2c" : "#000000"}
@@ -273,18 +333,23 @@ export function Stage({ scene, liftedSlot, hoverSlot, onCardDown, onHover, onRel
               <mesh rotation={[0, 0.4, 0]}>
                 <dodecahedronGeometry args={[0.46, 0]} />
                 <meshStandardMaterial
-                  color={dead ? "#2b3239" : targeted ? "#e0b46a" : "#9c6b3c"}
+                  color={dead ? "#2b3239" : targeted ? "#e0b46a" : hovered ? "#c89b63" : "#9c6b3c"}
                   roughness={0.6}
                   flatShading
                   emissive={targeted ? "#5a3c10" : "#000000"}
                 />
               </mesh>
             )}
-            {/* 合法目标高亮：脚下一圈 */}
-            {targeted && (
-              <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.5, 0]}>
-                <ringGeometry args={[0.5, 0.62, 24]} />
-                <meshBasicMaterial color="#9dff9d" transparent opacity={0.75} side={THREE.DoubleSide} />
+            {/* [P1-UX] 用面向相机的轮廓环替代水平地面环：竖屏/固定镜头也明显可见。
+                青色=可选，绿色=当前有效目标；这只是 UI 提示，动作合法性仍由 options 决定。 */}
+            {(eligible || illegalHover) && (
+              <mesh position={[0, 0, 0.40]} raycast={() => null}>
+                <ringGeometry args={[0.49, 0.55, 36]} />
+                <meshBasicMaterial
+                  color={illegalHover ? "#ff917b" : targeted ? "#86ffba" : "#7cc9ff"}
+                  transparent opacity={illegalHover || targeted ? 0.96 : 0.55}
+                  side={THREE.DoubleSide} depthTest={false} depthWrite={false}
+                />
               </mesh>
             )}
           </group>
@@ -346,9 +411,18 @@ export function Stage({ scene, liftedSlot, hoverSlot, onCardDown, onHover, onRel
           ref={(node) => {
             hitRefs.current[index] = node;
           }}
+          onPointerOver={(event) => {
+            if (event.pointerType === "mouse" || event.pointerType === "pen") onCardHover(index);
+          }}
+          onPointerOut={() => onCardHover(-1)}
           onPointerDown={(event) => {
+            if (event.button !== 0) return; // 右键用于查看详情，不应进入出牌状态。
             event.stopPropagation();
-            onCardDown(index);
+            // [P1-UX] 保留 pointerId + CSS 像素原点供全局监听器计算真实拖动距离。
+            onCardDown(index, {
+              id: event.pointerId, type: event.pointerType,
+              x: event.clientX, y: event.clientY,
+            });
           }}
         >
           <planeGeometry args={[CARD_W, CARD_H]} />

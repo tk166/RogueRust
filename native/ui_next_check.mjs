@@ -461,6 +461,66 @@ await mkdir(OUT_DIR, { recursive: true });
 const shotWide = await page.screenshotPng();
 await writeFile(join(OUT_DIR, "1280x800-desktop.png"), shotWide);
 
+// ── 9. 版面：整张牌都在视口内、敌人标签不互压、气泡不压 HUD（Review UX-3）──────
+// ⚠️ 只查"牌心在视口内"是不够的：牌心在、牌身被裁掉一半，第一版就是这么报绿的。
+const wideLayout = await evaluate(`(() => {
+  const l = window.__p1.layout();
+  return {
+    width: l.width, height: l.height,
+    cards: l.cards.map((c) => ({ slot: c.slot, top: Math.round(c.y - c.h / 2), bottom: Math.round(c.y + c.h / 2) })),
+    enemies: l.enemies.map((e) => ({ slot: e.slot, x: Math.round(e.x), y: Math.round(e.y), r: Math.round(e.r) })),
+  };
+})()`);
+const wideOverflow = wideLayout.cards.filter(
+  (card) => card.top < 0 || card.bottom > wideLayout.height - 6
+);
+check(
+  wideOverflow.length === 0,
+  `1280×800 每张牌的整个矩形都在视口内（底部留 6px）`,
+  JSON.stringify(wideOverflow)
+);
+
+// 竖屏：敌人纵向单列，间距要放得下三行标签
+await page.send("Emulation.setDeviceMetricsOverride", {
+  width: 390,
+  height: 844,
+  deviceScaleFactor: 1,
+  mobile: true,
+});
+await sleep(400);
+const portraitLayout = await evaluate(`(() => {
+  const l = window.__p1.layout();
+  const hint = document.querySelector(".gesture-hint");
+  const rect = hint ? hint.getBoundingClientRect() : null;
+  return {
+    width: l.width, height: l.height,
+    cards: l.cards.map((c) => ({ slot: c.slot, top: Math.round(c.y - c.h / 2), bottom: Math.round(c.y + c.h / 2) })),
+    enemies: l.enemies.map((e) => ({ slot: e.slot, x: Math.round(e.x), y: Math.round(e.y), r: Math.round(e.r) })),
+    hintTop: rect ? Math.round(rect.top) : null,
+  };
+})()`);
+const portraitOverflow = portraitLayout.cards.filter(
+  (card) => card.top < 0 || card.bottom > portraitLayout.height - 6
+);
+check(
+  portraitOverflow.length === 0,
+  "390×844 每张牌的整个矩形都在视口内（底部留 6px）",
+  JSON.stringify(portraitOverflow)
+);
+const sorted = portraitLayout.enemies.slice().sort((a, b) => a.y - b.y);
+let tooClose = null;
+for (let i = 1; i < sorted.length; i += 1) {
+  const gap = Math.abs(sorted[i].y - sorted[i - 1].y);
+  const need = sorted[i].r + sorted[i - 1].r + 8;
+  if (gap < need) tooClose = { upper: sorted[i - 1].slot, lower: sorted[i].slot, gap, need };
+}
+check(tooClose === null, "竖屏相邻敌人间距放得下三行标签", JSON.stringify(tooClose));
+check(
+  (portraitLayout.hintTop ?? 0) >= 96,
+  "窄屏提示气泡在 HUD 下方（HUD 是 uikit 的 3D 层，DOM 量不到 ⇒ 这条用布局常量）",
+  `hintTop=${portraitLayout.hintTop}`
+);
+
 await page.close();
 
 console.log(notes.join("\n"));

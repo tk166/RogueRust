@@ -11,6 +11,7 @@ import { initialScene, liveEnemySlots, type MockCard, type MockScene } from "./m
 import { TextOverlay } from "./overlay/TextOverlay";
 import { Stage } from "./stage/Stage";
 import { layout } from "./stage/layout";
+import { enemyAtScreen, cardAtScreen } from "./input/hitTest";
 import { MachineStore } from "./store";
 import type { DropOption } from "./input/pointerMachine";
 import { installProbe } from "./probe";
@@ -37,9 +38,41 @@ export interface CommitLogEntry {
 export function App() {
   const store = useMemo(() => new MachineStore(), []);
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
-  const [scene, setScene] = useState<MockScene>(() => initialScene());
+  const [scene, setScene] = useState<MockScene>(() => {
+    const base = initialScene();
+    // [P1-LAYOUT] ?debug&enemies=N 下制造 1~6 敌人的测试局面，默认不改变游戏。
+    const query = new URLSearchParams(window.location.search);
+    const raw = query.get("enemies");
+    if (!query.has("debug") || raw === null) return base;
+    const count = Number(raw);
+    if (!Number.isInteger(count) || count < 1 || count > 6) return base;
+    return {
+      ...base,
+      enemies: Array.from({ length: count }, (_, i) => ({
+        ...base.enemies[i % base.enemies.length], slot: i,
+        id: `debug_enemy_${i}`, name: `演示敌人 ${i + 1}`,
+        hp: 25 + i * 4, maxHp: 25 + i * 4, intent: `攻击 ${6 + i}`,
+      })),
+    };
+  });
   const [modalOpen, setModalOpen] = useState(false);
   const [detailSlot, setDetailSlot] = useState(-1);
+  // [P1-UX] Hover 仅为表现层状态，不影响游戏规则与 Action 列表。
+  const [hoverCardSlot, setHoverCardSlot] = useState(-1);
+  const [hoveredEnemySlot, setHoveredEnemySlot] = useState(-1);
+  const [notice, setNotice] = useState("");
+  const [noticeKind, setNoticeKind] = useState<"success" | "warning" | null>(null);
+  const activePointer = useRef<{
+    id: number; type: string; startX: number; startY: number;
+    longPressTimer: number | null; handSlot: number;
+  } | null>(null);
+  const noticeTimer = useRef<number | null>(null);
+  const flash = useCallback((message: string, kind: "success" | "warning" | null = null) => {
+    setNotice(message);
+    setNoticeKind(kind);
+    if (noticeTimer.current !== null) window.clearTimeout(noticeTimer.current);
+    noticeTimer.current = window.setTimeout(() => { setNotice(""); setNoticeKind(null); }, 850);
+  }, []);
   const commits = useRef<CommitLogEntry[]>([]);
   const rebounds = useRef<string[]>([]);
   // 上一帧的 hover 槽位：`pointerup` 落空时用它兜底（R3F 的 onPointerUp 只对命中的对象触发）。
@@ -65,8 +98,7 @@ export function App() {
     });
   }, []);
 
-  // 状态机 → 副作用（提交/回弹）。按**事件序号**去重，不按内容去重：
-  // 同一张牌打同一个敌人的两次操作 payload 完全相同，用 JSON 当身份会把第二次吞掉（§352 P1-A）。
+  // [P1-UX] 相同卡牌 + 相同目标可以连续出两次：必须按事件序号而非 JSON 载荷去重。
   const lastResultSeq = useRef(0);
   useEffect(() => {
     const result = state.lastResult;
@@ -82,29 +114,52 @@ export function App() {
         card: card ? card.id : "?",
       });
       setDetailSlot(-1);
+      flash("已出牌 · 动作已提交", "success");
     } else {
       rebounds.current.push(result.why);
+      flash("已取消 · 卡牌返回手牌", "warning");
     }
-  }, [state.lastResult, state.resultSeq, scene.hand, applyCommit]);
+  }, [state.lastResult, state.resultSeq, scene.hand, applyCommit, flash]);
 
   // ── 输入接线：全部走同一个状态机 ────────────────────────────────────────────
   const onCardDown = useCallback(
-    (slot: number) => {
-      if (modalOpen) return; // 模态打开 ⇒ 输入隔离（闸门 25 会证明它）
+    (slot: number, pointer: { id: number; type: string; x: number; y: number }) => {
+      if (modalOpen) return;
+      if (activePointer.current) return; // [P1-UX] 第一指针独占，第二根手指不可偷走当前牌。
       const card = scene.hand[slot];
       if (!card) return;
+      setDetailSlot(-1);
+      setHoverCardSlot(-1);
+      const gesture = {
+        id: pointer.id, type: pointer.type, startX: pointer.x, startY: pointer.y,
+        longPressTimer: null as number | null, handSlot: slot,
+      };
+      activePointer.current = gesture;
       store.send({ type: "down", handSlot: slot, options: optionsFor(card, scene, slot) });
+      if (pointer.type === "touch" || pointer.type === "pen") {
+        // [P1-UX] 450ms 长按展示详情；移动超过拖拽阈值即取消定时器。
+        // detail 与 commit 互斥：先 dismiss 状态机，再展示详情，松手不会误出牌。
+        gesture.longPressTimer = window.setTimeout(() => {
+          if (activePointer.current !== gesture) return;
+          activePointer.current = null;
+          store.send({ type: "dismiss" });
+          setDetailSlot(slot);
+          flash("卡牌详情 · 点击关闭按钮或按 Esc");
+        }, 450);
+      }
     },
-    [modalOpen, scene, store]
+    [modalOpen, scene, store, flash]
   );
 
   const onHover = useCallback(
     (slot: number) => {
       if (modalOpen) return;
       hoverRef.current = slot;
+      setHoveredEnemySlot((previous) => previous === slot ? previous : slot);
+      // [P1-UX] 有活动手指时由 window.pointermove 统一计算真实距离，避免 R3F 事件使用 999px 假距离。
+      if (activePointer.current) return;
       const current = store.peek();
-      if (current.phase === "idle") return;
-      store.send({ type: "move", hoverSlot: slot, distance: 999 });
+      if (current.phase === "targeting") store.send({ type: "move", hoverSlot: slot, distance: 999 });
     },
     [modalOpen, store]
   );
@@ -112,6 +167,8 @@ export function App() {
   const onRelease = useCallback(
     (slot: number) => {
       if (modalOpen) return;
+      // [P1-UX] 有活动指针时 window.pointerup 会完成事务；阻止 R3F 与 window 双提交。
+      if (activePointer.current) return;
       const current = store.peek();
       if (current.phase === "idle") return;
       store.send({ type: "up", hoverSlot: slot, distance: 999 });
@@ -119,29 +176,79 @@ export function App() {
     [modalOpen, store]
   );
 
-  // 点按语义：抬起在空白处（R3F 没给我们 onPointerUp）时，用上一次 hover 兜底。
+  // [P1-UX] 全局指针跟踪：即使松开时已经离开 WebGL mesh，动作仍能完成或被正确取消。
   useEffect(() => {
-    const onUp = () => {
-      const current = store.peek();
-      if (current.phase === "pressed") {
-        store.send({ type: "up", hoverSlot: -1, distance: 0 });
-      } else if (current.phase === "targeting" || current.phase === "dragging") {
-        store.send({ type: "up", hoverSlot: hoverRef.current, distance: 999 });
+    const clearPointer = () => {
+      const p = activePointer.current;
+      if (p?.longPressTimer !== null && p?.longPressTimer !== undefined)
+        window.clearTimeout(p.longPressTimer);
+      activePointer.current = null;
+    };
+    const currentTarget = (x: number, y: number) => {
+      // [P1-UX] 命中范围由 Stage 的屏幕投影提供；不要复制三维队形公式。
+      const legal = new Set(store.peek().options.filter((o) => o.slot >= 0).map((o) => o.slot));
+      return enemyAtScreen(layout.enemies, x, y, legal);
+    };
+    const onMove = (event: PointerEvent) => {
+      const p = activePointer.current;
+      if (!p || p.id !== event.pointerId || modalOpen) return;
+      const distance = Math.hypot(event.clientX - p.startX, event.clientY - p.startY);
+      if (distance >= 8 && p.longPressTimer !== null) {
+        window.clearTimeout(p.longPressTimer);
+        p.longPressTimer = null;
       }
+      const target = currentTarget(event.clientX, event.clientY);
+      hoverRef.current = target;
+      store.send({ type: "move", hoverSlot: target, distance });
+    };
+    const onUp = (event: PointerEvent) => {
+      if (modalOpen) return;
+      const p = activePointer.current;
+      if (p && p.id !== event.pointerId) return;
+      if (p) clearPointer();
+      const current = store.peek();
+      if (current.phase === "idle") return; // 长按详情已经 dismiss，不得在松手时出牌。
+      const target = currentTarget(event.clientX, event.clientY);
+      const distance = p ? Math.hypot(event.clientX - p.startX, event.clientY - p.startY) : 999;
+      // [P1-UX] 极快拖动可能没有中间 move 事件，抬起前补一次真实距离判定。
+      if (current.phase === "pressed" && distance >= 8)
+        store.send({ type: "move", hoverSlot: target, distance });
+      store.send({ type: "up", hoverSlot: target, distance });
+    };
+    const cancel = () => {
+      clearPointer();
+      setHoveredEnemySlot(-1);
+      if (store.peek().phase !== "idle") store.send({ type: "cancel" });
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         if (modalOpen) setModalOpen(false);
-        else store.send({ type: "cancel" });
+        else if (detailSlot >= 0) setDetailSlot(-1);
+        else cancel();
       }
     };
+    window.addEventListener("pointermove", onMove, { passive: true });
     window.addEventListener("pointerup", onUp);
+    // 第二指针取消不能把第一指针的卡牌操作误撤销。
+    const onCancel = (event: PointerEvent) => {
+      if (activePointer.current && event.pointerId !== activePointer.current.id) return;
+      cancel();
+    };
+    window.addEventListener("pointercancel", onCancel);
+    window.addEventListener("blur", cancel);
     window.addEventListener("keydown", onKey);
     return () => {
+      window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+      window.removeEventListener("blur", cancel);
       window.removeEventListener("keydown", onKey);
     };
-  }, [store, modalOpen]);
+  }, [store, modalOpen, detailSlot]);
+  useEffect(() => () => {
+    if (activePointer.current?.longPressTimer != null) window.clearTimeout(activePointer.current.longPressTimer);
+    if (noticeTimer.current !== null) window.clearTimeout(noticeTimer.current);
+  }, []);
 
   // 点开详情：双击抬起（P1 的第三档可读性）
   const onDetail = useCallback(
@@ -186,12 +293,28 @@ export function App() {
         dpr={[1, 2]}
         camera={{ position: [0, 0.6, 6], fov: 45, near: 0.1, far: 80 }}
         onCreated={({ camera }) => camera.lookAt(0, 0.1, 0)}
+        // [P1-UX] 桌面右键详情，使用命中布局投影，避免 DOM 覆盖层拦截 3D 射线。
+        onContextMenu={(event) => {
+          event.preventDefault();
+          const slot = cardAtScreen(layout.cards, event.clientX, event.clientY);
+          if (slot >= 0 && !modalOpen) {
+            store.send({ type: "dismiss" });
+            onDetail(slot);
+          }
+        }}
+        style={{ cursor: activePointer.current ? "grabbing" : hoverCardSlot >= 0 ? "grab" : "default" }}
       >
         <Stage
           scene={scene}
           liftedSlot={liftedSlot}
           hoverSlot={state.hoverSlot}
+          hoverCardSlot={hoverCardSlot}
+          hoveredEnemySlot={hoveredEnemySlot}
+          phase={state.phase}
+          followPointer={activePointer.current !== null && state.phase !== "idle"}
+          legalTargets={state.options.filter((o) => o.slot >= 0).map((o) => o.slot)}
           onCardDown={onCardDown}
+          onCardHover={setHoverCardSlot}
           onHover={onHover}
           onRelease={onRelease}
         />
@@ -210,7 +333,22 @@ export function App() {
         />
       </Canvas>
 
-      <TextOverlay scene={scene} liftedSlot={liftedSlot} detailSlot={detailSlot} modalOpen={modalOpen} />
+      <TextOverlay scene={scene} liftedSlot={liftedSlot} hoverCardSlot={hoverCardSlot}
+        detailSlot={detailSlot} modalOpen={modalOpen} onCloseDetail={() => setDetailSlot(-1)} />
+      {/* [P1-UX] 文本反馈与颜色高亮并行：色弱/触屏用户也能理解当前目标状态。 */}
+      {!modalOpen && (
+        <div className={`gesture-hint${noticeKind ? ` is-${noticeKind}` : ""}`} role="status" aria-live="polite">
+          {notice || (detailSlot >= 0 ? "卡牌详情 · 点击关闭按钮或按 Esc" :
+            state.phase === "targeting" && hoveredEnemySlot >= 0 &&
+              !state.options.some((o) => o.slot === hoveredEnemySlot) ?
+              "红圈表示无效目标 · 选择蓝圈敌人" :
+            state.phase === "targeting" ? "选择右侧高亮敌人 · 拖动或点按 · Esc 取消" :
+            state.phase === "dragging" ? "松开使用卡牌 · 移到空白可撤销目标" :
+            state.phase === "pressed" ? "拖动出牌 · 触屏长按看详情" :
+            hoverCardSlot >= 0 ? "左键选牌或拖动 · 右键查看详情" :
+            "左侧为我方，右侧为敌人 · 点击或拖动手牌")}
+        </div>
+      )}
 
       {modalOpen && (
         <div className="modal-backdrop" data-modal onClick={() => setModalOpen(false)}>

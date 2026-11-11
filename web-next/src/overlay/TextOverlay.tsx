@@ -33,13 +33,17 @@ export const COMPACT_BELOW_PX = 44;
 export interface TextOverlayProps {
   scene: MockScene;
   liftedSlot: number;
+  /** [P1-UX] 仅桌面 hover；触屏通过按压/长按进入大卡预览。 */
+  hoverCardSlot: number;
   /** 详情态：被点开的牌（显示完整规则），`-1` 表示没有。 */
   detailSlot: number;
   /** 模态是否打开（打开时覆盖层不显示手牌文字，避免和模态抢注意力）。 */
   modalOpen: boolean;
+  /** [P1-UX] 详情可通过可见按钮关闭。 */
+  onCloseDetail: () => void;
 }
 
-export function TextOverlay({ scene, liftedSlot, detailSlot, modalOpen }: TextOverlayProps) {
+export function TextOverlay({ scene, liftedSlot, hoverCardSlot, detailSlot, modalOpen, onCloseDetail }: TextOverlayProps) {
   const layerRef = useRef<HTMLDivElement>(null);
 
   // rAF 循环：读 `layout`，直接改 style。**不经过 React**（60Hz 重渲染会把 P1 的 FPS 数字毁掉）。
@@ -77,12 +81,13 @@ export function TextOverlay({ scene, liftedSlot, detailSlot, modalOpen }: TextOv
     <div className="text-layer" ref={layerRef} aria-hidden={modalOpen}>
       {scene.hand.map((card, index) => {
         const selected = index === liftedSlot;
+        const hovered = index === hoverCardSlot;
         // 手牌态：只有标题（StS 手机版就是这个取舍）；选中态：标题 + 规则。
         const showRules = selected && detailSlot < 0;
         return (
           <div
             key={`${card.id}-${index}`}
-            className={`card-text${selected ? " is-selected" : ""}`}
+            className={`card-text${selected ? " is-selected" : ""}${hovered ? " is-hovered" : ""}`}
             data-card={index}
             data-kind={card.kind}
           >
@@ -120,14 +125,16 @@ export function TextOverlay({ scene, liftedSlot, detailSlot, modalOpen }: TextOv
       ))}
 
       {/* 详情态：被点开的牌放大到可读尺寸（这是"能不能读完整描述"的那一档） */}
-      {detailSlot >= 0 && <DetailCard card={scene.hand[detailSlot]} />}
+      {detailSlot >= 0 && <DetailCard card={scene.hand[detailSlot]} onClose={onCloseDetail} />}
     </div>
   );
 }
 
-function DetailCard({ card }: { card: MockCard }) {
+function DetailCard({ card, onClose }: { card: MockCard; onClose: () => void }) {
   return (
     <div className="detail-card">
+      {/* [P1-UX] 触屏与键盘用户可见的关闭入口，不依赖探针。 */}
+      <button type="button" className="detail-card__close" onClick={onClose} aria-label="关闭卡牌详情">×</button>
       <div className="detail-card__title" style={{ fontSize: `${TYPE_SCALE.detail.title}px` }} data-detail-title>
         {card.name}
       </div>

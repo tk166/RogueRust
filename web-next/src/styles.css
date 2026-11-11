@@ -212,3 +212,53 @@ body,
   font-size: 14px;
   cursor: pointer;
 }
+
+/* ── P1-UX 示例：反馈只属于渲染层，不参与 WASM Action 判定 ─────────────── */
+.card-text.is-hovered {
+  /* 文字仍由 Stage 投影驱动，hover 只做清晰而克制的明度反馈。 */
+  filter: drop-shadow(0 0 8px rgba(145, 205, 255, 0.5));
+}
+.gesture-hint {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(94vw, 680px);
+  z-index: 9;
+  pointer-events: none; /* 提示不阻断射线；modal 才允许截获点击 */
+  border: 1px solid rgba(137, 187, 232, 0.40);
+  border-radius: 999px;
+  padding: 7px 14px;
+  background: rgba(8, 17, 27, 0.82);
+  color: #dceeff;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.5;
+}
+/* 操作结果颜色具有可读文字冗余，不能只靠红绿判断成功/失败。 */
+.gesture-hint.is-success { border-color: rgba(120, 235, 177, 0.88); background: rgba(8, 52, 35, 0.92); }
+.gesture-hint.is-warning { border-color: rgba(255, 153, 129, 0.88); background: rgba(69, 30, 23, 0.92); }
+/* 详情层的父级 pointer-events:none；只有关闭按钮吃事件。 */
+.detail-card__close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(177, 204, 236, 0.48);
+  background: #263a4e;
+  color: #fff;
+  font-size: 22px;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.detail-card__close:focus-visible { outline: 3px solid #8fc7ff; outline-offset: 2px; }
+@media (max-width: 600px) {
+  /* ⚠️ 窄屏的 HUD 是两行（HP/BLK/EN 会换行），高约 96px。气泡留在 top:14px 会正好盖住
+     BLK 与 EN —— 截图上就是这么糊在一起的。宽屏 HUD 只有一行且靠左，气泡居中，不冲突。 */
+  .gesture-hint { font-size: 11px; padding: 5px 10px; top: calc(env(safe-area-inset-top, 0px) + 100px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gesture-hint { transition: none; }
+}

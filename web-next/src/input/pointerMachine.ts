@@ -35,14 +35,7 @@ export interface State {
   readonly options: readonly DropOption[];
   /** 上一次提交/回弹的结果，供 UI 播放一次动画。 */
   readonly lastResult: Result | null;
-  /**
-   * 每产生一次结果就 +1 的**事件序号**。
-   *
-   * ⚠️ 为什么需要它：消费方（`App`）最初用 `JSON.stringify(lastResult)` 判断"是不是新结果"。
-   * 但"同一张牌打同一个敌人两次"的 payload **完全相同**，第二次会被当成重复事件吞掉。
-   * 事件身份是"第几次发生"，不是"内容长什么样"。P1 Mock 手牌不移除，这个 bug 直接可构造；
-   * 接真实 WASM 后，下一回合同一槽位抽到同名牌同样是合法局面。
-   */
+  /** [P1-UX] 每产生一次结果都增加。相同 payload 的两次出牌不是同一事件。 */
   readonly resultSeq: number;
 }
 
@@ -55,7 +48,9 @@ export type Event =
   | { readonly type: "down"; readonly handSlot: number; readonly options: readonly DropOption[] }
   | { readonly type: "move"; readonly hoverSlot: number; readonly distance: number }
   | { readonly type: "up"; readonly hoverSlot: number; readonly distance: number }
-  | { readonly type: "cancel" };
+  | { readonly type: "cancel" }
+  /** [P1-UX] 长按打开详情后安静退出，不记录一次假的回弹。 */
+  | { readonly type: "dismiss" };
 
 /** 超过这个像素距离才算"开始拖"，否则按下-抬起 = 点按（走 `tap` 语义）。 */
 export const DRAG_THRESHOLD_PX = 8;
@@ -134,11 +129,11 @@ export function reduce(state: State, event: Event): State {
     case "cancel":
       return state.phase === "idle"
         ? state
-        : {
-            ...INITIAL,
-            resultSeq: state.resultSeq + 1,
-            lastResult: { kind: "rebound", handSlot: state.handSlot, why: "illegal-target" },
-          };
+        : { ...INITIAL, resultSeq: state.resultSeq + 1,
+            lastResult: { kind: "rebound", handSlot: state.handSlot, why: "illegal-target" } };
+    case "dismiss":
+      // [P1-UX] 长按详情和游戏逻辑互斥，松手不能再派发 Commit。
+      return { ...INITIAL, resultSeq: state.resultSeq };
   }
 }
 
@@ -148,10 +143,7 @@ function finish(
   targetSlot: number,
   why: "no-target" | "illegal-target" | "outside-hand" | null
 ): State {
-  // ⚠️ `targetSlot` 是**物理落点**（指针松在哪），不是业务动作的目标。
-  // 无目标牌的选项只有 `slot === -1` 一项；如果拿物理落点去查（丢在敌人 slot=1 上就查
-  // `slot === 1`），会查不到 ⇒ 明明 `decide()` 判了 commit，这里却变成 rebound。
-  // 所以：有目标的牌按物理落点查，无目标的牌一律取 `-1` 那一项。
+  // [P1-UX] 无目标牌的业务落点永远是 -1。真实屏幕上松在敌人/空白处都不改变动作。
   const chosen = needsTarget(state.options)
     ? state.options.find((option) => option.slot === targetSlot)
     : state.options.find((option) => option.slot === -1);
@@ -159,5 +151,6 @@ function finish(
     kind === "commit" && chosen
       ? { kind: "commit", handSlot: state.handSlot, actionIndex: chosen.actionIndex, targetSlot: chosen.slot }
       : { kind: "rebound", handSlot: state.handSlot, why: why ?? "illegal-target" };
+  // [P1-UX] 事件编号只在真实 commit/rebound 时前进，解决相同操作吞掉第二次的问题。
   return { ...INITIAL, resultSeq: state.resultSeq + 1, lastResult };
 }
