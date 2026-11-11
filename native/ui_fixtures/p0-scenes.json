@@ -1,8 +1,96 @@
 {
- "note": "P0 raw ABI dumps. Values are exactly what the wasm said; nothing here is interpreted.",
+ "note": "P0 ABI dumps. `raw` is exactly what the wasm exports returned (uninterpreted); `facts` and `scene` are DERIVED by this script -- see `provenance`.",
+ "provenance": {
+  "raw": "verbatim return values of the wasm exports",
+  "facts": "derived from raw by this script (the ten Adapter fields); not an ABI claim",
+  "scene": "computed by web/ui_panels.js resolveScene() from facts"
+ },
+ "wasmSha256": "4c343910bf68df675491e8cdb770d31385b70594bd81cfc8046c377f42a7dccd",
  "contentFingerprint": "0x54af44dd",
  "runObserveLen": 19,
  "combatObserveLen": 148,
+ "plan": [
+  {
+   "label": "SC-00-no-run",
+   "expect": "SC-00",
+   "kind": "real",
+   "state": "REAL"
+  },
+  {
+   "label": "SC-01-blessing",
+   "expect": "SC-01",
+   "kind": "real",
+   "state": "REAL"
+  },
+  {
+   "label": "SC-02-map",
+   "expect": "SC-02",
+   "kind": "real",
+   "state": "REAL"
+  },
+  {
+   "label": "SC-03-pre-fight",
+   "expect": "SC-03",
+   "kind": "real",
+   "state": "REAL"
+  },
+  {
+   "label": "SC-03b-combat",
+   "expect": null,
+   "kind": "real",
+   "state": "REAL"
+  },
+  {
+   "label": "SC-03b-run-facts",
+   "expect": "SC-03b",
+   "kind": "real",
+   "state": "REAL"
+  },
+  {
+   "label": "SC-04-reward",
+   "expect": "SC-04",
+   "kind": "real",
+   "state": "REAL"
+  },
+  {
+   "label": "SC-05-shop",
+   "expect": "SC-05",
+   "kind": "real",
+   "state": "REAL"
+  },
+  {
+   "label": "SC-07-treasure",
+   "expect": "SC-07",
+   "kind": "real",
+   "state": "REAL"
+  },
+  {
+   "label": "SC-08-event",
+   "expect": "SC-08",
+   "kind": "real",
+   "state": "REAL"
+  },
+  {
+   "label": "SC-11a-pickup-debt",
+   "expect": null,
+   "overlay": "SC-11a",
+   "kind": "real",
+   "state": "REAL"
+  },
+  {
+   "label": "SC-12b-defeat",
+   "expect": "SC-12b",
+   "kind": "real",
+   "state": "REAL"
+  },
+  {
+   "label": "SC-12a-act-clear",
+   "expect": "SC-12a",
+   "kind": "synthetic",
+   "why": "needs the boss fight",
+   "state": "UNREACHED"
+  }
+ ],
  "scenes": [
   {
    "label": "SC-00-no-run",

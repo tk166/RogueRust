@@ -81,7 +81,9 @@
 - **SC-02b**：已有文档说明当前内容几乎/完全不可达；不能伪造玩家主路径的通过证据。可保留类型与单独合成夹具。
 - **文档漂移（§349 已修关键项）**：SC-00、Boss ID、§5 判定依据已经同步；P0 只审计剩余历史条目和真实导出是否一致，不重复分配已完成的文档修复任务。
 - **卡牌实例**：`handSlot` 与 `defSlot` 不等于跨动作稳定的实例身份；新 UI 不得凭 `defSlot` 断言两张同名牌是同一实例。若精确跨区追踪动画真正需要稳定实例 ID，再开单独 ABI 需求。
-- **Enemy 角色美术标识**：`enemy_name` 可能是展示文本；渲染器不能把本地化后的名称当资源键。优先使用真实 `enemyId`/内容定义键；当前无可靠 ID 时使用中性占位模型，并记录为候选接口缺口。
+- **Enemy 角色美术标识**（⚠️ **§350 已更正，见 `docs/ui-abi-audit.md` §3.4**）：`rd_env_enemy_name_*`
+  返回的是**敌人定义 id**（`acid_slime_m`），**不是**本地化文本 ⇒ 可直接作 AssetRegistry 的资源键，
+  **不需要**中性占位，也不是接口缺口。显示文字走 `displayName()`。
 
 ### 1.4 冻结哪些，暂不冻结哪些
 
@@ -252,7 +254,8 @@ export type CombatSnapshot = Readonly<{
 export type HandCardView = Readonly<{
   handSlot: number;       // 传入 Action 的参数；不可用数组渲染下标替换
   defSlot: number;        // 内容行号：资源索引可用，跨内容版本不保证稳定
-  definitionId?: string;  // 仅在有可信来源时填充
+  definitionId?: string;  // ⚠️ §350 已更正：`rd_env_card_name_*` 返回的就是 card definition id
+                          //    （可直接填）。但它**不是**跨动作稳定的 CardInstanceId。
   title: string;
   text: string;
   kind: number;
