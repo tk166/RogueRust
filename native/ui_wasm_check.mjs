@@ -117,6 +117,9 @@ check(
 const attack = await evaluate(`(() => {
   const s = window.__p2.snapshot();
   const names = window.__p2.names();
+  // 这里用的是内核文本（英文 "Deal 6 damage."），所以匹配英文 damage。
+  // 闸门 29 用的是视图规则文本（i18n 之后是中文），那边匹配 damage 或 伤害。
+  // 注意：这段在模板字符串里，注释里不许出现反引号（会截断字符串）。
   const damaging = new Set(
     names.hand.filter((card) => /damage/i.test(card.text)).map((card) => card.slot)
   );

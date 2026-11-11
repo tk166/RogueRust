@@ -166,6 +166,23 @@ UI_WASM_UI PASS mode=wasm hand=4 energy=2 enemy0=28->22 dom-synced=1
 **X 费扣能量当前不可达**（起手牌不含、药水候选不含），只覆盖解码层 —— 这条写进闸门输出，
 不静默跳过。
 
+## 5c. 中文映射表（§359）
+
+`native/build_zh_i18n.py` 生成 `web-next/src/i18n/zh.ts`：内容 id → 中文名/介绍，494 条
+（卡 267 / 遗物 138 / 药水 30 / 怪 46 / 状态 13）。
+
+主来源是 **spire-archive**（从游戏文件解析的 13 语言库，`/api/sts1/...`）；仓库自己的
+`sts/content/*.json` 用来**交叉核对**，两边有 8 处不一致 —— 都是仓库里的旧中文缩写
+（`iron_wave` 铁斩 vs 官方铁斩波、`cleave` 顺劈 vs 顺劈斩…）。灰机中文 wiki 被 Cloudflare 挡，
+只能靠 search snippet 抽查：`铁斩波` = Iron Wave 与 `打击` = Strike 都**站在 spire-archive 一边**，
+所以采用官方名。
+
+回退链三层：精确 → 剥掉所有 `+` 查基础（名字补回 `+`）→ **返回 id 本身并计数**。
+第三层是为了让"没翻译"看得出来：静默回退成英文会假装翻译过。闸门 29 断言"这一局回退数 = 0"。
+
+已知不精确：`+` 变体的介绍沿用基础文本（126 条，来源只给英文升级描述）；28 张特殊/衍生牌
+（`insight` / `shiv` / `omega` …）不在来源里；状态 13/150（`powers` 端点只给英文）。
+
 ## 6. 还没做的
 
 - **卡名是定义 id**（`bash` / `strike` / `defend`）：`rd_env_card_name_*` 返回定义 id，本地化是后续的事；

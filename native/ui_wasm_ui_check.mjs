@@ -91,6 +91,24 @@ check(
   "每张手牌都有名字且可出（可出性来自内核动作表）",
   JSON.stringify(view.hand.map((card) => `${card.name}:${card.playable}`))
 );
+// i18n：手牌名必须是**中文**（映射表真的接上了，不是回退到定义 id）。
+const CJK = /[一-鿿]/;
+check(
+  view.hand.every((card) => CJK.test(card.name)),
+  "每张手牌的显示名都是中文（i18n 映射表生效）",
+  JSON.stringify(view.hand.map((card) => card.name))
+);
+const i18nReport = await evaluate("window.__p1.i18n()");
+check(
+  (i18nReport.entries.cards ?? 0) > 200 && (i18nReport.entries.monsters ?? 0) > 30,
+  "映射表有内容（卡牌 >200、怪物 >30）",
+  JSON.stringify(i18nReport.entries)
+);
+check(
+  i18nReport.fallbacks.cards === 0 && i18nReport.fallbacks.monsters === 0,
+  "这一局里没有 id 走回退（手牌与敌人都在表里）",
+  JSON.stringify(i18nReport.fallbackIds)
+);
 check(
   view.enemies.every((enemy) => enemy.name.length > 0 && enemy.hp > 0),
   "敌人名字与血量来自内核",
@@ -118,14 +136,14 @@ check(labelsMatch, "屏幕上的敌人血量与内核一致（不是陈旧值）
 // 卡牌文本来自内核（英文），用它挑一张攻击牌；`targeted` 也来自内核动作表。
 const pick = await evaluate(`(() => {
   const view = window.__p1.view();
-  const card = view.hand.find((c) => c.targeted && /damage/i.test(c.rules ?? ""));
+  const card = view.hand.find((c) => c.targeted && /damage|伤害/i.test(c.rules ?? ""));
   return card ? card.id : null;
 })()`);
 const playable = await evaluate(`(() => {
   const view = window.__p1.view();
   const cards = window.__p1.layout().cards;
   // 视图里的手牌按槽位排列；找到那张会打人的牌在哪个槽位
-  const index = view.hand.findIndex((c) => c.targeted && /damage/i.test(c.rules ?? ""));
+  const index = view.hand.findIndex((c) => c.targeted && /damage|伤害/i.test(c.rules ?? ""));
   if (index < 0) return null;
   const screen = cards.find((c) => c.slot === index);
   const enemy = window.__p1.layout().enemies[0];

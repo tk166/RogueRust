@@ -16,6 +16,7 @@
 import type { DropOption } from "../input/pointerMachine";
 import { liveEnemySlots, type MockScene } from "../mock/scene";
 import type { CombatSnapshot } from "../wasm/snapshot";
+import { displayName, displayText } from "../i18n";
 
 export type CardKind = "attack" | "skill" | "power";
 
@@ -85,7 +86,9 @@ function intentText(kind: number, damage: number): string {
  * 要变成事实，得让内核在观察向量里加一格（那是 ABI 变更，P3 再说）。
  */
 function guessKind(rules: string): CardKind {
-  return /damage|damage\./i.test(rules) ? "attack" : "skill";
+  // ⚠️ i18n 之后规则文本是**中文**（"造成 6 点伤害。"）⇒ 必须同时匹配中英两种写法，
+  // 否则所有牌都会被判成"技能"（截图上整手牌一个颜色）。
+  return /damage|伤害/i.test(rules) ? "attack" : "skill";
 }
 
 export interface WasmNames {
@@ -102,13 +105,15 @@ export interface WasmNames {
  */
 export function viewFromWasm(snapshot: CombatSnapshot, names: WasmNames): CombatView {
   const hand: ViewCard[] = snapshot.hand.map((card) => {
-    const rules = names.cardText(card.slot);
+    // 内核给的是**定义 id**（`strike` / `strike+`）；中文由 i18n 表查，内核不需要知道中文。
+    const cardId = names.cardName(card.slot);
+    const rules = displayText("cards", cardId) || names.cardText(card.slot);
     const actions = snapshot.actions.filter(
       (action) => action.kind === "play" && action.handSlot === card.slot
     );
     return {
       id: `hand-${card.slot}-${card.defSlot}`,
-      name: names.cardName(card.slot),
+      name: displayName("cards", cardId),
       cost: card.cost,
       kind: guessKind(rules),
       // "需要目标"由内核决定：存在 `targetSlot >= 0` 的动作就是定向牌。
@@ -131,7 +136,7 @@ export function viewFromWasm(snapshot: CombatSnapshot, names: WasmNames): Combat
     enemies: snapshot.enemies.map((enemy) => ({
       slot: enemy.slot,
       id: `enemy-${enemy.slot}`,
-      name: names.enemyName(enemy.slot),
+      name: displayName("monsters", names.enemyName(enemy.slot)),
       hp: enemy.hp,
       hpMax: enemy.hpMax,
       block: enemy.block,

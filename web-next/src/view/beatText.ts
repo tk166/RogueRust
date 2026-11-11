@@ -7,6 +7,7 @@
 // 卡名与状态名统一本地化是后续的事（用户已明确：卡名与美术一起处理）。
 
 import { BEAT, type Beat } from "../wasm/snapshot";
+import { displayName } from "../i18n";
 
 /** 墙位槽 → 人话。`-1` 英雄、`0..5` 敌人、`-2` 没有。 */
 function who(slot: number): string {
@@ -16,16 +17,16 @@ function who(slot: number): string {
 }
 
 function statusName(def: string): string {
-  // `standard.vulnerable` → `vulnerable`（本地化留待统一处理）
-  const dot = def.lastIndexOf(".");
-  return dot >= 0 ? def.slice(dot + 1) : def;
+  // `standard.vulnerable` → 易伤（i18n 表）；没条目时回退成 `vulnerable`。
+  return displayName("statuses", def);
 }
 
 /** 一条 beat 的文案；返回 `null` 表示"这条不用给玩家看"。 */
 export function beatText(beat: Beat): string | null {
   switch (beat.kind) {
     case BEAT.cardPlayed:
-      return `打出 ${beat.def || "一张牌"}`;
+      // `beat.def` 是**定义 id**（`bash` / `strike+`）⇒ 走 i18n 表拿中文名。
+      return `打出 ${beat.def ? displayName("cards", beat.def) : "一张牌"}`;
     case BEAT.damage: {
       const blocked = beat.b > 0 ? `（格挡 ${beat.b}）` : "";
       return `${who(beat.target)} −${beat.a} 血${blocked}`;

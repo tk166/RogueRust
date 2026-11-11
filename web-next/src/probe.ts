@@ -10,6 +10,7 @@ import type { MockScene } from "./mock/scene";
 import type { CombatView } from "./view/combatView";
 import type { WasmDiagnostics } from "./wasm/host";
 import type { PendingChoice } from "./wasm/snapshot";
+import { coverage as i18nCoverage, UPGRADED_WITH_BASE_TEXT } from "./i18n";
 import type { CommitLogEntry } from "./App";
 
 export interface ProbeOptions {
@@ -100,6 +101,13 @@ export interface Probe {
   choicePick: (index: number, on: boolean) => void;
   choiceConfirm: () => void;
   choiceClear: () => void;
+  /** i18n 覆盖统计：每个表多少条、多少 id 走了回退。 */
+  i18n: () => {
+    entries: Record<string, number>;
+    fallbacks: Record<string, number>;
+    fallbackIds: Record<string, string[]>;
+    upgradedWithBaseText: number;
+  };
   /** 手牌文字的字号（闸门断言可读性用）。 */
   typeScale: () => Record<string, { title: number; rules: number }>;
   /** 帧率采样：在 `ms` 毫秒内数 rAF。headless 是软件光栅，数字只做记录，不当判据。 */
@@ -175,6 +183,18 @@ export function installProbe(options: ProbeOptions): void {
     detailSlot: () => options.detailSlot(),
     modalOpen: () => options.modalOpen(),
     hovered: () => ({ card: options.hoveredCard(), enemy: options.hoveredEnemy() }),
+    i18n: () => {
+      const report = i18nCoverage();
+      const entries: Record<string, number> = {};
+      const fallbacks: Record<string, number> = {};
+      const fallbackIds: Record<string, string[]> = {};
+      for (const [table, row] of Object.entries(report)) {
+        entries[table] = row.entries;
+        fallbacks[table] = row.fallbacks;
+        fallbackIds[table] = row.ids;
+      }
+      return { entries, fallbacks, fallbackIds, upgradedWithBaseText: UPGRADED_WITH_BASE_TEXT };
+    },
     choice: () => {
       const choice = options.choice();
       return choice

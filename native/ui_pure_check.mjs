@@ -44,6 +44,7 @@ try {
       "src/stage/layout.ts",
       "src/wasm/snapshot.ts",
       "src/view/choiceText.ts",
+      "src/i18n/index.ts",
     ],
     { cwd: WEB_NEXT, stdio: "pipe" }
   );
@@ -52,6 +53,7 @@ try {
   const combat = await import(pathToFileURL(join(out, "stage/combatLayout.js")).href);
   const snapshotMod = await import(pathToFileURL(join(out, "wasm/snapshot.js")).href);
   const choiceText = await import(pathToFileURL(join(out, "view/choiceText.js")).href);
+  const i18n = await import(pathToFileURL(join(out, "i18n/index.js")).href);
   const hit = await import(pathToFileURL(join(out, "input/hitTest.js")).href);
   const machine = await import(pathToFileURL(join(out, "input/pointerMachine.js")).href);
 
@@ -259,6 +261,42 @@ try {
     sentenceFor(1, 99, 1, 1)
   );
 
+  // ── i18n：精确 / `+` 剥壳 / 回退 三层 ─────────────────────────────────
+  i18n.resetCoverage();
+  check(i18n.displayName("cards", "strike") === "打击", "i18n：精确命中（strike → 打击）", i18n.displayName("cards", "strike"));
+  check(
+    i18n.displayName("cards", "strike+") === "打击+",
+    "i18n：`+` 变体剥壳后查基础条目并补回 +",
+    i18n.displayName("cards", "strike+")
+  );
+  check(
+    i18n.displayText("cards", "strike").length > 0,
+    "i18n：介绍文本非空",
+    i18n.displayText("cards", "strike")
+  );
+  check(
+    i18n.displayName("statuses", "standard.vulnerable") === "易伤",
+    "i18n：ABI 状态轴（standard.vulnerable → 易伤）",
+    i18n.displayName("statuses", "standard.vulnerable")
+  );
+  const unknown = i18n.displayName("cards", "no_such_card_xyz");
+  check(
+    unknown === "no_such_card_xyz",
+    "i18n：未知 id 回退成 id 本身（不编名字）",
+    unknown
+  );
+  const report = i18n.coverage();
+  check(
+    report.cards.fallbacks === 1 && report.cards.ids[0] === "no_such_card_xyz",
+    "i18n：回退被计数（静默回退 = 假装翻译过）",
+    JSON.stringify(report.cards)
+  );
+  check(
+    report.cards.entries > 200 && report.monsters.entries > 30 && report.statuses.entries >= 13,
+    "i18n：表有内容（卡 >200 / 怪 >30 / 状态 >=13）",
+    JSON.stringify({ cards: report.cards.entries, monsters: report.monsters.entries, statuses: report.statuses.entries })
+  );
+
   // ── 状态机 ──────────────────────────────────────────────────────────────
   const targeted = [
     { slot: 0, actionIndex: 1, label: "a" },
@@ -302,7 +340,7 @@ try {
     console.error(`UI_PURE FAIL: ${bad} 条`);
     process.exit(1);
   }
-  console.log(`UI_PURE PASS formation=0..6 hit=5 machine=4 layout=6 decode=8 choice=6`);
+  console.log(`UI_PURE PASS formation=0..6 hit=5 machine=4 layout=6 decode=8 choice=6 i18n=7`);
 } catch (error) {
   await rm(out, { recursive: true, force: true }).catch(() => {});
   console.error(`UI_PURE ERROR: ${error.message}`);

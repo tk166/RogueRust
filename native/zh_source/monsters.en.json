@@ -1,0 +1,2629 @@
+{
+ "total": 66,
+ "offset": 0,
+ "limit": 400,
+ "items": [
+  {
+   "id": "ACIDSLIME_L",
+   "name": "Acid Slime (L)",
+   "type": "Normal",
+   "act": "exordium",
+   "min_hp": 65,
+   "max_hp": 69,
+   "min_hp_ascension": 68,
+   "max_hp_ascension": 72,
+   "moves": [
+    {
+     "id": "SLIME_TACKLE",
+     "name": "Corrosive Spit",
+     "damage": 11,
+     "damage_ascension": 12,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "NORMAL_TACKLE",
+     "name": "Normal Tackle",
+     "damage": 16,
+     "damage_ascension": 18,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "SPLIT",
+     "name": "Split",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "UNKNOWN",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "WEAK_LICK",
+     "name": "Lick",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEBUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "ACIDSLIME_M",
+   "name": "Acid Slime (M)",
+   "type": "Normal",
+   "act": "exordium",
+   "min_hp": 28,
+   "max_hp": 32,
+   "min_hp_ascension": 29,
+   "max_hp_ascension": 34,
+   "moves": [
+    {
+     "id": "WOUND_TACKLE",
+     "name": "Corrosive Spit",
+     "damage": 7,
+     "damage_ascension": 8,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "NORMAL_TACKLE",
+     "name": "Normal Tackle",
+     "damage": 10,
+     "damage_ascension": 12,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "WEAK_LICK",
+     "name": "Lick",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEBUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "ACIDSLIME_S",
+   "name": "Acid Slime (S)",
+   "type": "Normal",
+   "act": "exordium",
+   "min_hp": 8,
+   "max_hp": 12,
+   "min_hp_ascension": 9,
+   "max_hp_ascension": 13,
+   "moves": [
+    {
+     "id": "TACKLE",
+     "name": "Tackle",
+     "damage": 3,
+     "damage_ascension": 4,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "DEBUFF",
+     "name": "Debuff",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEBUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "APOLOGY_SLIME",
+   "name": "Apology Slime",
+   "type": "Normal",
+   "act": "exordium",
+   "min_hp": 8,
+   "max_hp": 12,
+   "min_hp_ascension": null,
+   "max_hp_ascension": null,
+   "moves": [
+    {
+     "id": "TACKLE",
+     "name": "Tackle",
+     "damage": 3,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "DEBUFF",
+     "name": "Debuff",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEBUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "CULTIST",
+   "name": "Cultist",
+   "type": "Normal",
+   "act": "exordium",
+   "min_hp": 48,
+   "max_hp": 54,
+   "min_hp_ascension": 50,
+   "max_hp_ascension": 56,
+   "moves": [
+    {
+     "id": "DARK_STRIKE",
+     "name": "Dark Strike",
+     "damage": 6,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "INCANTATION",
+     "name": "Incantation",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "BUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "GREMLINFAT",
+   "name": "Fat Gremlin",
+   "type": "Normal",
+   "act": "exordium",
+   "min_hp": 13,
+   "max_hp": 17,
+   "min_hp_ascension": 14,
+   "max_hp_ascension": 18,
+   "moves": [
+    {
+     "id": "BLUNT",
+     "name": "Smash",
+     "damage": 4,
+     "damage_ascension": 5,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "MOVE_99",
+     "name": "Move 99",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "ESCAPE",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "FUNGIBEAST",
+   "name": "Fungi Beast",
+   "type": "Normal",
+   "act": "exordium",
+   "min_hp": 22,
+   "max_hp": 28,
+   "min_hp_ascension": 24,
+   "max_hp_ascension": 28,
+   "moves": [
+    {
+     "id": "BITE",
+     "name": "Bite",
+     "damage": 6,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "GROW",
+     "name": "Grow",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "BUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "GREMLINNOB",
+   "name": "Gremlin Nob",
+   "type": "Elite",
+   "act": "exordium",
+   "min_hp": 82,
+   "max_hp": 86,
+   "min_hp_ascension": 85,
+   "max_hp_ascension": 90,
+   "moves": [
+    {
+     "id": "BULL_RUSH",
+     "name": "Bull Rush",
+     "damage": 14,
+     "damage_ascension": 16,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "SKULL_BASH",
+     "name": "Skull Bash",
+     "damage": 6,
+     "damage_ascension": 8,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "BELLOW",
+     "name": "Bellow",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "BUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "GREMLINWIZARD",
+   "name": "Gremlin Wizard",
+   "type": "Normal",
+   "act": "exordium",
+   "min_hp": 21,
+   "max_hp": 25,
+   "min_hp_ascension": 22,
+   "max_hp_ascension": 26,
+   "moves": [
+    {
+     "id": "DOPE_MAGIC",
+     "name": "Ultimate Blast",
+     "damage": 25,
+     "damage_ascension": 30,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "CHARGE",
+     "name": "Charging",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "UNKNOWN",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "MOVE_99",
+     "name": "Move 99",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "ESCAPE",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "HEXAGHOST",
+   "name": "Hexaghost",
+   "type": "Boss",
+   "act": "exordium",
+   "min_hp": 250,
+   "max_hp": 250,
+   "min_hp_ascension": 264,
+   "max_hp_ascension": 264,
+   "moves": [
+    {
+     "id": "DIVIDER",
+     "name": "Divider",
+     "damage": -1,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 6,
+     "block": null
+    },
+    {
+     "id": "TACKLE",
+     "name": "Tackle",
+     "damage": 5,
+     "damage_ascension": 6,
+     "intent": "ATTACK",
+     "hits": 2,
+     "block": null
+    },
+    {
+     "id": "INFLAME",
+     "name": "Inflame",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEFEND_BUFF",
+     "hits": 1,
+     "block": 12
+    },
+    {
+     "id": "SEAR",
+     "name": "Sear",
+     "damage": 6,
+     "damage_ascension": null,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "ACTIVATE",
+     "name": "Activate",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "UNKNOWN",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "INFERNO",
+     "name": "Inferno",
+     "damage": 2,
+     "damage_ascension": 3,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 6,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "JAWWORM",
+   "name": "Jaw Worm",
+   "type": "Normal",
+   "act": "exordium",
+   "min_hp": 40,
+   "max_hp": 44,
+   "min_hp_ascension": 42,
+   "max_hp_ascension": 46,
+   "moves": [
+    {
+     "id": "CHOMP",
+     "name": "Chomp",
+     "damage": 11,
+     "damage_ascension": 12,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "BELLOW",
+     "name": "Bellow",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEFEND_BUFF",
+     "hits": 1,
+     "block": 6
+    },
+    {
+     "id": "THRASH",
+     "name": "Thrash",
+     "damage": 7,
+     "damage_ascension": null,
+     "intent": "ATTACK_DEFEND",
+     "hits": 1,
+     "block": 5
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "LAGAVULIN",
+   "name": "Lagavulin",
+   "type": "Elite",
+   "act": "exordium",
+   "min_hp": 109,
+   "max_hp": 111,
+   "min_hp_ascension": 112,
+   "max_hp_ascension": 115,
+   "moves": [
+    {
+     "id": "DEBUFF",
+     "name": "Siphon Soul",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "STRONG_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "STRONG_ATK",
+     "name": "Strong Atk",
+     "damage": 18,
+     "damage_ascension": 20,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "OPEN",
+     "name": "Open",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "STUN",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "IDLE",
+     "name": "Idle",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "SLEEP",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "LOOTER",
+   "name": "Looter",
+   "type": "Normal",
+   "act": "exordium",
+   "min_hp": 44,
+   "max_hp": 48,
+   "min_hp_ascension": 46,
+   "max_hp_ascension": 50,
+   "moves": [
+    {
+     "id": "MUG",
+     "name": "Mug",
+     "damage": 10,
+     "damage_ascension": 11,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "SMOKE_BOMB",
+     "name": "Smoke Bomb",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEFEND",
+     "hits": 1,
+     "block": 6
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "FUZZYLOUSEDEFENSIVE",
+   "name": "Louse",
+   "type": "Normal",
+   "act": "exordium",
+   "min_hp": 11,
+   "max_hp": 17,
+   "min_hp_ascension": 12,
+   "max_hp_ascension": 18,
+   "moves": [
+    {
+     "id": "BITE",
+     "name": "Bite",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "WEAKEN",
+     "name": "Spit Web",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEBUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "FUZZYLOUSENORMAL",
+   "name": "Louse",
+   "type": "Normal",
+   "act": "exordium",
+   "min_hp": 10,
+   "max_hp": 15,
+   "min_hp_ascension": 11,
+   "max_hp_ascension": 16,
+   "moves": [
+    {
+     "id": "BITE",
+     "name": "Bite",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "STRENGTHEN",
+     "name": "Grow",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "BUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "GREMLINWARRIOR",
+   "name": "Mad Gremlin",
+   "type": "Normal",
+   "act": "exordium",
+   "min_hp": 20,
+   "max_hp": 24,
+   "min_hp_ascension": 21,
+   "max_hp_ascension": 25,
+   "moves": [
+    {
+     "id": "SCRATCH",
+     "name": "Scratch",
+     "damage": 4,
+     "damage_ascension": 5,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "MOVE_99",
+     "name": "Move 99",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "ESCAPE",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "SENTRY",
+   "name": "Sentry",
+   "type": "Elite",
+   "act": "exordium",
+   "min_hp": 38,
+   "max_hp": 42,
+   "min_hp_ascension": 39,
+   "max_hp_ascension": 45,
+   "moves": [
+    {
+     "id": "BOLT",
+     "name": "Bolt",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "BEAM",
+     "name": "Beam",
+     "damage": 9,
+     "damage_ascension": 10,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "GREMLINTSUNDERE",
+   "name": "Shield Gremlin",
+   "type": "Normal",
+   "act": "exordium",
+   "min_hp": 12,
+   "max_hp": 15,
+   "min_hp_ascension": 13,
+   "max_hp_ascension": 17,
+   "moves": [
+    {
+     "id": "PROTECT",
+     "name": "Protect",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEFEND",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "BASH",
+     "name": "Shield Bash",
+     "damage": 6,
+     "damage_ascension": 8,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "MOVE_99",
+     "name": "Move 99",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "ESCAPE",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "SLAVERBLUE",
+   "name": "Slaver",
+   "type": "Normal",
+   "act": "exordium",
+   "min_hp": 46,
+   "max_hp": 50,
+   "min_hp_ascension": 48,
+   "max_hp_ascension": 52,
+   "moves": [
+    {
+     "id": "STAB",
+     "name": "Stab",
+     "damage": 12,
+     "damage_ascension": 13,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "RAKE",
+     "name": "Rake",
+     "damage": 7,
+     "damage_ascension": 8,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "SLAVERRED",
+   "name": "Slaver",
+   "type": "Normal",
+   "act": "exordium",
+   "min_hp": 46,
+   "max_hp": 50,
+   "min_hp_ascension": 48,
+   "max_hp_ascension": 52,
+   "moves": [
+    {
+     "id": "STAB",
+     "name": "Stab",
+     "damage": 13,
+     "damage_ascension": 14,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "ENTANGLE",
+     "name": "Entangle",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "STRONG_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "SCRAPE",
+     "name": "Scrape",
+     "damage": 8,
+     "damage_ascension": 9,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "SLIMEBOSS",
+   "name": "Slime Boss",
+   "type": "Boss",
+   "act": "exordium",
+   "min_hp": 140,
+   "max_hp": 140,
+   "min_hp_ascension": 150,
+   "max_hp_ascension": 150,
+   "moves": [
+    {
+     "id": "SLAM",
+     "name": "Slam",
+     "damage": 35,
+     "damage_ascension": 38,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "PREP_SLAM",
+     "name": "Preparing",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "UNKNOWN",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "SPLIT",
+     "name": "Split",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "UNKNOWN",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "STICKY",
+     "name": "Goop Spray",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "STRONG_DEBUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "GREMLINTHIEF",
+   "name": "Sneaky Gremlin",
+   "type": "Normal",
+   "act": "exordium",
+   "min_hp": 10,
+   "max_hp": 14,
+   "min_hp_ascension": 11,
+   "max_hp_ascension": 15,
+   "moves": [
+    {
+     "id": "PUNCTURE",
+     "name": "Puncture",
+     "damage": 9,
+     "damage_ascension": 10,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "MOVE_99",
+     "name": "Move 99",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "ESCAPE",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "SPIKESLIME_L",
+   "name": "Spike Slime (L)",
+   "type": "Normal",
+   "act": "exordium",
+   "min_hp": 64,
+   "max_hp": 70,
+   "min_hp_ascension": 67,
+   "max_hp_ascension": 73,
+   "moves": [
+    {
+     "id": "FLAME_TACKLE",
+     "name": "Flame Tackle",
+     "damage": 16,
+     "damage_ascension": 18,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "SPLIT",
+     "name": "Split",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "UNKNOWN",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "FRAIL_LICK",
+     "name": "Lick",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEBUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "SPIKESLIME_M",
+   "name": "Spike Slime (M)",
+   "type": "Normal",
+   "act": "exordium",
+   "min_hp": 28,
+   "max_hp": 32,
+   "min_hp_ascension": 29,
+   "max_hp_ascension": 34,
+   "moves": [
+    {
+     "id": "FLAME_TACKLE",
+     "name": "Flame Tackle",
+     "damage": 8,
+     "damage_ascension": 10,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "FRAIL_LICK",
+     "name": "Lick",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEBUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "SPIKESLIME_S",
+   "name": "Spike Slime (S)",
+   "type": "Normal",
+   "act": "exordium",
+   "min_hp": 10,
+   "max_hp": 14,
+   "min_hp_ascension": 11,
+   "max_hp_ascension": 15,
+   "moves": [
+    {
+     "id": "TACKLE",
+     "name": "Tackle",
+     "damage": 5,
+     "damage_ascension": 6,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "THEGUARDIAN",
+   "name": "The Guardian",
+   "type": "Boss",
+   "act": "exordium",
+   "min_hp": 240,
+   "max_hp": 240,
+   "min_hp_ascension": 250,
+   "max_hp_ascension": 250,
+   "moves": [
+    {
+     "id": "CLOSE_UP",
+     "name": "Defensive Mode",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "BUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "FIERCE_BASH",
+     "name": "Fierce Bash",
+     "damage": 32,
+     "damage_ascension": 36,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "ROLL_ATTACK",
+     "name": "Roll Attack",
+     "damage": 9,
+     "damage_ascension": 10,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "TWIN_SLAM",
+     "name": "Twin Slam",
+     "damage": 8,
+     "damage_ascension": null,
+     "intent": "ATTACK_BUFF",
+     "hits": 2,
+     "block": null
+    },
+    {
+     "id": "WHIRLWIND",
+     "name": "Whirlwind",
+     "damage": 5,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 4,
+     "block": null
+    },
+    {
+     "id": "CHARGE_UP",
+     "name": "Charging Up",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEFEND",
+     "hits": 1,
+     "block": 9
+    },
+    {
+     "id": "VENT_STEAM",
+     "name": "Vent Steam",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "STRONG_DEBUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "BANDITBEAR",
+   "name": "Bear",
+   "type": "Normal",
+   "act": "city",
+   "min_hp": 38,
+   "max_hp": 42,
+   "min_hp_ascension": 40,
+   "max_hp_ascension": 44,
+   "moves": [
+    {
+     "id": "BEAR_HUG",
+     "name": "Bear Hug",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "STRONG_DEBUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "BOOKOFSTABBING",
+   "name": "Book of Stabbing",
+   "type": "Elite",
+   "act": "city",
+   "min_hp": 160,
+   "max_hp": 164,
+   "min_hp_ascension": 168,
+   "max_hp_ascension": 172,
+   "moves": [
+    {
+     "id": "STAB",
+     "name": "Stab",
+     "damage": 6,
+     "damage_ascension": 7,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "BIG_STAB",
+     "name": "Big Stab",
+     "damage": 21,
+     "damage_ascension": 24,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "BRONZEAUTOMATON",
+   "name": "Bronze Automaton",
+   "type": "Boss",
+   "act": "city",
+   "min_hp": 300,
+   "max_hp": 300,
+   "min_hp_ascension": 320,
+   "max_hp_ascension": 320,
+   "moves": [
+    {
+     "id": "FLAIL",
+     "name": "Flail",
+     "damage": 7,
+     "damage_ascension": 8,
+     "intent": "ATTACK",
+     "hits": 2,
+     "block": null
+    },
+    {
+     "id": "HYPER_BEAM",
+     "name": "HYPER BEAM",
+     "damage": 45,
+     "damage_ascension": 50,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "STUNNED",
+     "name": "Stunned",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "STUN",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "SPAWN_ORBS",
+     "name": "Spawn Orbs",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "UNKNOWN",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "BOOST",
+     "name": "Boost",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEFEND_BUFF",
+     "hits": 1,
+     "block": 9
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "BYRD",
+   "name": "Byrd",
+   "type": "Normal",
+   "act": "city",
+   "min_hp": 25,
+   "max_hp": 31,
+   "min_hp_ascension": 26,
+   "max_hp_ascension": 33,
+   "moves": [
+    {
+     "id": "PECK",
+     "name": "Peck",
+     "damage": 1,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 5,
+     "block": null
+    },
+    {
+     "id": "GO_AIRBORNE",
+     "name": "Go Airborne",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "UNKNOWN",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "SWOOP",
+     "name": "Swoop",
+     "damage": 12,
+     "damage_ascension": 14,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "STUNNED",
+     "name": "Stunned",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "STUN",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "HEADBUTT",
+     "name": "Headbutt",
+     "damage": 3,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "CAW",
+     "name": "Caw",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "BUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "CENTURION",
+   "name": "Centurion",
+   "type": "Normal",
+   "act": "city",
+   "min_hp": 76,
+   "max_hp": 80,
+   "min_hp_ascension": 78,
+   "max_hp_ascension": 83,
+   "moves": [
+    {
+     "id": "SLASH",
+     "name": "Slash",
+     "damage": 12,
+     "damage_ascension": 14,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "PROTECT",
+     "name": "Protect",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEFEND",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "FURY",
+     "name": "Fury",
+     "damage": 6,
+     "damage_ascension": 7,
+     "intent": "ATTACK",
+     "hits": 3,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "CHOSEN",
+   "name": "Chosen",
+   "type": "Normal",
+   "act": "city",
+   "min_hp": 95,
+   "max_hp": 99,
+   "min_hp_ascension": 98,
+   "max_hp_ascension": 103,
+   "moves": [
+    {
+     "id": "ZAP",
+     "name": "Zap",
+     "damage": 18,
+     "damage_ascension": 21,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "DRAIN",
+     "name": "Drain",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "DEBILITATE",
+     "name": "Debilitate",
+     "damage": 10,
+     "damage_ascension": 12,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "HEX",
+     "name": "Hex",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "STRONG_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "POKE",
+     "name": "Poke",
+     "damage": 5,
+     "damage_ascension": 6,
+     "intent": "ATTACK",
+     "hits": 2,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "GREMLINLEADER",
+   "name": "Gremlin Leader",
+   "type": "Elite",
+   "act": "city",
+   "min_hp": 140,
+   "max_hp": 148,
+   "min_hp_ascension": 145,
+   "max_hp_ascension": 155,
+   "moves": [
+    {
+     "id": "RALLY",
+     "name": "Rally!",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "UNKNOWN",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "ENCOURAGE",
+     "name": "Encourage",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEFEND_BUFF",
+     "hits": 1,
+     "block": 6
+    },
+    {
+     "id": "STAB",
+     "name": "Stab",
+     "damage": 6,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 3,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "MUGGER",
+   "name": "Mugger",
+   "type": "Normal",
+   "act": "city",
+   "min_hp": 48,
+   "max_hp": 52,
+   "min_hp_ascension": 50,
+   "max_hp_ascension": 54,
+   "moves": [
+    {
+     "id": "MUG",
+     "name": "Mug",
+     "damage": 10,
+     "damage_ascension": 11,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "SMOKE_BOMB",
+     "name": "Smoke Bomb",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEFEND",
+     "hits": 1,
+     "block": 28
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "HEALER",
+   "name": "Mystic",
+   "type": "Normal",
+   "act": "city",
+   "min_hp": 48,
+   "max_hp": 56,
+   "min_hp_ascension": 50,
+   "max_hp_ascension": 58,
+   "moves": [
+    {
+     "id": "ATTACK",
+     "name": "Attack",
+     "damage": 8,
+     "damage_ascension": 9,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "HEAL",
+     "name": "Heal",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "BUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "BUFF",
+     "name": "Buff",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "BUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "BRONZEORB",
+   "name": "Orb",
+   "type": "Elite",
+   "act": "city",
+   "min_hp": 52,
+   "max_hp": 58,
+   "min_hp_ascension": 54,
+   "max_hp_ascension": 60,
+   "moves": [
+    {
+     "id": "BEAM",
+     "name": "Beam",
+     "damage": 8,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "SUPPORT_BEAM",
+     "name": "Support Beam",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEFEND",
+     "hits": 1,
+     "block": 12
+    },
+    {
+     "id": "STASIS",
+     "name": "Stasis",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "STRONG_DEBUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "BANDITCHILD",
+   "name": "Pointy",
+   "type": "Normal",
+   "act": "city",
+   "min_hp": 30,
+   "max_hp": 30,
+   "min_hp_ascension": 34,
+   "max_hp_ascension": 34,
+   "moves": [
+    {
+     "id": "POINTY_SPECIAL",
+     "name": "Pointy Special",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 2,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "BANDITLEADER",
+   "name": "Romeo",
+   "type": "Elite",
+   "act": "city",
+   "min_hp": 35,
+   "max_hp": 39,
+   "min_hp_ascension": 37,
+   "max_hp_ascension": 41,
+   "moves": [
+    {
+     "id": "MOCK",
+     "name": "Mock",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "UNKNOWN",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "SHELLED_PARASITE",
+   "name": "Shelled Parasite",
+   "type": "Normal",
+   "act": "city",
+   "min_hp": 68,
+   "max_hp": 72,
+   "min_hp_ascension": 70,
+   "max_hp_ascension": 75,
+   "moves": [
+    {
+     "id": "FELL",
+     "name": "Fell",
+     "damage": 18,
+     "damage_ascension": 21,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "DOUBLE_STRIKE",
+     "name": "Double Strike",
+     "damage": 6,
+     "damage_ascension": 7,
+     "intent": "ATTACK",
+     "hits": 2,
+     "block": null
+    },
+    {
+     "id": "LIFE_SUCK",
+     "name": "Life Suck",
+     "damage": 10,
+     "damage_ascension": 12,
+     "intent": "ATTACK_BUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "STUNNED",
+     "name": "Stunned",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "STUN",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "SNAKEPLANT",
+   "name": "Snake Plant",
+   "type": "Normal",
+   "act": "city",
+   "min_hp": 75,
+   "max_hp": 79,
+   "min_hp_ascension": 78,
+   "max_hp_ascension": 82,
+   "moves": [
+    {
+     "id": "CHOMPY_CHOMPS",
+     "name": "Chompy Chomps",
+     "damage": 7,
+     "damage_ascension": 8,
+     "intent": "ATTACK",
+     "hits": 3,
+     "block": null
+    },
+    {
+     "id": "SPORES",
+     "name": "Enfeebling Spores",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "STRONG_DEBUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "SNECKO",
+   "name": "Snecko",
+   "type": "Normal",
+   "act": "city",
+   "min_hp": 114,
+   "max_hp": 120,
+   "min_hp_ascension": 120,
+   "max_hp_ascension": 125,
+   "moves": [
+    {
+     "id": "GLARE",
+     "name": "Perplexing Glare",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "STRONG_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "BITE",
+     "name": "Bite",
+     "damage": 15,
+     "damage_ascension": 18,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "TAIL",
+     "name": "Tail Whip",
+     "damage": 8,
+     "damage_ascension": 10,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "SPHERICGUARDIAN",
+   "name": "Spheric Guardian",
+   "type": "Normal",
+   "act": "city",
+   "min_hp": 20,
+   "max_hp": 20,
+   "min_hp_ascension": null,
+   "max_hp_ascension": null,
+   "moves": [
+    {
+     "id": "BIG_ATTACK",
+     "name": "Big Attack",
+     "damage": 10,
+     "damage_ascension": 11,
+     "intent": "ATTACK",
+     "hits": 2,
+     "block": null
+    },
+    {
+     "id": "INITIAL_BLOCK_GAIN",
+     "name": "Initial Block Gain",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEFEND",
+     "hits": 1,
+     "block": 95
+    },
+    {
+     "id": "BLOCK_ATTACK",
+     "name": "Block Attack",
+     "damage": 10,
+     "damage_ascension": 11,
+     "intent": "ATTACK_DEFEND",
+     "hits": 1,
+     "block": 15
+    },
+    {
+     "id": "FRAIL_ATTACK",
+     "name": "Frail Attack",
+     "damage": 10,
+     "damage_ascension": 11,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "SLAVERBOSS",
+   "name": "Taskmaster",
+   "type": "Elite",
+   "act": "city",
+   "min_hp": 54,
+   "max_hp": 60,
+   "min_hp_ascension": 57,
+   "max_hp_ascension": 64,
+   "moves": [
+    {
+     "id": "SCOURING_WHIP",
+     "name": "Scouring Whip",
+     "damage": 7,
+     "damage_ascension": null,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "CHAMP",
+   "name": "The Champ",
+   "type": "Boss",
+   "act": "city",
+   "min_hp": 420,
+   "max_hp": 420,
+   "min_hp_ascension": 440,
+   "max_hp_ascension": 440,
+   "moves": [
+    {
+     "id": "HEAVY_SLASH",
+     "name": "Heavy Slash",
+     "damage": 16,
+     "damage_ascension": 18,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "DEFENSIVE_STANCE",
+     "name": "Defensive Stance",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEFEND_BUFF",
+     "hits": 1,
+     "block": 15
+    },
+    {
+     "id": "EXECUTE",
+     "name": "Execute",
+     "damage": 10,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 2,
+     "block": null
+    },
+    {
+     "id": "FACE_SLAP",
+     "name": "Face Slap",
+     "damage": 12,
+     "damage_ascension": 14,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "GLOAT",
+     "name": "Gloat",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "BUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "TAUNT",
+     "name": "Taunt",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "ANGER",
+     "name": "Anger",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "BUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "THECOLLECTOR",
+   "name": "The Collector",
+   "type": "Boss",
+   "act": "city",
+   "min_hp": 282,
+   "max_hp": 282,
+   "min_hp_ascension": 300,
+   "max_hp_ascension": 300,
+   "moves": [
+    {
+     "id": "SPAWN",
+     "name": "Spawn",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "UNKNOWN",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "FIREBALL",
+     "name": "Fireball",
+     "damage": 18,
+     "damage_ascension": 21,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "BUFF",
+     "name": "Buff",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEFEND_BUFF",
+     "hits": 1,
+     "block": 35
+    },
+    {
+     "id": "MEGA_DEBUFF",
+     "name": "Mega Debuff",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "STRONG_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "REVIVE",
+     "name": "Revive",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "UNKNOWN",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "TORCHHEAD",
+   "name": "Torch Head",
+   "type": "Normal",
+   "act": "city",
+   "min_hp": 38,
+   "max_hp": 40,
+   "min_hp_ascension": 40,
+   "max_hp_ascension": 45,
+   "moves": [
+    {
+     "id": "TACKLE",
+     "name": "Tackle",
+     "damage": 7,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "AWAKENEDONE",
+   "name": "Awakened One",
+   "type": "Boss",
+   "act": "beyond",
+   "min_hp": 300,
+   "max_hp": 300,
+   "min_hp_ascension": 320,
+   "max_hp_ascension": 320,
+   "moves": [
+    {
+     "id": "SLASH",
+     "name": "Slash",
+     "damage": 20,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "SOUL_STRIKE",
+     "name": "Soul Strike",
+     "damage": 6,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 4,
+     "block": null
+    },
+    {
+     "id": "REBIRTH",
+     "name": "Rebirth",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "UNKNOWN",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "DARK_ECHO",
+     "name": "Dark Echo",
+     "damage": 40,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "SLUDGE",
+     "name": "Sludge",
+     "damage": 18,
+     "damage_ascension": null,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "TACKLE",
+     "name": "Tackle",
+     "damage": 10,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 3,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "DAGGER",
+   "name": "Dagger",
+   "type": "Normal",
+   "act": "beyond",
+   "min_hp": 20,
+   "max_hp": 25,
+   "min_hp_ascension": null,
+   "max_hp_ascension": null,
+   "moves": [
+    {
+     "id": "WOUND",
+     "name": "Wound",
+     "damage": 9,
+     "damage_ascension": null,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "EXPLODE",
+     "name": "Explode",
+     "damage": 25,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "DARKLING",
+   "name": "Darkling",
+   "type": "Normal",
+   "act": "beyond",
+   "min_hp": 48,
+   "max_hp": 56,
+   "min_hp_ascension": 50,
+   "max_hp_ascension": 59,
+   "moves": [
+    {
+     "id": "CHOMP",
+     "name": "Chomp",
+     "damage": 8,
+     "damage_ascension": 9,
+     "intent": "ATTACK",
+     "hits": 2,
+     "block": null
+    },
+    {
+     "id": "HARDEN",
+     "name": "Harden",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEFEND",
+     "hits": 1,
+     "block": 12
+    },
+    {
+     "id": "NIP",
+     "name": "Nip",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "COUNT",
+     "name": "Count",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "UNKNOWN",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "REINCARNATE",
+     "name": "Reincarnate",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "BUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "DECA",
+   "name": "Deca",
+   "type": "Boss",
+   "act": "beyond",
+   "min_hp": 250,
+   "max_hp": 250,
+   "min_hp_ascension": 265,
+   "max_hp_ascension": 265,
+   "moves": [
+    {
+     "id": "BEAM",
+     "name": "Beam",
+     "damage": 10,
+     "damage_ascension": 12,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 2,
+     "block": null
+    },
+    {
+     "id": "SQUARE_OF_PROTECTION",
+     "name": "Square Of Protection",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEFEND",
+     "hits": 1,
+     "block": 16
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "DONU",
+   "name": "Donu",
+   "type": "Boss",
+   "act": "beyond",
+   "min_hp": 250,
+   "max_hp": 250,
+   "min_hp_ascension": 265,
+   "max_hp_ascension": 265,
+   "moves": [
+    {
+     "id": "BEAM",
+     "name": "Beam",
+     "damage": 10,
+     "damage_ascension": 12,
+     "intent": "ATTACK",
+     "hits": 2,
+     "block": null
+    },
+    {
+     "id": "CIRCLE_OF_PROTECTION",
+     "name": "Circle of Power",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "BUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "EXPLODER",
+   "name": "Exploder",
+   "type": "Normal",
+   "act": "beyond",
+   "min_hp": 30,
+   "max_hp": 30,
+   "min_hp_ascension": 30,
+   "max_hp_ascension": 35,
+   "moves": [
+    {
+     "id": "ATTACK",
+     "name": "Attack",
+     "damage": 9,
+     "damage_ascension": 11,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "BLOCK",
+     "name": "Block",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "UNKNOWN",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "GIANTHEAD",
+   "name": "Giant Head",
+   "type": "Elite",
+   "act": "beyond",
+   "min_hp": 500,
+   "max_hp": 500,
+   "min_hp_ascension": 520,
+   "max_hp_ascension": 520,
+   "moves": [
+    {
+     "id": "GLARE",
+     "name": "Glare",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "IT_IS_TIME",
+     "name": "It Is Time",
+     "damage": 5,
+     "damage_ascension": 15,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "COUNT",
+     "name": "Count",
+     "damage": 13,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "NEMESIS",
+   "name": "Nemesis",
+   "type": "Elite",
+   "act": "beyond",
+   "min_hp": 185,
+   "max_hp": 185,
+   "min_hp_ascension": 200,
+   "max_hp_ascension": 200,
+   "moves": [
+    {
+     "id": "TRI_ATTACK",
+     "name": "Tri Attack",
+     "damage": 6,
+     "damage_ascension": 7,
+     "intent": "ATTACK",
+     "hits": 3,
+     "block": null
+    },
+    {
+     "id": "SCYTHE",
+     "name": "Scythe",
+     "damage": 45,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "TRI_BURN",
+     "name": "Tri Burn",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEBUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "ORB_WALKER",
+   "name": "Orb Walker",
+   "type": "Normal",
+   "act": "beyond",
+   "min_hp": 90,
+   "max_hp": 96,
+   "min_hp_ascension": 92,
+   "max_hp_ascension": 102,
+   "moves": [
+    {
+     "id": "LASER",
+     "name": "Laser",
+     "damage": 10,
+     "damage_ascension": 11,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "CLAW",
+     "name": "Claw",
+     "damage": 15,
+     "damage_ascension": 16,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "REPTOMANCER",
+   "name": "Reptomancer",
+   "type": "Elite",
+   "act": "beyond",
+   "min_hp": 180,
+   "max_hp": 190,
+   "min_hp_ascension": 190,
+   "max_hp_ascension": 200,
+   "moves": [
+    {
+     "id": "SNAKE_STRIKE",
+     "name": "Snake Strike",
+     "damage": 13,
+     "damage_ascension": 16,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 2,
+     "block": null
+    },
+    {
+     "id": "SPAWN_DAGGER",
+     "name": "Spawn Dagger",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "UNKNOWN",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "BIG_BITE",
+     "name": "Big Bite",
+     "damage": 30,
+     "damage_ascension": 34,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "REPULSOR",
+   "name": "Repulsor",
+   "type": "Normal",
+   "act": "beyond",
+   "min_hp": 29,
+   "max_hp": 35,
+   "min_hp_ascension": 31,
+   "max_hp_ascension": 38,
+   "moves": [
+    {
+     "id": "DAZE",
+     "name": "Daze",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "ATTACK",
+     "name": "Attack",
+     "damage": 11,
+     "damage_ascension": 13,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "SPIKER",
+   "name": "Spiker",
+   "type": "Elite",
+   "act": "beyond",
+   "min_hp": 42,
+   "max_hp": 56,
+   "min_hp_ascension": 44,
+   "max_hp_ascension": 60,
+   "moves": [
+    {
+     "id": "ATTACK",
+     "name": "Attack",
+     "damage": 7,
+     "damage_ascension": 9,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "BUFF_THORNS",
+     "name": "Buff Thorns",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "BUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "SERPENT",
+   "name": "Spire Growth",
+   "type": "Normal",
+   "act": "beyond",
+   "min_hp": 170,
+   "max_hp": 170,
+   "min_hp_ascension": 190,
+   "max_hp_ascension": 190,
+   "moves": [
+    {
+     "id": "QUICK_TACKLE",
+     "name": "Quick Tackle",
+     "damage": 16,
+     "damage_ascension": 18,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "CONSTRICT",
+     "name": "Constrict",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "STRONG_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "SMASH",
+     "name": "Smash",
+     "damage": 22,
+     "damage_ascension": 25,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "MAW",
+   "name": "The Maw",
+   "type": "Normal",
+   "act": "beyond",
+   "min_hp": 300,
+   "max_hp": 300,
+   "min_hp_ascension": null,
+   "max_hp_ascension": null,
+   "moves": [
+    {
+     "id": "ROAR",
+     "name": "Roar",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "STRONG_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "SLAM",
+     "name": "Slam",
+     "damage": 25,
+     "damage_ascension": 30,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "DROOL",
+     "name": "Drool",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "BUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "NOMNOMNOM",
+     "name": "Nomnomnom",
+     "damage": 5,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "TIMEEATER",
+   "name": "Time Eater",
+   "type": "Boss",
+   "act": "beyond",
+   "min_hp": 456,
+   "max_hp": 456,
+   "min_hp_ascension": 480,
+   "max_hp_ascension": 480,
+   "moves": [
+    {
+     "id": "REVERBERATE",
+     "name": "Reverberate",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 3,
+     "block": null
+    },
+    {
+     "id": "RIPPLE",
+     "name": "Ripple",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEFEND_DEBUFF",
+     "hits": 1,
+     "block": 20
+    },
+    {
+     "id": "HEAD_SLAM",
+     "name": "Head Slam",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "HASTE",
+     "name": "Haste",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "BUFF",
+     "hits": 1,
+     "block": 26
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "TRANSIENT",
+   "name": "Transient",
+   "type": "Elite",
+   "act": "beyond",
+   "min_hp": 999,
+   "max_hp": 999,
+   "min_hp_ascension": null,
+   "max_hp_ascension": null,
+   "moves": [
+    {
+     "id": "ATTACK",
+     "name": "Attack",
+     "damage": 30,
+     "damage_ascension": 40,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "WRITHINGMASS",
+   "name": "Writhing Mass",
+   "type": "Elite",
+   "act": "beyond",
+   "min_hp": 160,
+   "max_hp": 160,
+   "min_hp_ascension": 175,
+   "max_hp_ascension": 175,
+   "moves": [
+    {
+     "id": "BIG_HIT",
+     "name": "Big Hit",
+     "damage": 32,
+     "damage_ascension": 38,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "MULTI_HIT",
+     "name": "Multi Hit",
+     "damage": 7,
+     "damage_ascension": 9,
+     "intent": "ATTACK",
+     "hits": 3,
+     "block": null
+    },
+    {
+     "id": "ATTACK_BLOCK",
+     "name": "Attack Block",
+     "damage": 15,
+     "damage_ascension": 16,
+     "intent": "ATTACK_DEFEND",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "ATTACK_DEBUFF",
+     "name": "Attack Debuff",
+     "damage": 10,
+     "damage_ascension": 12,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "MEGA_DEBUFF",
+     "name": "Mega Debuff",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "STRONG_DEBUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "CORRUPTHEART",
+   "name": "Corrupt Heart",
+   "type": "Boss",
+   "act": "ending",
+   "min_hp": 750,
+   "max_hp": 750,
+   "min_hp_ascension": 800,
+   "max_hp_ascension": 800,
+   "moves": [
+    {
+     "id": "BLOOD_SHOTS",
+     "name": "Blood Shots",
+     "damage": 2,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 12,
+     "block": null
+    },
+    {
+     "id": "ECHO_ATTACK",
+     "name": "Echo Attack",
+     "damage": 40,
+     "damage_ascension": 45,
+     "intent": "ATTACK",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "DEBILITATE",
+     "name": "Debilitate",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "STRONG_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "GAIN_ONE_STRENGTH",
+     "name": "Gain One Strength",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "BUFF",
+     "hits": 1,
+     "block": null
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "SPIRESHIELD",
+   "name": "Spire Shield",
+   "type": "Elite",
+   "act": "ending",
+   "min_hp": 110,
+   "max_hp": 110,
+   "min_hp_ascension": 125,
+   "max_hp_ascension": 125,
+   "moves": [
+    {
+     "id": "BASH",
+     "name": "Bash",
+     "damage": 12,
+     "damage_ascension": 14,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "FORTIFY",
+     "name": "Fortify",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "DEFEND",
+     "hits": 1,
+     "block": 30
+    },
+    {
+     "id": "SMASH",
+     "name": "Smash",
+     "damage": 34,
+     "damage_ascension": 38,
+     "intent": "ATTACK_DEFEND",
+     "hits": 1,
+     "block": 99
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "SPIRESPEAR",
+   "name": "Spire Spear",
+   "type": "Elite",
+   "act": "ending",
+   "min_hp": 160,
+   "max_hp": 160,
+   "min_hp_ascension": 180,
+   "max_hp_ascension": 180,
+   "moves": [
+    {
+     "id": "BURN_STRIKE",
+     "name": "Burn Strike",
+     "damage": 5,
+     "damage_ascension": 6,
+     "intent": "ATTACK_DEBUFF",
+     "hits": 2,
+     "block": null
+    },
+    {
+     "id": "PIERCER",
+     "name": "Piercer",
+     "damage": null,
+     "damage_ascension": null,
+     "intent": "BUFF",
+     "hits": 1,
+     "block": null
+    },
+    {
+     "id": "SKEWER",
+     "name": "Skewer",
+     "damage": 10,
+     "damage_ascension": null,
+     "intent": "ATTACK",
+     "hits": 3,
+     "block": null
+    }
+   ],
+   "image_url": null
+  }
+ ]
+}
