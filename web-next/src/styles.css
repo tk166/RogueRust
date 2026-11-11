@@ -1,0 +1,214 @@
+/* P1 样式：只做三件事 —— 铺满、覆盖层不吃事件、卡面文字的排版。
+   ⚠️ 文字层的 `pointer-events: none` 是**必须**的：否则 DOM 文字会挡住 R3F 的射线，
+   牌就再也点不到了（这是"3D 牌 + DOM 文字"组合的第一号坑）。 */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: #0b0f14;
+  color: #e6eef7;
+  font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+  touch-action: none; /* 触摸拖拽必须自己接管，否则浏览器会滚页面 */
+}
+
+.text-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* ── 卡面文字 ─────────────────────────────────────────────────────────────── */
+.card-text {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 6px 4px 0;
+  will-change: transform;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+}
+
+.card-text__cost {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  color: #ffd166;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.card-text__title {
+  color: #f2f7fc;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.card-text.is-selected .card-text__title {
+  color: #ffffff;
+}
+
+/* 紧凑态：屏幕太窄放不下标题 ⇒ 只留费用数字。
+   注意 `display:none` 而不是 `visibility:hidden` —— 闸门要能分辨"读得到"与"明确收起"。 */
+.card-text.is-compact .card-text__title,
+.card-text.is-compact .card-text__rules {
+  display: none;
+}
+
+.card-text.is-compact .card-text__cost {
+  position: static;
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+.card-text__rules {
+  margin-top: 6px;
+  color: #c8d8e8;
+  line-height: 1.35;
+  text-align: center;
+  /* 选中态宽度有限：允许换行，但**不裁切**（闸门断言 scrollHeight <= clientHeight） */
+  white-space: normal;
+  word-break: break-word;
+}
+
+.card-text[data-kind="attack"] .card-text__title {
+  color: #ffd9d2;
+}
+.card-text[data-kind="skill"] .card-text__title {
+  color: #d6ecff;
+}
+.card-text[data-kind="power"] .card-text__title {
+  color: #e8d6ff;
+}
+
+/* ── 敌人标签 ─────────────────────────────────────────────────────────────── */
+.enemy-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 3px 8px;
+  border-radius: 7px;
+  background: rgba(10, 16, 22, 0.72);
+  border: 1px solid rgba(120, 150, 180, 0.25);
+  will-change: transform;
+  white-space: nowrap;
+}
+
+.enemy-label__name {
+  font-size: 12px;
+  font-weight: 700;
+  color: #e6eef7;
+}
+
+.enemy-label__hp {
+  font-size: 11px;
+  color: #ff9d8a;
+  font-variant-numeric: tabular-nums;
+}
+
+.enemy-label__intent {
+  font-size: 10px;
+  color: #9fb3c6;
+}
+
+/* ── 详情卡 ───────────────────────────────────────────────────────────────── */
+.detail-card {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  transform: translate(-50%, -50%);
+  width: min(86vw, 340px);
+  padding: 18px 20px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #1a2431 0%, #121a24 100%);
+  border: 1px solid rgba(140, 175, 210, 0.35);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+.detail-card__title {
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.detail-card__cost {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #ffd166;
+}
+
+.detail-card__rules {
+  margin-top: 12px;
+  color: #cfdded;
+  line-height: 1.5;
+}
+
+/* ── 模态：**必须**盖住整屏并吃掉事件，否则"输入隔离"无从谈起 ───────────────── */
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 8, 12, 0.72);
+}
+
+.modal {
+  width: min(84vw, 320px);
+  padding: 18px 20px;
+  border-radius: 12px;
+  background: #16202b;
+  border: 1px solid rgba(140, 175, 210, 0.3);
+}
+
+.modal h2 {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+
+.modal p {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: #a9bccd;
+  line-height: 1.5;
+}
+
+.modal button {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(140, 175, 210, 0.4);
+  background: #22303d;
+  color: #e6eef7;
+  font-size: 14px;
+  cursor: pointer;
+}

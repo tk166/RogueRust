@@ -1,0 +1,41 @@
+{
+ "playerStrings": 85,
+ "distinctCjkGlyphs": 156,
+ "perSource": {
+  "sts/content/cards.json": 61,
+  "sts/content/statuses.json": 43,
+  "sts/content/enemies.json": 40,
+  "sts/content/relics.json": 36
+ },
+ "subsets": [
+  {
+   "font": "微软雅黑",
+   "format": "ttf",
+   "bytes": 108652,
+   "fullFontBytes": 19704352,
+   "magic": "\u0000\u0001\u0000\u0000"
+  },
+  {
+   "font": "微软雅黑",
+   "format": "woff2",
+   "bytes": 64408,
+   "fullFontBytes": 19704352,
+   "magic": "wOF2"
+  },
+  {
+   "font": "黑体",
+   "format": "ttf",
+   "bytes": 40268,
+   "fullFontBytes": 9745792,
+   "magic": "\u0000\u0001\u0000\u0000"
+  },
+  {
+   "font": "黑体",
+   "format": "woff2",
+   "bytes": 20116,
+   "fullFontBytes": 9745792,
+   "magic": "wOF2"
+  }
+ ],
+ "domOverlayBytes": 0
+}

@@ -45,6 +45,12 @@ export async function openPage({
   gate = "BROWSER_TEST",
   waitFor = "Boolean(window.ex)",
   /**
+   * 要打开的页面，相对仓库根。默认是旧页面 `web/index.html`；`web-next/`（P1 的 R3F PoC）
+   * 传 `web-next/dist/index.html`。⚠️ 两者共用同一个静态服务器与同一份 CDP 装置 ——
+   * "启动浏览器并跟它说话"这件事只应该有一份实现（两份必然漂）。
+   */
+  page = "web/index.html",
+  /**
    * §168: the bitmap is only comparable across runs if the viewport is. The Chrome window defaults
    * to whatever the OS gives it (764x485 here), and DPI changes `deviceScaleFactor` -- so a pixel
    * gate that does not pin these is measuring the machine, not the page.
@@ -280,7 +286,7 @@ export async function openPage({
 
   const suffix = query ? `?${query}` : "";
   const loaded = await send("Page.navigate", {
-    url: `http://127.0.0.1:${port}/web/index.html${suffix}`,
+    url: `http://127.0.0.1:${port}/${page}${suffix}`,
   });
   if (loaded.errorText) fail(`navigation failed: ${loaded.errorText}`);
 
@@ -306,6 +312,19 @@ export async function openPage({
       }
       const shot = await send("Page.captureScreenshot", params);
       return decodePng(Buffer.from(shot.data, "base64"));
+    },
+    /**
+     * 同一张截图的**原始 PNG 字节**，用来落成证据文件。
+     * `screenshot()` 解成像素是给"断言关于画面"的闸门用的；写文件要的是编码后的字节，
+     * 两者共用一次 `Page.captureScreenshot` 的语义，只是产物不同。
+     */
+    async screenshotPng(rect = null) {
+      const params = { format: "png", fromSurface: true, captureBeyondViewport: false };
+      if (rect) {
+        params.clip = { ...rect, scale: 1 };
+      }
+      const shot = await send("Page.captureScreenshot", params);
+      return Buffer.from(shot.data, "base64");
     },
     evaluate,
     probe,

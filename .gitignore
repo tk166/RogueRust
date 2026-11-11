@@ -49,3 +49,10 @@ desktop.ini
 
 # ── Web/wasm 构建产物（一条 cargo 命令即可重建，见 web/README.md）────────────
 web/*.wasm
+
+# ── 新 UI（P1，`web-next/`）─────────────────────────────────────────────────
+# 依赖不入库（`npm ci` 可重建）；**构建产物 dist/ 入库** —— 闸门 25 靠它做到
+# "不需要 npm、不需要网络"。改源码后必须 `npm run build`，否则闸门测的是旧包。
+web-next/node_modules/
+# 子集字体是 `native/ui_font_measure.py` 的产物，字节数记在 font-measure.json 里
+docs/ui-next-p1/subset-*

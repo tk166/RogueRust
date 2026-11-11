@@ -225,14 +225,14 @@ python -m http.server 8000
 | `kernel/rd-firmware/` | 裸机启动壳（独立的 `[workspace]`，只在 riscv 目标上存在）——**只为证明链接得过** |
 | `kernel/rd-hashdump` `rd-rngdump` `rd-sizeprobe` `rd-fightdump` | 诊断二进制：哈希对拍、洗牌序列对拍、RISC-V 代码体积、把一局战斗逐步打出来 |
 | `tools/contentc/` | **Python 内容编译器**：JSON 源 → `rdcf` 二进制镜像（段目录 + 字符串池 + 效果程序 IR） |
-| `tools/acceptance.ps1` | **聚合验收**：24 道闸门（含 `coverage-matrix`、`state-fields`、`ui-state` 与 `ui-abi`），一道红就整体红 |
+| `tools/acceptance.ps1` | **聚合验收**：25 道闸门（含 `coverage-matrix`、`state-fields`、`ui-state`、`ui-abi` 与 `ui-next`），一道红就整体红 |
 | `tools/rdcf_verify.py` `rdcf_terms.py` | 内容镜像的**独立**字节级校验（段目录 / count×stride / term 表形状） |
 | `web/` | 前端（零构建、零 CDN）：`index.html` + `ui_render.js`（战斗语义）+ `ui_panels.js`（14 个节点状态）+ `map.html` + `pixels.mjs`（像素度量）+ 门 13–20 的脚本 |
 | `native/RogueDeck.Oracle` `RogueDeck.Native` | C# 侧：对拍导出（NativeAOT）与 RL 环境 ABI |
 | `native/*.py` | 三类：**对拍/校验驱动**（`fight_diff.py`、`gap_check.py`、`sts_content_check.py`…）、**`doc_*.py`**（每一节往 `port-plan.md` 追加章节的脚本，与正文一一对应）、**`patch_*.py` / `negctl_*.py`**（那一节改动源码与**反证**的脚本，留作记录） |
 | `py/roguedeck_env/` | RL 环境的 Python 封装（`ctypes`，多进程 + 批量观察 + 吞吐基准） |
 | `corpus/` | 对拍语料：`golden_v1.jsonl`、`hash_cases/*.txt`、`coverage.json`（份数以闸门输出为准） |
-| `docs/` | `port-plan.md`（主计划 §1–§306）、`spec/`（19 份规格书）、`sts-wiki-gap.md`（缺口清单；"我们有多少"由 `native/gap_check.py` 重算，"还差哪些牌"由 `native/audit_card_gap.py` 与 wiki 卡表对账）、`coverage-matrix.md`（**生成物**：每个实体的 Implemented / TestNamed / HarnessOnly / SourceTie / DeclaredDeviation / Evidence，闸门 21；带 `--selftest` 的五个对抗性夹具）、`event-gaps.md`（事件侧缺口，§306 全面核对）、`mechanism-gaps-analysis.md`（两个机制缺口的分析记录与**关闭状态**）、**`ui-abi-audit.md`**（**新 UI 的 P0 契约基线**：52 个导出的实测行为、11 个真实场景的原始 dump、未验证清单；闸门 24 由 `native/ui_abi_dump.mjs --check` 守）、**`ui-state-model.md`**（**场景 × 层 × 字段 × 接口**：每个 UI 字段的取值域、何时变、从哪个导出读，以及 15 条"3D 重写会撞上"的缺口；闸门 23 钉住"文档点名的导出都存在、每个导出都被登记"） |
+| `docs/` | `port-plan.md`（主计划 §1–§306）、`spec/`（19 份规格书）、`sts-wiki-gap.md`（缺口清单；"我们有多少"由 `native/gap_check.py` 重算，"还差哪些牌"由 `native/audit_card_gap.py` 与 wiki 卡表对账）、`coverage-matrix.md`（**生成物**：每个实体的 Implemented / TestNamed / HarnessOnly / SourceTie / DeclaredDeviation / Evidence，闸门 21；带 `--selftest` 的五个对抗性夹具）、`event-gaps.md`（事件侧缺口，§306 全面核对）、`mechanism-gaps-analysis.md`（两个机制缺口的分析记录与**关闭状态**）、**`ui-abi-audit.md`**（**新 UI 的 P0 契约基线**：52 个导出的实测行为、11 个真实场景的原始 dump、未验证清单；闸门 24 由 `native/ui_abi_dump.mjs --check` 守）、**`ui-next-p1.md`**（**P1 的 R3F PoC 实测**：中文可读性三档与不变量、字形图集体积（156 字形 / 微软雅黑 64 KB woff2 / DOM 覆盖层 0 字节）、1.85 MB→692 KB gzip 的体积账、闸门 25 抓到的五处"看起来对"与三处假绿；闸门 25 由 `native/ui_next_check.mjs` 守，`web-next/dist/` 入库所以不需要 npm）、**`ui-state-model.md`**（**场景 × 层 × 字段 × 接口**：每个 UI 字段的取值域、何时变、从哪个导出读，以及 15 条"3D 重写会撞上"的缺口；闸门 23 钉住"文档点名的导出都存在、每个导出都被登记"） |
 | `ref/` | 参考实现的浅克隆位置（**不在本仓库**，见 §9） |
 | `sts/` | **早期 Python 原型**，已被 Rust 内核取代，保留作参照（不参与任何闸门） |
 
