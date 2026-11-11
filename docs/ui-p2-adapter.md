@@ -116,11 +116,40 @@ UI_WASM PASS exports=234 content=0x54af44dd hand=5 enemies=2 steps=15 result=vic
 
 ---
 
-## 5. 还没做的（第二步）
+## 5. 第二步（已完成）：主页面接真 wasm
 
-- **主页面换成真实数据源**：`Stage`/`TextOverlay` 现在吃 `MockScene`，要改成吃
-  `CombatSnapshot` + 名字查找（`rd_env_card_name_*` / `_enemy_name_*`）。计划里叫
-  `CombatView` 这层 view model。
+`CombatView` 是渲染层唯一认识的数据形状，两个生产者（`viewFromMock` / `viewFromWasm`）填它。
+字段名刻意与 P1 的 `MockScene` 一致 ⇒ 换数据源只改了类型与 import，**一行渲染逻辑都没动**。
+
+落点表也进了视图（`view.optionsFor`）：wasm 那边直接读内核动作表，`actionIndex` 就是
+`rd_env_step` 的入参。UI 不再自己算"能不能打这个敌人"。
+
+| 模式 | 触发 | 守什么 |
+|---|---|---|
+| mock | `?mock` | P1 的 94 条渲染/手势断言（确定局面） |
+| wasm | 默认 | P2 的数据源断言 |
+
+### 一处"半可用"被当场抓住
+
+第一版 `view = MOCK_MODE || !wasmView ? viewFromMock(scene) : wasmView` —— wasm 没装载好时**静默
+用 Mock**。闸门 29 前几条立刻绿了：`mode()` 说 `wasm`，视图里却是 10 张 `打击/防御`、72 血。
+一副能拖能打却与内核无关的牌 = plan 明令禁止的"半可用"。改成空局面 + 状态条（装载中/失败原因）。
+
+### 闸门 29 `ui-wasm-ui`
+
+```
+UI_WASM_UI PASS mode=wasm hand=4 energy=2 enemy0=28->22 dom-synced=1
+```
+
+从 UI 拖一张攻击牌：手牌 5→4、能量 3→2、**只有**被指的敌人 28→22，而且 **DOM 上的血量也变成
+22/28**（不是只改了内存里的 view）。结束回合走内核动作：round 1→2、hp 80→68。
+
+两处竞态（都是"读得太早"，会变成假红）：视图就绪 ≠ 布局就绪（`layout().cards` 由 `useFrame`
+每帧写）；`endTurn()` 之后要等 React 重渲染再读 `view()`。
+
+## 6. 还没做的
+
+- **卡名是定义 id**（`bash` / `strike` / `defend`）：`rd_env_card_name_*` 返回定义 id，本地化是后续的事；
 - **待决选牌（`PendingChoice`）**：`rd_env_choice_*` 一族没接。战斗中出现选牌时动作表为空，
   闸门 28 的循环会把这种情况标成 `stuck` 并停止（**不假绿**）。
 - **Beat（1–13 类演出）**：`rd_env_beat_*` 没接。目前 UI 靠观察向量 diff（`diffObservations`）。

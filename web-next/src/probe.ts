@@ -7,12 +7,21 @@
 import type { MachineStore } from "./store";
 import type { ScreenLayout } from "./stage/layout";
 import type { MockScene } from "./mock/scene";
+import type { CombatView } from "./view/combatView";
+import type { WasmDiagnostics } from "./wasm/host";
 import type { CommitLogEntry } from "./App";
 
 export interface ProbeOptions {
   store: MachineStore;
   layout: ScreenLayout;
   scene: () => MockScene;
+  /** 渲染层实际拿到的视图（Mock 或 wasm 适配后的）。 */
+  view: () => CombatView;
+  mode: () => "mock" | "wasm";
+  wasmDiagnostics: () => WasmDiagnostics | null;
+  wasmError: () => string | null;
+  /** 结束回合（wasm 侧走内核动作；Mock 侧只推进回合数）。 */
+  endTurn: () => { accepted: boolean; code: number | null };
   commits: () => CommitLogEntry[];
   rebounds: () => string[];
   detailSlot: () => number;
@@ -59,6 +68,21 @@ export interface Probe {
   hovered: () => { card: number; enemy: number };
   openDetail: (slot: number) => void;
   setModal: (open: boolean) => void;
+  /** 渲染层实际拿到的视图。 */
+  view: () => {
+    mode: string;
+    hero: { hp: number; hpMax: number; block: number; energy: number; maxEnergy: number };
+    hand: { id: string; name: string; cost: number | "X"; targeted: boolean; playable: boolean; rules: string }[];
+    enemies: { slot: number; name: string; hp: number; hpMax: number; alive: boolean; intent: string }[];
+    turn: number;
+    round: number;
+    result: string;
+  };
+  /** `?mock` ⇒ mock，否则 wasm。 */
+  mode: () => "mock" | "wasm";
+  wasmDiagnostics: () => WasmDiagnostics | null;
+  wasmError: () => string | null;
+  endTurn: () => { accepted: boolean; code: number | null };
   /** 手牌文字的字号（闸门断言可读性用）。 */
   typeScale: () => Record<string, { title: number; rules: number }>;
   /** 帧率采样：在 `ms` 毫秒内数 rAF。headless 是软件光栅，数字只做记录，不当判据。 */
@@ -134,6 +158,36 @@ export function installProbe(options: ProbeOptions): void {
     detailSlot: () => options.detailSlot(),
     modalOpen: () => options.modalOpen(),
     hovered: () => ({ card: options.hoveredCard(), enemy: options.hoveredEnemy() }),
+    view: () => {
+      const view = options.view();
+      return {
+        mode: view.mode,
+        hero: { ...view.hero },
+        hand: view.hand.map((card) => ({
+          id: card.id,
+          name: card.name,
+          cost: card.cost,
+          targeted: card.targeted,
+          playable: card.playable,
+          rules: card.rules,
+        })),
+        enemies: view.enemies.map((enemy) => ({
+          slot: enemy.slot,
+          name: enemy.name,
+          hp: enemy.hp,
+          hpMax: enemy.hpMax,
+          alive: enemy.alive,
+          intent: enemy.intent,
+        })),
+        turn: view.turn,
+        round: view.round,
+        result: view.result,
+      };
+    },
+    mode: options.mode,
+    wasmDiagnostics: options.wasmDiagnostics,
+    wasmError: options.wasmError,
+    endTurn: options.endTurn,
     openDetail: options.openDetail,
     setModal: options.setModal,
     typeScale: () => ({

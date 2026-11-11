@@ -17,7 +17,7 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import type { MockScene } from "../mock/scene";
+import type { CombatView } from "../view/combatView";
 import { layout, type CardScreen, type EnemyScreen } from "./layout";
 import { computeCombatFormation } from "./formation";
 import {
@@ -59,7 +59,8 @@ export function fanTransform(index: number, count: number, layout: CombatLayout)
 }
 
 export interface StageProps {
-  scene: MockScene;
+  /** 渲染层只认识 `CombatView`：Mock 与真 wasm 都由生产者适配成这个形状。 */
+  scene: CombatView;
   /** 抬起的牌（拖拽/选中中）；其余牌回落到手牌位置。 */
   liftedSlot: number;
   hoverSlot: number;

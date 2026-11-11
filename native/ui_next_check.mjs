@@ -35,7 +35,7 @@ function check(ok, label, detail = "") {
 
 const page = await openPage({
   page: "web-next/dist/index.html",
-  query: "debug&still",
+  query: "mock&debug&still",
   gate: GATE,
   waitFor: "Boolean(window.__p1 && window.__p1.ready)",
 });
@@ -719,7 +719,7 @@ const handCases = [
 ];
 for (const handCase of handCases) {
   await page.send("Page.navigate", {
-    url: `http://127.0.0.1:${page.port}/web-next/dist/index.html?debug&still&hand=${handCase.count}`,
+    url: `http://127.0.0.1:${page.port}/web-next/dist/index.html?mock&debug&still&hand=${handCase.count}`,
   });
   // ⚠️ 判据是"这一页真的换成 hand=N 了"，不是"有个探针在"：导航未提交时
   // `window.__p1` 还是**旧页面**的，照着它判断会对着旧布局断言。
@@ -780,7 +780,7 @@ for (const handCase of handCases) {
 
 // 回到默认局面，别把后续状态带走（这一段之后没有别的断言，但保持干净）。
 await page.send("Page.navigate", {
-  url: `http://127.0.0.1:${page.port}/web-next/dist/index.html?debug&still`,
+  url: `http://127.0.0.1:${page.port}/web-next/dist/index.html?mock&debug&still`,
 });
 await sleep(300);
 

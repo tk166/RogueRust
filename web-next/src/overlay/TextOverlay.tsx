@@ -11,7 +11,7 @@
 
 import { useEffect, useRef } from "react";
 import { layout } from "../stage/layout";
-import type { MockCard, MockScene } from "../mock/scene";
+import type { CombatView, ViewCard } from "../view/combatView";
 
 /** 三档字号：手牌态只显示标题，选中态显示规则，详情态放大。数字写死是为了让闸门能断言。 */
 export const TYPE_SCALE = {
@@ -31,7 +31,7 @@ export const TYPE_SCALE = {
 export const COMPACT_BELOW_PX = 44;
 
 export interface TextOverlayProps {
-  scene: MockScene;
+  scene: CombatView;
   liftedSlot: number;
   /** [P1-UX] 仅桌面 hover；触屏通过按压/长按进入大卡预览。 */
   hoverCardSlot: number;
@@ -133,7 +133,7 @@ export function TextOverlay({ scene, liftedSlot, hoverCardSlot, detailSlot, moda
         <div key={enemy.id} className="enemy-label" data-enemy={enemy.slot}>
           <span className="enemy-label__name">{enemy.name}</span>
           <span className="enemy-label__hp">
-            {enemy.hp}/{enemy.maxHp}
+            {enemy.hp}/{enemy.hpMax}
           </span>
           <span className="enemy-label__intent">{enemy.intent}</span>
         </div>
@@ -145,7 +145,7 @@ export function TextOverlay({ scene, liftedSlot, hoverCardSlot, detailSlot, moda
   );
 }
 
-function DetailCard({ card, onClose }: { card: MockCard; onClose: () => void }) {
+function DetailCard({ card, onClose }: { card: ViewCard; onClose: () => void }) {
   return (
     <div className="detail-card">
       {/* [P1-UX] 触屏与键盘用户可见的关闭入口，不依赖探针。 */}
