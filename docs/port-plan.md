@@ -25690,3 +25690,60 @@ plan P6 的退出条件：**提供可复现的设备/浏览器/尺寸/性能记�
 * **真机**（iOS Safari / Android Chrome）与真机安全区 inset —— 只有 CDP 仿真；
 * **GPU 侧的性能**（draw call、显存）—— 无头软件光栅的数字没有意义，所以只记 rAF 帧间隔；
 * **长时 soak**（小时级）与内存曲线 —— 只做了 8 次重开 + 26 步长局的趋势检查。
+
+---
+
+## §367 P7 交付：对等验收、部署产物、默认入口切换
+
+plan P7 的退出条件：*"新旧入口同一内核版本下的关键游戏状态与动作结果一致；新 UI 没有无依据的
+游戏规则分支。"* 完整对等清单在 `docs/ui-parity.md`。
+
+### 367.1 同一个内核（闸门 41 `ui-parity`）
+
+三件事：
+
+1. **逐字节一致**：`web/rd_wasm.wasm`（唯一产物）== `web-next/dist/rd_wasm.wasm` ==
+   `wasm.json` 的 sha256。"两个内核版本"在结构上不可能存在（`scripts/sync-wasm.mjs` 只复制，
+   不重编）。
+2. **内核侧脚本 ⇄ 新入口状态**：在 **Node 里直接跑 wasm**（原始导出，不经过任何界面）跑一段
+   脚本（开局 → 祝福 → 走一格 → 结算 → 开战 → 出三张牌），再在浏览器里用**新入口**走同样的
+   步骤，逐检查点比 8 个运行层字段（`env-abi.md` §11.3 的下标）。
+   证据串：`UI_PARITY PASS checkpoints=8 fields=64 sha=match old=alive`。
+3. **旧入口还活着**：`web/index.html` 仍能装载**同一份** wasm、开局、相位正确（19/148 长度）。
+
+⚠️ 为什么不拿旧页面当参照物：界面是**被验收的对象**，拿它验另一个界面就是自己验自己。
+共同底座是 wasm。
+
+### 367.2 部署产物（闸门 42 `ui-deploy`）
+
+`web-next/scripts/serve.mjs` 是一台**明确知道自己在干什么**的静态服务器：
+
+| 项 | 规则 | 为什么 |
+|---|---|---|
+| MIME | `.wasm` → `application/wasm` | `instantiateStreaming` 只认它；用错就白屏 |
+| 缓存 | `/assets/*` → `immutable` 一年；`*.html` / `wasm.json` / `rd_wasm.wasm` → `no-cache` + ETag | 带哈希的可以永久缓存；HTML 缓存住就会去要已删除的资源 |
+| 版本 | 启动时校验 `wasm.json.sha256` == 磁盘 wasm 的 sha256，不一致**拒绝启动** | "换了 wasm 忘更新 manifest"这类错不该走到玩家屏幕上 |
+| 入口 | `/` = 默认入口；`/legacy/*` = 旧入口（永远可达） | P7 要求保留 `web/`，且切换可回退 |
+
+闸门还断言：页面引用的每个 `/assets/*` 都能取到、带哈希的是 immutable、没有 `.map` 可下载、
+越界路径被拒绝。
+
+### 367.3 默认入口切换（独立 commit）
+
+`serve.mjs` 里 `export const DEFAULT_ENTRY = "legacy" | "run"` —— **切换就是改这一行**，
+所以回退是一次单行 revert。切换本身放在**单独的 commit** 里（plan 的硬要求）。
+
+### 367.4 中文覆盖补完
+
+事件表（`native/zh_events.py`）在 §365.5 交付：36 个事件名、35 段正文（官方中文）、
+32 条选项标签；子节点正文回退英文并计数。
+
+### 367.5 已知缺口（如实记录，见 `docs/ui-parity.md` §2）
+
+* **存档 / 回档 / 回放**：内核导出都在（`rd_run_archive_*` / `rd_run_restore_from` /
+  `rd_run_replay_*`），**旧入口有界面、新入口没有**。`web/` 保留就是这个用途。
+* **bench 面板**与**脚本化输入**：旧入口有，新入口用探针/设置面板代替。
+
+### 367.6 数字
+
+闸门 40 → **42**；units 1233、导出 234、四条对拍不动；新增 `docs/ui-parity.md`。

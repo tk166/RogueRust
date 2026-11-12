@@ -225,7 +225,7 @@ python -m http.server 8000
 | `kernel/rd-firmware/` | 裸机启动壳（独立的 `[workspace]`，只在 riscv 目标上存在）——**只为证明链接得过** |
 | `kernel/rd-hashdump` `rd-rngdump` `rd-sizeprobe` `rd-fightdump` | 诊断二进制：哈希对拍、洗牌序列对拍、RISC-V 代码体积、把一局战斗逐步打出来 |
 | `tools/contentc/` | **Python 内容编译器**：JSON 源 → `rdcf` 二进制镜像（段目录 + 字符串池 + 效果程序 IR） |
-| `tools/acceptance.ps1` | **聚合验收**：40 道闸门（含 `coverage-matrix`、`state-fields`、`ui-state`、`ui-abi`、`ui-next`、`ui-pointer`、`ui-pure`、`ui-wasm`、`ui-wasm-ui`、`ui-wasm-choice`、`ui-wasm-fixtures`、`ui-wasm-xcost`、`ui-scene`、`ui-next-loop`、`ui-p4-models`、`ui-next-p4`、`ui-beats`、`ui-next-p5`、`ui-mobile` 与 `ui-soak-p6`），一道红就整体红 |
+| `tools/acceptance.ps1` | **聚合验收**：42 道闸门（含 `coverage-matrix`、`state-fields`、`ui-state`、`ui-abi`、`ui-next`、`ui-pointer`、`ui-pure`、`ui-wasm`、`ui-wasm-ui`、`ui-wasm-choice`、`ui-wasm-fixtures`、`ui-wasm-xcost`、`ui-scene`、`ui-next-loop`、`ui-p4-models`、`ui-next-p4`、`ui-beats`、`ui-next-p5`、`ui-mobile` 与 `ui-soak-p6`），一道红就整体红 |
 | `tools/rdcf_verify.py` `rdcf_terms.py` | 内容镜像的**独立**字节级校验（段目录 / count×stride / term 表形状） |
 | `web/` | 前端（零构建、零 CDN）：`index.html` + `ui_render.js`（战斗语义）+ `ui_panels.js`（14 个节点状态）+ `map.html` + `pixels.mjs`（像素度量）+ 门 13–20 的脚本 |
 | `native/RogueDeck.Oracle` `RogueDeck.Native` | C# 侧：对拍导出（NativeAOT）与 RL 环境 ABI |
@@ -348,3 +348,57 @@ python native/env_check.py       # RL ABI
 ```
 
 **只读**，不要在里面跑 `dotnet`（它自己的构建会污染工作树）。
+
+---
+
+## 10. 新前端 `web-next/`（P1–P7 的产物）
+
+旧入口 `web/` 仍然保留（它是回归夹具，也是**存档/回放**的落点），但产品路径在 `web-next/`。
+
+### 10.1 构建
+
+```bash
+cd web-next
+npm ci                      # 只装前端依赖（three / r3f / vite / typescript）
+node scripts/sync-wasm.mjs  # 把 web/rd_wasm.wasm 复制进 public/ 并记 sha256（**不重编**）
+npm run build               # → dist/（产物入库，闸门不需要 npm 也能跑）
+```
+
+### 10.2 运行
+
+```bash
+node web-next/scripts/serve.mjs --port 8080 --entry run     # 新 UI
+node web-next/scripts/serve.mjs --port 8080 --entry legacy  # 旧 UI（默认）
+```
+
+* `/`            → 默认入口（由 `--entry` 决定；默认值就是**切换开关**，单行可回退）
+* `/legacy/*`    → 旧入口（永远可达）
+* 这台服务器会校验 `wasm.json` 的 sha256 与磁盘 wasm 一致，不一致**拒绝启动**；
+  `.wasm` 的 MIME 是 `application/wasm`（`instantiateStreaming` 的前提）。
+
+### 10.3 测试
+
+```bash
+powershell -File tools/acceptance.ps1     # 42 道闸门（约 10 分钟）
+node native/ui_parity_check.mjs           # 新旧入口同一内核（8 检查点 × 8 字段）
+node native/ui_deploy_check.mjs           # MIME / 缓存 / 版本一致性 / 入口可切换
+node native/ui_mobile_check.mjs           # 390×844 触控 + 安全区 + DPR 上限
+node native/ui_soak_p6_check.mjs          # 重开/长局/重载/context lost/动效偏好
+```
+
+### 10.4 已知缺口
+
+* **存档 / 回档 / 回放**：内核导出齐全，新入口**没有界面**（旧入口有）。见 `docs/ui-parity.md` §2。
+* **GLB 角色资产**：没有资产管线，只有程序化外观表 + 降级（`docs/ui-p5-beats.md` §6）。
+* **打赢 Boss 的幕间 E2E**：自动策略打不过第 16 层，只有拒绝路径与路由在守（§365.4）。
+* **真机**：移动端结论全部来自 CDP 仿真（`docs/ui-p6-devices.md` §1）。
+* 事件的**子节点正文**仍是英文（没有官方中文来源，已计数）。
+
+### 10.5 许可证
+
+* 本仓库的参考实现是 `RogueDeck-Core`（C#，**MIT**），按 commit `fd43e68…` 冻结，
+  `ref/` 是只读浅克隆且**不入库**。
+* 前端依赖：`three`（MIT）、`@react-three/fiber`（MIT）、`@react-three/uikit`（MIT）、
+  `vite`（MIT）、`typescript`（Apache-2.0）。
+* 中文文案来自 `spire-archive.com/api/sts1`（从游戏文件解析的社区数据）与
+  `slaythespire.wiki.gg`；**游戏内容本身的版权属于 Mega Crit**，本仓库只用于学习与研究。
