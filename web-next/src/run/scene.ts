@@ -196,10 +196,17 @@ export function isImplemented(scene: SceneId): boolean {
   switch (scene) {
     case SCENE.title:
     case SCENE.blessing:
+    case SCENE.blessingCard:
     case SCENE.map:
     case SCENE.preCombat:
     case SCENE.combat:
     case SCENE.reward:
+    case SCENE.shop:
+    case SCENE.rest:
+    case SCENE.chest:
+    case SCENE.event:
+    case SCENE.eventCard:
+    case SCENE.eventOffer:
     case SCENE.over:
     case SCENE.actCleared:
     case SCENE.actEnd:

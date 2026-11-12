@@ -29,13 +29,29 @@ export interface MapSceneProps {
   readonly map: MapModel;
   readonly onEnter: (index: number) => void;
   readonly onBlocked: (index: number) => void;
+  /**
+   * Boss 哨兵这一步能不能进（`rd_run_action_arg` 里有 `BOSS_NODE`）。
+   *
+   * ⚠️ 它**不在** `map.nodes` 里 —— 第 16 层在地图之外。所以这个徽章不是"装饰"，
+   * 它是第 15 层之后**唯一**的下一步。
+   */
+  readonly bossReachable: boolean;
+  readonly bossIndex: number;
   /** 遗物欠账/局终等覆盖层要求地图**不可操作**。 */
   readonly inert?: boolean;
 }
 
 const BOSS_ROW_KINDS = new Set<number>([NODE_KIND.boss, NODE_KIND.bossChest]);
 
-export function MapScene({ run, map, onEnter, onBlocked, inert = false }: MapSceneProps) {
+export function MapScene({
+  run,
+  map,
+  onEnter,
+  onBlocked,
+  bossReachable,
+  bossIndex,
+  inert = false,
+}: MapSceneProps) {
   const current = run.node;
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -94,10 +110,22 @@ export function MapScene({ run, map, onEnter, onBlocked, inert = false }: MapSce
         </p>
       </header>
 
-      {boss && (
-        <div className="map-boss" data-boss-sentinel={boss.index}>
-          <span aria-hidden>{nodeKindGlyph(boss.kind)}</span>
-          <span>{nodeKindLabel(boss.kind)}</span>
+      {/* Boss 哨兵：可点时是**按钮**（第 15 层之后唯一的下一步），不可点时只是徽章。 */}
+      {bossReachable && !inert ? (
+        <button
+          type="button"
+          className="map-boss is-reachable"
+          data-boss-sentinel={bossIndex}
+          data-boss-reachable="1"
+          onClick={() => onEnter(bossIndex)}
+        >
+          <span aria-hidden>{nodeKindGlyph(NODE_KIND.boss)}</span>
+          <span>{nodeKindLabel(NODE_KIND.boss)}（可前往）</span>
+        </button>
+      ) : (
+        <div className="map-boss" data-boss-sentinel={boss ? boss.index : -1}>
+          <span aria-hidden>{nodeKindGlyph(NODE_KIND.boss)}</span>
+          <span>{nodeKindLabel(NODE_KIND.boss)}</span>
         </div>
       )}
 

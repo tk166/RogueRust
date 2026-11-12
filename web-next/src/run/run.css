@@ -720,3 +720,470 @@ button.primary:disabled {
     width: 54px;
   }
 }
+
+/* ── P4：药水条 / 牌堆 / 商店 / 篝火 / 宝箱 / 事件 / 选择器 / 设置 ─────────── */
+
+.run-subbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 14px 6px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.potion-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.potion-slot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #131820;
+}
+
+.potion-name {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.potion-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.potion-actions button {
+  padding: 1px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.potion-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.run-potion-targeting {
+  color: var(--accent);
+}
+
+/* 商店 */
+.shop-shelf {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--panel);
+}
+
+.shop-shelf-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.shop-rows {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.shop-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #131820;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.shop-row:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.shop-row.is-unaffordable .shop-row-price {
+  color: var(--bad);
+}
+
+.shop-row.is-sold {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.shop-row-price {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.shop-service {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+}
+
+.shop-service button {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.shop-service button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* 篝火 */
+.rest-options {
+  display: grid;
+  gap: 10px;
+}
+
+.rest-option {
+  display: grid;
+  gap: 3px;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.rest-option:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--panel-2);
+}
+
+.rest-option-label {
+  font-weight: 600;
+}
+
+.rest-option-hint {
+  font-size: 12px;
+}
+
+/* 宝箱 */
+.chest-body {
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  padding: 26px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.chest-glyph {
+  font-size: 42px;
+  color: var(--accent);
+}
+
+.chest-loot {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+}
+
+/* 事件 */
+.event-text {
+  margin: 0;
+  padding: 14px 16px;
+  border-left: 3px solid var(--accent);
+  background: var(--panel);
+  border-radius: 0 10px 10px 0;
+  line-height: 1.65;
+  font-size: 14px;
+}
+
+.event-options {
+  display: grid;
+  gap: 10px;
+}
+
+.event-option {
+  display: grid;
+  gap: 3px;
+  text-align: left;
+  padding: 13px 15px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.event-option:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--panel-2);
+}
+
+.event-option.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.event-option-label {
+  font-weight: 600;
+}
+
+.event-option-effect {
+  font-size: 12px;
+}
+
+.event-option-why {
+  font-size: 11px;
+  color: var(--warn);
+}
+
+/* 牌组选择器 */
+.run-deck-select {
+  width: min(560px, 94vw);
+  max-height: 84vh;
+  display: grid;
+  gap: 10px;
+  grid-template-rows: auto auto 1fr auto;
+}
+
+.deck-select-head h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.deck-select-head p {
+  margin: 2px 0 0;
+  font-size: 12px;
+}
+
+.deck-select-filter {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #131820;
+  color: var(--text);
+  font: inherit;
+}
+
+.deck-select-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: auto;
+  min-height: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.deck-select-row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #131820;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.deck-select-row:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.deck-select-row.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.deck-select-index {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+}
+
+.deck-select-id {
+  font-size: 11px;
+}
+
+.deck-select-why {
+  font-size: 11px;
+  color: var(--warn);
+}
+
+/* 遗物欠账 */
+.run-pickup {
+  width: min(460px, 92vw);
+}
+
+.run-pickup-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.run-pickup-actions button,
+.run-pickup button[data-pickup-pick] {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* 牌堆浏览 */
+.run-pile {
+  width: min(520px, 94vw);
+  max-height: 80vh;
+  display: grid;
+  gap: 10px;
+  grid-template-rows: auto auto 1fr auto;
+}
+
+.pile-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.pile-tab {
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #131820;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.pile-tab.is-active {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* 设置 */
+.run-settings {
+  width: min(520px, 94vw);
+  max-height: 84vh;
+  overflow: auto;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.settings-grid div {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #131820;
+}
+
+.settings-grid dt {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.settings-grid dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-section {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.settings-section h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.settings-section ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+}
+
+.settings-log .is-good {
+  color: var(--good);
+}
+
+.settings-log .is-warn {
+  color: var(--warn);
+}
+
+.settings-log .is-bad {
+  color: var(--bad);
+}
+
+/* 战利品横幅（宝箱"打开即结束"，战利品在这里说） */
+.run-loot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: #1d2a1a;
+  border-bottom: 1px solid #2f4a28;
+  color: #cdeac0;
+  font-size: 13px;
+}
+
+.run-loot button {
+  margin-left: auto;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid #2f4a28;
+  background: #22331d;
+  color: #cdeac0;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* Boss 哨兵可点时是个按钮（第 15 层之后唯一的下一步） */
+.map-boss.is-reachable {
+  cursor: pointer;
+  border-color: var(--accent);
+  color: #ffd9a3;
+  box-shadow: 0 0 0 2px rgba(240, 161, 58, 0.28);
+  animation: node-pulse 1.8s ease-in-out infinite;
+  font: inherit;
+  font-size: 13px;
+}

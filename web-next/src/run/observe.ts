@@ -52,6 +52,16 @@ export const NODE_KIND = {
 
 export type NodeKindValue = (typeof NODE_KIND)[keyof typeof NODE_KIND];
 
+/**
+ * Boss 的**哨兵下标**（`rd_run::map::BOSS_NODE = 100`）。
+ *
+ * ⚠️ 第 16 层的 Boss **不在地图上**（`inv:§7.2`：floor 16 在地图之外），它是以"哨兵"的形式
+ * 出现在**动作表**里的。第一版只从 `map.nodes` 里找 Boss（`kind == 7`），于是：
+ * 第 15 层站定之后 `map.nodes` 里一个可达节点都没有，而内核其实给了一条合法动作
+ * （`enter_node(100)`）—— 界面看起来"没有下一步"，玩家软锁（闸门 36 实测）。
+ */
+export const BOSS_SENTINEL = 100;
+
 /** `?` 房掷出来的东西（`env-abi.md` §11.3 第 18 格，§272）。 */
 export const UNKNOWN_ROOM = {
   none: 0,

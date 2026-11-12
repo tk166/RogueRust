@@ -319,7 +319,17 @@ try {
     "每个场景都有中文名（不是回退到 id）"
   );
   check(isImplemented(SCENE.map) && isImplemented(SCENE.reward) && isImplemented(SCENE.combat), "P3 的三屏都标成已实现");
-  check(!isImplemented(SCENE.shop) && !isImplemented(SCENE.rest) && !isImplemented(SCENE.event), "P4 的屏还没标成已实现");
+  // P4 之后：商店/篝火/宝箱/事件/选牌都已有界面（`UnsupportedScene` 只剩兜底用途）。
+  check(
+    isImplemented(SCENE.shop) &&
+      isImplemented(SCENE.rest) &&
+      isImplemented(SCENE.chest) &&
+      isImplemented(SCENE.event) &&
+      isImplemented(SCENE.eventCard) &&
+      isImplemented(SCENE.eventOffer) &&
+      isImplemented(SCENE.blessingCard),
+    "P4 的七屏也标成已实现"
+  );
 } finally {
   await rm(out, { recursive: true, force: true });
 }

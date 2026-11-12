@@ -36,6 +36,15 @@ export interface RunProbe {
   combat(): unknown;
   /** 事件日志。 */
   log(): unknown;
+  /** P4 的屏（商店/篝火/宝箱/事件/欠账/药水）—— 一次读全，闸门不必逐字段拼。 */
+  screens(): unknown;
+  /** 战斗中的三个牌堆（没有战斗会话时是空表）。 */
+  piles(): unknown;
+  /** 待决选牌的问句（`rd_env_choice_*`）；`null` = 没有问句。 */
+  choice(): unknown;
+  choicePick(index: number, on: boolean): unknown;
+  choiceClear(): unknown;
+  choiceConfirm(): unknown;
   /** 原始 ABI 事实（诊断用：`activeSlot`/`inFight`/`exists` 三者一起看才能判断会话存在性）。 */
   debug(): unknown;
 
@@ -50,6 +59,27 @@ export interface RunProbe {
   takePotion(): unknown;
   takeRelic(): unknown;
   settleDefault(): unknown;
+
+  // ── P4 动作（与玩家按钮一一对应）──────────────────────────────────────────
+  buy(kind: string, slot: number): unknown;
+  leave(): unknown;
+  rest(): unknown;
+  smith(index: number): unknown;
+  toke(index: number): unknown;
+  lift(): unknown;
+  dig(): unknown;
+  recall(): unknown;
+  openChest(): unknown;
+  chooseEvent(slot: number): unknown;
+  takeEventOffer(slot: number): unknown;
+  pickEventCard(index: number): unknown;
+  pickBlessingCard(index: number): unknown;
+  pickupPickCard(index: number): unknown;
+  pickupAddCard(slot: number): unknown;
+  pickupSkip(): unknown;
+  pickupMaxHp(): unknown;
+  usePotion(slot: number, target: number): unknown;
+  dropPotion(slot: number): unknown;
 
   /**
    * 用**真 DOM 点击**走一步（闸门用它证明"玩家点得到"）。
@@ -117,6 +147,47 @@ export function installRunProbe(store: RunStore): void {
     violations: () => [...state().violations],
     combat: () => state().combat,
     log: () => [...state().log],
+
+    screens() {
+      const current = state();
+      return {
+        shop: current.shop,
+        rest: current.rest,
+        chest: current.chest,
+        event: current.event,
+        pickup: current.pickup,
+        potions: current.potions,
+        deck: [...current.deck],
+        deckTitles: [...current.deckTitles],
+      };
+    },
+
+    piles: () => store.piles(),
+
+    choice() {
+      const game = store.combat;
+      if (!game) return null;
+      return game.choice();
+    },
+    choicePick(index: number, on: boolean) {
+      const game = store.combat;
+      if (!game) return { code: -1 };
+      const code = game.pickChoice(index, on);
+      return { code, choice: game.choice() };
+    },
+    choiceClear() {
+      const game = store.combat;
+      if (!game) return { code: -1 };
+      const code = game.clearChoice();
+      return { code, choice: game.choice() };
+    },
+    choiceConfirm() {
+      const game = store.combat;
+      if (!game) return { code: -1, accepted: false };
+      const outcome = game.confirmChoice();
+      store.refresh();
+      return { ...outcome, choice: game.choice() };
+    },
     debug: () => ({ ...store.hostForCombat.run(), hasCombatSession: store.hostForCombat.hasCombatSession() }),
 
     start(seed: number, ascension: number) {
@@ -158,6 +229,83 @@ export function installRunProbe(store: RunStore): void {
     settleDefault() {
       const ok = store.settleDefault();
       return { ok, scene: window.__run!.scene(), violations: window.__run!.violations() };
+    },
+
+    buy(kind: string, slot: number) {
+      const code = store.buy(kind as "card" | "relic" | "potion" | "colorless", slot);
+      return { code, screens: window.__run!.screens(), violations: window.__run!.violations() };
+    },
+    leave() {
+      const code = store.leave();
+      return { code, scene: window.__run!.scene(), violations: window.__run!.violations() };
+    },
+    rest() {
+      const code = store.rest();
+      return { code, scene: window.__run!.scene(), run: window.__run!.run(), violations: window.__run!.violations() };
+    },
+    smith(index: number) {
+      const code = store.smith(index);
+      return { code, scene: window.__run!.scene(), violations: window.__run!.violations() };
+    },
+    toke(index: number) {
+      const code = store.toke(index);
+      return { code, scene: window.__run!.scene(), violations: window.__run!.violations() };
+    },
+    lift() {
+      const code = store.lift();
+      return { code, screens: window.__run!.screens(), violations: window.__run!.violations() };
+    },
+    dig() {
+      const code = store.dig();
+      return { code, scene: window.__run!.scene(), violations: window.__run!.violations() };
+    },
+    recall() {
+      const code = store.recall();
+      return { code, scene: window.__run!.scene(), violations: window.__run!.violations() };
+    },
+    openChest() {
+      const code = store.openChest();
+      return { code, screens: window.__run!.screens(), violations: window.__run!.violations() };
+    },
+    chooseEvent(slot: number) {
+      const code = store.chooseEvent(slot);
+      return { code, scene: window.__run!.scene(), violations: window.__run!.violations() };
+    },
+    takeEventOffer(slot: number) {
+      const code = store.takeEventOffer(slot);
+      return { code, scene: window.__run!.scene(), violations: window.__run!.violations() };
+    },
+    pickEventCard(index: number) {
+      const code = store.pickEventCard(index);
+      return { code, scene: window.__run!.scene(), violations: window.__run!.violations() };
+    },
+    pickBlessingCard(index: number) {
+      const code = store.pickBlessingCard(index);
+      return { code, scene: window.__run!.scene(), violations: window.__run!.violations() };
+    },
+    pickupPickCard(index: number) {
+      const code = store.pickupPickCard(index);
+      return { code, screens: window.__run!.screens(), violations: window.__run!.violations() };
+    },
+    pickupAddCard(slot: number) {
+      const code = store.pickupAddCard(slot);
+      return { code, screens: window.__run!.screens(), violations: window.__run!.violations() };
+    },
+    pickupSkip() {
+      const code = store.pickupSkip();
+      return { code, screens: window.__run!.screens(), violations: window.__run!.violations() };
+    },
+    pickupMaxHp() {
+      const code = store.pickupMaxHp();
+      return { code, screens: window.__run!.screens(), violations: window.__run!.violations() };
+    },
+    usePotion(slot: number, target: number) {
+      const code = store.usePotion(slot, target);
+      return { code, screens: window.__run!.screens(), violations: window.__run!.violations() };
+    },
+    dropPotion(slot: number) {
+      const code = store.dropPotion(slot);
+      return { code, screens: window.__run!.screens(), violations: window.__run!.violations() };
     },
 
     click(selector: string) {
