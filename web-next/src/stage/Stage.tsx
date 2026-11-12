@@ -76,7 +76,7 @@ export function Stage({
   scene, liftedSlot, hoverSlot, hoverCardSlot, hoveredEnemySlot, phase, followPointer,
   legalTargets, onCardDown,
 }: StageProps) {
-  const { camera, size, pointer } = useThree();
+  const { camera, size, pointer, gl } = useThree();
   // `?still`：冻结呼吸与插值，让证据截图逐字节可复现（见文件头）。
   const still = typeof window !== "undefined" && window.location.search.includes("still");
   const heroRef = useRef<THREE.Group>(null);
@@ -122,6 +122,17 @@ export function Stage({
 
   useFrame(({ clock }, delta) => {
     const t = still ? 0 : clock.getElapsedTime();
+
+    // ── 画布在**页面**里的原点 ────────────────────────────────────────────────
+    //
+    // `layout` 里的屏幕坐标必须是**视口**坐标（与 `event.clientX/clientY` 同一套），
+    // 否则"画布不在视口左上角"的页面里所有命中都会偏。
+    // 这正是 P3 的运行层外壳暴露出来的：顶栏占了 44px，画布从 y=44 开始，
+    // 于是 `hitX/hitY` 全是画布局部坐标 ⇒ 真玩家的拖拽、闸门的 3D 拾取都差 44px
+    // （P1/P2 的回归页画布铺满视口，所以一直没发现）。
+    const canvasRect = gl.domElement.getBoundingClientRect();
+    const originX = canvasRect.left;
+    const originY = canvasRect.top;
 
     // ── 版面：**一个**纯函数决定相机距离、可见范围、手牌位置与各区域边界 ────────
     const view = computeCombatLayout(
@@ -213,8 +224,8 @@ export function Stage({
       for (const [sx, sy] of CORNERS) {
         scratch.offset.set(sx * cardHalfW, sy * cardHalfH, 0);
         scratch.corner.copy(scratch.offset).applyMatrix4(group.matrixWorld).project(camera);
-        const px = (scratch.corner.x * 0.5 + 0.5) * size.width;
-        const py = (-scratch.corner.y * 0.5 + 0.5) * size.height;
+        const px = (scratch.corner.x * 0.5 + 0.5) * size.width + originX;
+        const py = (-scratch.corner.y * 0.5 + 0.5) * size.height + originY;
         if (px < minX) minX = px;
         if (px > maxX) maxX = px;
         if (py < minY) minY = py;
@@ -261,17 +272,21 @@ export function Stage({
       if (!group) return;
       group.getWorldPosition(scratch.world);
       scratch.projected.copy(scratch.world).project(camera);
-      const cx = (scratch.projected.x * 0.5 + 0.5) * size.width;
-      const cy = (-scratch.projected.y * 0.5 + 0.5) * size.height;
+      const cx = (scratch.projected.x * 0.5 + 0.5) * size.width + originX;
+      const cy = (-scratch.projected.y * 0.5 + 0.5) * size.height + originY;
       scratch.offset.set(0.44 * (formation.enemies[index]?.scale ?? 1), 0, 0);
       scratch.corner.copy(scratch.world).add(scratch.offset).project(camera);
-      const rx = (scratch.corner.x * 0.5 + 0.5) * size.width;
+      const rx = (scratch.corner.x * 0.5 + 0.5) * size.width + originX;
       enemies.push({ slot: enemy.slot, x: cx, y: cy, r: Math.abs(rx - cx) });
     });
     layout.enemies = enemies;
     layout.regions = view.regions;
     layout.width = size.width;
     layout.height = size.height;
+    // 画布原点（视口坐标）。消费方要把"视口坐标 ↔ 画布局部坐标"互转时用它，
+    // 不要假设画布在 (0,0)。
+    layout.originX = originX;
+    layout.originY = originY;
     // [P1-UX] 只在 "目标合法且真的被指向" 时画瞄准线，避免误导玩家。
     const aimTarget = formation.enemies.find((p) => p.slot === hoverSlot);
     const aimCard = liftedSlot >= 0 ? cardRefs.current[liftedSlot] : null;

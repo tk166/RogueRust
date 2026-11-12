@@ -61,6 +61,14 @@ export interface ScreenLayout {
   height: number;
   /** 已渲染的帧数；闸门等它 > 0 才算"投影有效"。 */
   frames: number;
+  /**
+   * 画布在**页面**里的原点（CSS 像素）。
+   *
+   * `cards`/`enemies` 里的坐标已经是**视口**坐标（与 `event.clientX/clientY` 同一套），
+   * 所以消费方通常不需要它；它存在是为了"从视口坐标反推画布局部坐标"这类诊断。
+   */
+  originX: number;
+  originY: number;
 }
 
 export const layout: ScreenLayout = {
@@ -70,4 +78,6 @@ export const layout: ScreenLayout = {
   width: 0,
   height: 0,
   frames: 0,
+  originX: 0,
+  originY: 0,
 };

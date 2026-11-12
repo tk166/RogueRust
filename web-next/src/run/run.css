@@ -1,0 +1,722 @@
+/* 运行层（`run.html`）的样式：地图 / 顶栏 / 场景 / 日志 / 覆盖层。
+ *
+ * 三条取舍：
+ * 1. **不引入 CSS 框架**：这一层要能在闸门的无头 Chrome 里确定性渲染，多一个依赖就多一处
+ *    "本地好看、无头不一样"的可能。
+ * 2. **布局只用 flex/grid + 百分比**：地图节点用归一化坐标（`MapModel.layout`）算百分比，
+ *    所以改窗口大小不会让连线错位。
+ * 3. **可达/不可达靠"亮度 + 环"区分，不只靠颜色**：色弱玩家也要能看出能去哪（P1 的可读性
+ *    要求沿用到这里）。 */
+
+:root {
+  --bg: #0d1014;
+  --panel: #161b22;
+  --panel-2: #1e252e;
+  --line: #2b3440;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --accent: #f0a13a;
+  --good: #3fb950;
+  --warn: #d29922;
+  --bad: #f85149;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+.run-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.run-status,
+.run-violation {
+  padding: 12px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+
+.run-violation {
+  background: #2b1416;
+  border-bottom: 1px solid var(--bad);
+  color: #ffdcd8;
+}
+
+.run-violation ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+/* ── 顶栏 ────────────────────────────────────────────────────────────────── */
+
+.run-topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.run-hp {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 150px;
+}
+
+.run-hp-bar {
+  position: relative;
+  width: 96px;
+  height: 10px;
+  background: #2a1a1c;
+  border-radius: 5px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+
+.run-hp-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #7a2f2f, #d14545);
+  transition: width 180ms ease-out;
+}
+
+.run-hp-text {
+  font-size: 13px;
+}
+
+.run-stat {
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font: inherit;
+}
+
+.run-deck-button {
+  cursor: pointer;
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.run-deck-button:hover {
+  border-color: var(--accent);
+}
+
+.run-scene-label {
+  margin-left: auto;
+  color: var(--accent);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+/* ── 场景容器（切换时淡入：让"换屏"是可感知的，而不是内容忽然变成另一段）──── */
+
+.run-main {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  animation: scene-in 160ms ease-out;
+  /* 战斗屏是 3D canvas：它必须**真的**拿到剩余高度。
+     ````
+     没有这两行时 `.app { height: 100% }` 在 flex 容器里解析成 auto ⇒ 画布只剩 150px 高，
+     手牌被压成一条缝（闸门 34 第一次跑就是在这个 150px 画布上拖牌，一按就空）。
+     ```` */
+  display: flex;
+  flex-direction: column;
+}
+
+.run-main > .app {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
+@keyframes scene-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.scene {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 20px 16px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.scene-head h1,
+.scene-head h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.scene-sub,
+.scene-foot,
+.scene-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+button.primary {
+  align-self: flex-start;
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: linear-gradient(180deg, #3a2a12, #2a1e0d);
+  color: #ffd9a3;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #4a3517, #35250f);
+}
+
+button.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── 标题 ────────────────────────────────────────────────────────────────── */
+
+.scene-title {
+  padding-top: 60px;
+  text-align: center;
+  align-items: center;
+}
+
+.scene-title h1 {
+  font-size: 40px;
+  letter-spacing: 0.12em;
+  margin: 0;
+}
+
+.title-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: stretch;
+  width: min(320px, 100%);
+  margin-top: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.field input[type="text"] {
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.field input[type="text"][aria-invalid="true"] {
+  border-color: var(--bad);
+}
+
+.field input[type="range"] {
+  accent-color: var(--accent);
+}
+
+.field-error {
+  margin: 0;
+  color: var(--bad);
+  font-size: 12px;
+}
+
+/* ── 祝福 ────────────────────────────────────────────────────────────────── */
+
+.blessing-list {
+  display: grid;
+  gap: 10px;
+}
+
+.blessing {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.blessing:hover {
+  border-color: var(--accent);
+  background: var(--panel-2);
+}
+
+.blessing-title {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.blessing-follow {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.blessing-gain {
+  color: var(--good);
+  font-size: 13px;
+}
+
+.blessing-cost {
+  color: var(--warn);
+  font-size: 12px;
+}
+
+.blessing-cost.is-free {
+  color: var(--muted);
+}
+
+/* ── 地图 ────────────────────────────────────────────────────────────────── */
+
+.scene-map {
+  max-width: 560px;
+}
+
+.map-boss {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  align-self: center;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid #6b2b2b;
+  background: #2a1416;
+  color: #ffb3ab;
+  font-size: 13px;
+}
+
+.map-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: radial-gradient(circle at 50% 100%, #141a22, #0d1014 70%);
+  padding: 10px 0;
+}
+
+.map-canvas {
+  position: relative;
+  display: flex;
+  flex-direction: column-reverse; /* 第 1 行在底部：往上爬 */
+  gap: 22px;
+  min-height: calc(var(--map-rows) * 62px);
+  padding: 12px 10px;
+}
+
+.map-edges {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.map-edge {
+  stroke: #2c3742;
+  stroke-width: 1.4;
+}
+
+.map-edge.is-live {
+  stroke: var(--accent);
+  stroke-width: 2.2;
+  opacity: 0.9;
+}
+
+.map-row {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+}
+
+.map-node {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 62px;
+  padding: 6px 2px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #131820;
+  color: var(--muted);
+  font: inherit;
+  cursor: default;
+  opacity: 0.72;
+}
+
+.map-node-glyph {
+  font-size: 18px;
+  line-height: 1.1;
+}
+
+.map-node-label {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+/* 可达：亮 + 外环（不只靠颜色） */
+.map-node.is-reachable {
+  opacity: 1;
+  cursor: pointer;
+  border-color: var(--accent);
+  color: var(--text);
+  box-shadow: 0 0 0 2px rgba(240, 161, 58, 0.28);
+  animation: node-pulse 1.8s ease-in-out infinite;
+}
+
+.map-node.is-reachable:hover {
+  background: #241a0c;
+}
+
+@keyframes node-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px rgba(240, 161, 58, 0.22);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(240, 161, 58, 0.1);
+  }
+}
+
+.map-node.is-current {
+  border-color: #58a6ff;
+  color: #cfe6ff;
+  opacity: 1;
+}
+
+.map-node-here {
+  position: absolute;
+  top: -9px;
+  font-size: 9px;
+  color: #58a6ff;
+  white-space: nowrap;
+}
+
+.map-node.kind-boss,
+.map-node.kind-bossChest {
+  border-color: #6b2b2b;
+}
+
+/* ── 战斗前 ──────────────────────────────────────────────────────────────── */
+
+.precombat-card {
+  display: grid;
+  gap: 4px;
+  padding: 18px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.precombat-name {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.precombat-id {
+  font-size: 12px;
+}
+
+.precombat-hp {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ── 奖励 ────────────────────────────────────────────────────────────────── */
+
+.reward-rows {
+  display: grid;
+  gap: 8px;
+}
+
+.reward-row {
+  display: grid;
+  grid-template-columns: 28px 60px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.reward-glyph {
+  font-size: 16px;
+  color: var(--accent);
+}
+
+.reward-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.reward-value {
+  font-weight: 600;
+}
+
+.reward-row button {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.reward-row button:hover {
+  border-color: var(--accent);
+}
+
+.reward-cards-head {
+  margin: 6px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.reward-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.reward-card {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, #1a212a, #141a22);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.reward-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.reward-card-title {
+  font-weight: 600;
+}
+
+.reward-card-id {
+  font-size: 11px;
+}
+
+/* ── 局终 ────────────────────────────────────────────────────────────────── */
+
+.end-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.end-stats div {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.end-stats dt {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.end-stats dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 未实现场景 ──────────────────────────────────────────────────────────── */
+
+.scene-unsupported {
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  margin-top: 20px;
+}
+
+/* ── 覆盖层 ──────────────────────────────────────────────────────────────── */
+
+.run-overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(6, 9, 12, 0.72);
+  z-index: 40;
+}
+
+.run-overlay-card {
+  width: min(420px, 92vw);
+  padding: 20px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  display: grid;
+  gap: 12px;
+}
+
+.run-overlay-card h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.run-deck-list {
+  max-height: 50vh;
+  overflow: auto;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+/* ── 日志 ────────────────────────────────────────────────────────────────── */
+
+.run-log {
+  padding: 6px 14px 10px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  font-size: 12px;
+  min-height: 3.2em;
+}
+
+.run-log-line {
+  color: var(--muted);
+  animation: log-in 200ms ease-out;
+}
+
+.run-log-line.is-good {
+  color: var(--good);
+}
+
+.run-log-line.is-warn {
+  color: var(--warn);
+}
+
+.run-log-line.is-bad {
+  color: var(--bad);
+}
+
+@keyframes log-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ── 战斗屏在运行层里的容器 ──────────────────────────────────────────────── */
+
+.combat-finished {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  background: rgba(8, 11, 15, 0.82);
+  z-index: 30;
+  text-align: center;
+}
+
+.combat-finished h2 {
+  margin: 0;
+  font-size: 26px;
+}
+
+.combat-finished-hint {
+  margin: 0;
+  color: var(--muted);
+}
+
+.combat-finished button {
+  padding: 10px 22px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: linear-gradient(180deg, #3a2a12, #2a1e0d);
+  color: #ffd9a3;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* 移动端：390×844 是 P1 的可读性基准尺寸 */
+@media (max-width: 460px) {
+  .run-topbar {
+    gap: 8px;
+    font-size: 13px;
+  }
+
+  .run-hp-bar {
+    width: 64px;
+  }
+
+  .scene {
+    padding: 14px 12px 32px;
+  }
+
+  .map-node {
+    width: 54px;
+  }
+}

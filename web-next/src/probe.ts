@@ -11,7 +11,7 @@ import type { CombatView } from "./view/combatView";
 import type { WasmDiagnostics } from "./wasm/host";
 import type { PendingChoice } from "./wasm/snapshot";
 import { coverage as i18nCoverage, UPGRADED_WITH_BASE_TEXT } from "./i18n";
-import type { CommitLogEntry } from "./App";
+import type { CommitLogEntry } from "./combat/CombatScreen";
 
 export interface ProbeOptions {
   store: MachineStore;
@@ -151,6 +151,8 @@ export function installProbe(options: ProbeOptions): void {
       width: options.layout.width,
       height: options.layout.height,
       frames: options.layout.frames,
+      originX: options.layout.originX,
+      originY: options.layout.originY,
     }),
     hand: () =>
       options.scene().hand.map((card, slot) => ({

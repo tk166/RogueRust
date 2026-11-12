@@ -100,7 +100,10 @@ function Invoke-Gate {
                      # P2：定向夹具
                      '(UI_WASM_FIXTURES PASS duplicate=\d+ zero-energy=1 slot-stable=1)',
                      # P2：X 费扣能量
-                     '(UI_WASM_XCOST PASS seed=\d+ card=\w+ energy=\d+->0 damaged=\d+)')) {
+                     '(UI_WASM_XCOST PASS seed=\d+ card=\w+ energy=\d+->0 damaged=\d+)',
+                     # P3：场景判定（纯函数）与端到端闭环
+                     '(UI_SCENE PASS order=\d+\+\d+ pending=\d+ exhaustive=\d+ rows=\d+)',
+                     '(UI_NEXT_LOOP PASS nodes=\d+ steps=\d+ scene-chain=SC-00>SC-01>SC-02>SC-03>SC-03b>SC-04>SC-02)')) {
     $m = [regex]::Match($out, $pat)
     if ($m.Success) { $evidence = $m.Value; break }
   }
@@ -125,7 +128,7 @@ Write-Output ("=" * 78)
 Write-Output "sts-tui 聚合验收"
 Write-Output ("=" * 78)
 
-Write-Output "`n[1/32] 单元测试 + 语料逐字节回环（Rust 内核）"
+Write-Output "`n[1/34] 单元测试 + 语料逐字节回环（Rust 内核）"
 # `-p rd-core -p rd-run`：run 层是新 crate，它自己的 8 条测试若不加进这条闸门，就没人跑它们。
 # 于是"条数下限"必须对**两个 crate 加起来**比 —— 只取第一个 `N passed` 会让新 crate 的测试
 # 全绿或全红都对闸门没有影响（这就是"覆盖不到的地方看起来最绿"）。
@@ -141,37 +144,37 @@ if ($r.Ok -and [int]$passed -lt $UnitsFloor) {
 }
 $results[-1] = $r
 
-Write-Output "[2/32] 语料回环份数（确认不是空扫）"
+Write-Output "[2/34] 语料回环份数（确认不是空扫）"
 $r = Invoke-Gate -Name 'corpus-roundtrip' -Exe $CARGO `
   -ArgLine "test -p rd-core --release --target-dir `"$TARGET_DIR`" corpus -- --nocapture" `
   -Workdir (Join-Path $ROOT 'kernel') -MustMatch 'case\(s\) reproduced byte-for-byte'
 $results += $r
 
-Write-Output "[3/32] 裸机目标编译（riscv32imac-unknown-none-elf）"
+Write-Output "[3/34] 裸机目标编译（riscv32imac-unknown-none-elf）"
 $results += Invoke-Gate -Name 'rust-baremetal' -Exe $CARGO `
   -ArgLine "check --target riscv32imac-unknown-none-elf -p rd-core -p rd-run --release --target-dir `"$TARGET_DIR`"" `
   -Workdir (Join-Path $ROOT 'kernel') -MustMatch 'Finished'
 
-Write-Output "[4/32] clippy"
+Write-Output "[4/34] clippy"
 $results += Invoke-Gate -Name 'rust-clippy' -Exe $CARGO `
   -ArgLine "clippy --all-targets -p rd-core -p rd-run -p rd-wasm --target-dir `"$TARGET_DIR`"" -Workdir (Join-Path $ROOT 'kernel') `
   -MustMatch 'Finished'
 
-Write-Output "[5/32] 真链接成裸机 ELF 镜像"
+Write-Output "[5/34] 真链接成裸机 ELF 镜像"
 $fw = Join-Path $ROOT 'kernel\rd-firmware\link.x'
 $results += Invoke-Gate -Name 'firmware-link' -Exe $CARGO `
   -ArgLine "rustc --release --target riscv32imac-unknown-none-elf --manifest-path rd-firmware/Cargo.toml -- -C link-arg=-T$fw" `
   -Workdir (Join-Path $ROOT 'kernel') -MustMatch 'Finished'
 
-Write-Output "[6/32] 镜像占用（自带陈旧守卫）"
+Write-Output "[6/34] 镜像占用（自带陈旧守卫）"
 $results += Invoke-Gate -Name 'firmware-size' -Exe $PY `
   -ArgLine (Join-Path $ROOT 'tools\firmware_size.py') -Workdir $ROOT -MustMatch '非易失存储'
 
-Write-Output "[7/32] 覆盖门禁"
+Write-Output "[7/34] 覆盖门禁"
 $results += Invoke-Gate -Name 'coverage-gate' -Exe $PY `
   -ArgLine (Join-Path $ROOT 'native\coverage_check.py') -Workdir $ROOT -MustMatch '19/19'
 
-Write-Output "[8/32] golden 基线逐字节一致"
+Write-Output "[8/34] golden 基线逐字节一致"
 $ga = Join-Path $ROOT 'corpus\golden_v1.jsonl'
 $gb = Join-Path $ROOT 'corpus\baseline\golden_v1.jsonl'
 $same = ((Get-FileHash $ga -Algorithm SHA256).Hash -eq (Get-FileHash $gb -Algorithm SHA256).Hash)
@@ -180,12 +183,12 @@ $results += [pscustomobject]@{
   Evidence = "$((Get-Content $ga).Count) 行"; Notes = $(if ($same) { '' } else { 'SHA-256 不一致' }); Output = ''
 }
 
-Write-Output "[9/32] RL 环境冒烟（多开 + 确定性）"
+Write-Output "[9/34] RL 环境冒烟（多开 + 确定性）"
 $results += Invoke-Gate -Name 'env-smoke' -Exe $PY -ArgLine '-m roguedeck_env.bench' `
   -Workdir (Join-Path $ROOT 'py') -MustMatch '多开吞吐与可复现性均通过' `
   -ExtraEnv @{ PYTHONPATH = (Join-Path $ROOT 'py') } -TimeoutSec 1800
 
-Write-Output "`n[10/32] 内容镜像 byte-identity（用当前编译器重编源文档 == 钉死的 SHA）"
+Write-Output "`n[10/34] 内容镜像 byte-identity（用当前编译器重编源文档 == 钉死的 SHA）"
 # 为什么这条闸门必须存在：本文件上面的对拍闸门（CARD_DIFF / FIGHT_DIFF / ENEMY_DIFF /
 # corpus / coverage / golden）全部钉在 `tools/contentc/out/content.core.rdcf` 这一份镜像上。
 # 为了支持 StS 内容去改 compile.py，后果**不是**"某条测试变红"，而是所有对拍静默地改为
@@ -198,7 +201,7 @@ $results += Invoke-Gate -Name 'contentc-bytes' -Exe $PY `
   -ArgLine (Join-Path $ROOT 'tools\contentc\verify_bytes.py') -Workdir $ROOT `
   -MustMatch 'CONTENTC_BYTES PASS \(2/2 images, 1/1 source\)' -TimeoutSec 600
 
-Write-Output "[11/32] 内容镜像结构不变量（独立解读字节：段目录 + 7 张定长表的 count×stride）"
+Write-Output "[11/34] 内容镜像结构不变量（独立解读字节：段目录 + 7 张定长表的 count×stride）"
 # 为什么这条闸门必须存在：tools/rdcf_verify.py 曾经**静默失效** —— 它从 variants[name] 里取
 # tables（tables 其实在 manifest 顶层），于是 5 张表的 count×stride 检查一次都没跑成，
 # 脚本只记一条"观察"并 exit 0；而它自己抄的那份 stride 常量（28/36/16/20）也是错的。
@@ -211,7 +214,7 @@ $results += Invoke-Gate -Name 'rdcf-verify' -Exe $PY `
   -ArgLine (Join-Path $ROOT 'tools\rdcf_verify.py') -Workdir $ROOT `
   -MustMatch 'RDCF_VERIFY PASS \(2/2 variants, 8/8 tables, 16 count×stride checks, [0-9]+ table rows, 6 term-shape checks' -TimeoutSec 300
 
-Write-Output "`n[12/32] StS 内容包自洽（不变量表 + 两份镜像逐键回读 + 交叉引用）"
+Write-Output "`n[12/34] StS 内容包自洽（不变量表 + 两份镜像逐键回读 + 交叉引用）"
 # 为什么这条闸门必须存在：第 10 道 verify_bytes.py **只钉 `packages/roguedeck/**`**。
 # 于是 `packages/sts/**` 的源文档被改坏时，上面已知的 11 道闸门一条都不会红 ——
 # 这正是"覆盖不到的地方看起来最绿"。三层各补一种假绿（native/sts_content_check.py
@@ -228,7 +231,7 @@ $results += Invoke-Gate -Name 'sts-content' -Exe $PY `
   -MustMatch 'weak pool[\s\S]*inert keys[\s\S]*full roots[\s\S]*core SEC_IDX[\s\S]*STS_CONTENT PASS \(monsters \d+, encounters \d+, deck \d+, statuses \d+, cards \d+, enemy_actions \d+' `
   -TimeoutSec 300
 
-Write-Output "`n[13/32] 覆盖矩阵：每个实体被验证到哪一步（Implemented / RuntimeTested / WikiVerified / Deviation / Evidence）"
+Write-Output "`n[13/34] 覆盖矩阵：每个实体被验证到哪一步（Implemented / RuntimeTested / WikiVerified / Deviation / Evidence）"
 # 为什么这条闸门必须存在：这一页是**生成物**（`docs/coverage-matrix.md`），它回答"`chosen` 的 HP
 # 错了很久、`spiker.spike` 根本不是 wiki 的那一招 —— 当时哪一道闸门能看出来？"。答案是都不能：
 # 闸门看不见 wiki，但闸门**能**看见"某个实体没有任何来源、没有任何测试、也没有声明过偏差"。
@@ -244,7 +247,7 @@ $results += Invoke-Gate -Name 'coverage-matrix' -Exe $PY `
   -ArgLine ((Join-Path $ROOT 'native\coverage_matrix.py') + ' --check --selftest') -Workdir $ROOT `
   -MustMatch 'COVERAGE_MATRIX PASS \(rows=\d+, tests=\d+, fresh\)' -TimeoutSec 300
 
-Write-Output "`n[14/32] 重编网页那一份 .wasm（web/** 是仓库里唯一被手工 Copy-Item 进来的二进制产物）"
+Write-Output "`n[14/34] 重编网页那一份 .wasm（web/** 是仓库里唯一被手工 Copy-Item 进来的二进制产物）"
 # 为什么这条闸门必须存在：`web/rd_wasm.wasm` 被三方引用 —— index.html 硬编码的 122 格偏移、
 # smoke.mjs 的导出手抄清单、README 里钉死的字节数 —— 而它**不在 cargo 的依赖图里**：
 # 源码改了不重编，它照样绿。（真实测到的两种"时间说谎"：Copy-Item 恢复文件会把 mtime 一起
@@ -253,7 +256,7 @@ $results += Invoke-Gate -Name 'wasm-rebuild' -Exe $CARGO `
   -ArgLine "build -p rd-wasm --release --target wasm32-unknown-unknown" -Workdir (Join-Path $ROOT 'kernel') `
   -MustMatch 'Finished' -TimeoutSec 600
 
-Write-Output "[15/32] 页面 + 产物：字节同一 + 脚本能解析 + 只在真导出上调用 + 偏移仍铺满"
+Write-Output "[15/34] 页面 + 产物：字节同一 + 脚本能解析 + 只在真导出上调用 + 偏移仍铺满"
 # 为什么这条闸门必须存在：上面 13 道闸门**没有一道看 web/index.html**。实测过一次把页面改坏
 # （语法错），十二道闸门全绿 —— 因为所有闸门都止步于 .wasm。这条补的就是那一段：
 #   (a) web/rd_wasm.wasm 与刚才那次重编**逐字节相同**，不同就打印两边的 sha 与复制命令；
@@ -265,7 +268,7 @@ Write-Output "[15/32] 页面 + 产物：字节同一 + 脚本能解析 + 只在�
 $results += Invoke-Gate -Name 'web-package' -Exe 'C:\Program Files\nodejs\node.exe' `
   -ArgLine (Join-Path $ROOT 'web\smoke.mjs') -Workdir $ROOT -MustMatch 'WEB_SMOKE PASS' -TimeoutSec 600
 
-Write-Output "[16/32] 界面渲染的**语义**（不是语法）：每一格显示的数 == 观察向量里那一格"
+Write-Output "[16/34] 界面渲染的**语义**（不是语法）：每一格显示的数 == 观察向量里那一格"
 # 为什么这条闸门必须存在：上面 14 道闸门里，闸门 14 只证明页面**能解析、只在真导出上调用、
 # 偏移铺得满**。它证明不了任何一格显示得对 —— 把 `o[H.HP]` 写成 `o[H.HP_MAX]`，14 道闸门全绿。
 # 实测过一次：把渲染里的血量格改成读上限，整套验收没有任何一条会红。
@@ -277,7 +280,7 @@ Write-Output "[16/32] 界面渲染的**语义**（不是语法）：每一格显
 $results += Invoke-Gate -Name 'web-ui' -Exe 'C:\Program Files\nodejs\node.exe' `
   -ArgLine (Join-Path $ROOT 'web\ui_test.mjs') -Workdir $ROOT -MustMatch 'UI_RENDER PASS' -TimeoutSec 600
 
-Write-Output "[17/32] 地图页：画出来的东西**就是** rd-run 生成的那张图（逐节点、逐边、逐格光照）"
+Write-Output "[17/34] 地图页：画出来的东西**就是** rd-run 生成的那张图（逐节点、逐边、逐格光照）"
 # 为什么这条闸门必须存在：闸门 15 盯的是**战斗**那一套导出（`rd_env_*`）。地图走的是
 # `env-abi.md` §11 的另一套（`rd_run_*`），所以上面 15 道闸门里**没有一道**看它 ——
 # 把"可达"改成"前 N 个节点"、把行读成列、把游标标记删掉，15 道闸门全绿。
@@ -294,7 +297,7 @@ $results += Invoke-Gate -Name 'web-map' -Exe 'C:\Program Files\nodejs\node.exe' 
 # （祝福面板被吃掉、拒绝消息擦掉按钮、日志把祝福的伤害算在卡上）都是"点一下才知道"的。
 # 零依赖：node:http 起静态服务 + 系统 Chrome 的 CDP（Node 22 自带 WebSocket），断言的是**渲染出来的文字**，
 # 不做截图像素比对（那个在不同字体/缩放下太脆）。
-Write-Output "`n[18/32] 真浏览器：点下去，断言渲染出来的文字"
+Write-Output "`n[18/34] 真浏览器：点下去，断言渲染出来的文字"
 $results += Invoke-Gate -Name 'web-browser' -Exe 'C:\Program Files\nodejs\node.exe' `
   -ArgLine (Join-Path $ROOT 'web\browser_test.mjs') -Workdir $ROOT -MustMatch 'BROWSER_TEST PASS' -TimeoutSec 600
 
@@ -302,7 +305,7 @@ $results += Invoke-Gate -Name 'web-browser' -Exe 'C:\Program Files\nodejs\node.e
 # 小节 —— 因为那条路径不点药水。这一道用带种子的 PRNG 随机点**每一个启用中的控件**，每点一次问一句
 # "有东西变了吗"：死按钮违反的正是这一条，而它不关心是哪个按钮。另外断言"页面没抛异常"与"走过若干种
 # 界面"（商店/篝火/宝箱/事件…），否则"随机点 300 次什么都没坏"可能只是没点到东西。
-Write-Output "`n[19/32] 随机 soak：每个启用中的控件点一下都必须有反应"
+Write-Output "`n[19/34] 随机 soak：每个启用中的控件点一下都必须有反应"
 $results += Invoke-Gate -Name 'web-soak' -Exe 'C:\Program Files\nodejs\node.exe' `
   -ArgLine (Join-Path $ROOT 'web\soak_test.mjs') -Workdir $ROOT -MustMatch 'SOAK_TEST PASS' -TimeoutSec 900
 
@@ -310,7 +313,7 @@ $results += Invoke-Gate -Name 'web-soak' -Exe 'C:\Program Files\nodejs\node.exe'
 # 门 17 是一条写死的路，门 18 是随机点 —— 两者都不能证明
 # "商店能买东西""精英会给遗物""篟火能打铁"。
 # 这一道在固定种子上**自己算路线**走到每一种节点。
-Write-Output "`n[20/32] 一幕垂直切片：自己算路线走遍每种节点"
+Write-Output "`n[20/34] 一幕垂直切片：自己算路线走遍每种节点"
 $results += Invoke-Gate -Name 'web-slice' -Exe 'C:\Program Files\nodejs\node.exe' `
   -ArgLine (Join-Path $ROOT 'web\act1_slice.mjs') -Workdir $ROOT `
   -MustMatch 'ACT1_SLICE PASS' -TimeoutSec 900
@@ -321,7 +324,7 @@ $results += Invoke-Gate -Name 'web-slice' -Exe 'C:\Program Files\nodejs\node.exe
 # 棋盘上确实有墨、墨与底色**看得清**、每张牌自己的矩形在"藏起卡牌"前后**变过**、卡牌没有画到条带外面、
 # 两次同状态截图**逐像素相同**。最后一段是**故障注入**：把 `--ink` 设成底色、藏掉一张牌、压扁手牌条带、
 # 藏掉棋盘，逐个确认**同一批探测器会红** —— 否则"像素门通过"什么也没证明。
-Write-Output "`n[21/32] 像素：画出来是什么样（不比基线，只断性质）"
+Write-Output "`n[21/34] 像素：画出来是什么样（不比基线，只断性质）"
 $results += Invoke-Gate -Name 'web-pixel' -Exe 'C:\Program Files\nodejs\node.exe' `
   -ArgLine (Join-Path $ROOT 'web\pixel_test.mjs') -Workdir $ROOT `
   -MustMatch 'PIXEL_TEST PASS' -TimeoutSec 600
@@ -333,12 +336,12 @@ $results += Invoke-Gate -Name 'web-pixel' -Exe 'C:\Program Files\nodejs\node.exe
 # 这一道做两件机器能做的事：穷尽读 `pub struct RunState` 的字段表，逐个要求它出现在
 # `write_payload` 与 `hash.rs` 里；豁免必须写下理由，且豁免表里的字段一旦被删就红。
 # 它证明的只是"点过名"（编译才证明"打得开"），但"没点名"这一半正是漏的 18 个。
-Write-Output "`n[22/32] RunState 字段清点：每一个字段都进存档、都进指纹"
+Write-Output "`n[22/34] RunState 字段清点：每一个字段都进存档、都进指纹"
 $results += Invoke-Gate -Name 'state-fields' -Exe $PY `
   -ArgLine ((Join-Path $ROOT 'native\check_state_fields.py') + ' --check') -Workdir $ROOT `
   -MustMatch 'STATE_FIELDS PASS' -TimeoutSec 120
 
-Write-Output "`n[23/32] UI 状态模型：文档点名的每个导出都存在，每个导出都被登记"
+Write-Output "`n[23/34] UI 状态模型：文档点名的每个导出都存在，每个导出都被登记"
 # 为什么这条必须是一道闸门：`docs/ui-state-model.md` 是"3D 重写要读什么"的现场清单，而它的
 # 每一行都在声称"这个字段从 rd_xxx 读"。文档只有一种腐烂方式：名字不再存在，或者新导出
 # 没人登记 —— 两种都长得像"文档看起来挺好"，没有任何编译器或测试会碰到它。
@@ -351,7 +354,7 @@ $results += Invoke-Gate -Name 'ui-state' -Exe $PY `
   -MustMatch 'NEGCTL1 RED[\s\S]*NEGCTL2 RED[\s\S]*UI_STATE_CHECK PASS' `
   -TimeoutSec 120
 
-Write-Output "`n[24/32] UI ABI 契约：新 UI 依赖的导出/长度/哨兵/场景 parity（P0 基线）"
+Write-Output "`n[24/34] UI ABI 契约：新 UI 依赖的导出/长度/哨兵/场景 parity（P0 基线）"
 # 为什么这条必须是一道闸门：`docs/ui-abi-audit.md` 是新 UI 的**契约基线**，而它引用的每条
 # 行为都只在一个地方被机器验证 —— `native/ui_abi_dump.mjs --check`。少了它，那些结论就只是
 # 文档里的散文：删掉一个导出、改掉一个哨兵、把 `i32::MIN` 当成"没有局"，都不会有闸门红。
@@ -366,7 +369,7 @@ $results += Invoke-Gate -Name 'ui-abi' -Exe 'C:\Program Files\nodejs\node.exe' `
   -MustMatch 'UI_ABI_CHECK PASS \(exports \d+, runObs 19, combatObs 148, content 0x[0-9a-f]{8}, scenes 18\)' `
   -TimeoutSec 180
 
-Write-Output "`n[25/32] UI P1（R3F PoC）：拖动/目标/回弹/触摸/模态隔离/中文可读性"
+Write-Output "`n[25/34] UI P1（R3F PoC）：拖动/目标/回弹/触摸/模态隔离/中文可读性"
 # 为什么这条必须是一道闸门：P1 的退出条件是"选中具体卡牌 → 指向正确敌人 → 释放；取消/非法释放
 # 回弹；移动端触摸完成同样操作"，这三条只有在**真浏览器 + 真指针事件**里跑才成立 ——
 # 直接调状态机函数会绕开射线、绕开 R3F 的事件派发、绕开 DOM 覆盖层，而那三处恰恰是 3D UI
@@ -380,7 +383,7 @@ $results += Invoke-Gate -Name 'ui-next' -Exe 'C:\Program Files\nodejs\node.exe' 
   -MustMatch 'UI_NEXT PASS cards=10 enemies=2 commits=\d+ rebound=\d+ touch=1 modal-isolation=1 minTitle=\d+px' `
   -TimeoutSec 300
 
-Write-Output "`n[26/32] UI 纯状态机回归：同一动作做两次 / 物理落点 ≠ 业务目标"
+Write-Output "`n[26/34] UI 纯状态机回归：同一动作做两次 / 物理落点 ≠ 业务目标"
 # 为什么这条单独成闸门：第十三轮 Review 的 P1-A / P1-B 都是"从控制流能推出来、但 41 条浏览器
 # 断言全都没覆盖"的缺陷 —— 那些断言里没有一条要求**同一件事做两次**。它们分别表现为
 # "payload 相同的第二次操作被内容去重吞掉"与"无目标牌丢在敌人身上被判成回弹（判定与执行矛盾）"。
@@ -392,7 +395,7 @@ $results += Invoke-Gate -Name 'ui-pointer' -Exe 'C:\Program Files\nodejs\node.ex
   -MustMatch 'P1_REVIEW13_REPRO PASS: 三条都已修复' `
   -TimeoutSec 180
 
-Write-Output "`n[27/32] UI 纯函数回归：队形 0–6 敌 / 屏幕命中 / 状态机（含 dismiss）"
+Write-Output "`n[27/34] UI 纯函数回归：队形 0–6 敌 / 屏幕命中 / 状态机（含 dismiss）"
 # 为什么单独成闸门：合并参考包之后，队形与屏幕命中是**纯函数**，它们的最强证据是"0–6 个敌人、
 # 横竖屏、业务 slot 不重编号、超过 6 个响亮失败"这种穷尽式断言 —— 在浏览器里跑同样的事要
 # 几十秒且只能覆盖一两种组合。与闸门 25/26 分开：红了要能一眼看出坏在纯逻辑、接线还是渲染。
@@ -401,7 +404,7 @@ $results += Invoke-Gate -Name 'ui-pure' -Exe 'C:\Program Files\nodejs\node.exe' 
   -MustMatch 'UI_PURE PASS formation=0\.\.6 hit=\d+ machine=\d+ layout=\d+ decode=\d+ choice=\d+ i18n=\d+ rows=\d+' `
   -TimeoutSec 180
 
-Write-Output "`n[28/32] P2 WASM 接线：装载校验 / 观察解码 / 动作表 / 走一步 / 拒绝不变 / 打到终局"
+Write-Output "`n[28/34] P2 WASM 接线：装载校验 / 观察解码 / 动作表 / 走一步 / 拒绝不变 / 打到终局"
 # 为什么必须是一道闸门：plan P2 的两条退出条件（"相同输入得到正确动作与结果"、"拒绝操作不产生
 # 成功演出"）只有对着**真 wasm** 跑才成立。这道闸门驱动 `web-next/dist/p2.html` 的探针：
 # 装载校验（导出/长度/哨兵/指纹）、开局走到战斗、按 (手牌槽位,目标槽位) 找内核给的动作、
@@ -411,7 +414,7 @@ $results += Invoke-Gate -Name 'ui-wasm' -Exe 'C:\Program Files\nodejs\node.exe' 
   -MustMatch 'UI_WASM PASS exports=\d+ content=0x[0-9a-f]{8} hand=\d+ enemies=\d+ steps=\d+ result=(victory|defeat) rejected-unchanged=1' `
   -TimeoutSec 300
 
-Write-Output "`n[29/32] P2 UI 与内核一致：主页面跑真 wasm，拖牌后 DOM 跟着内核变"
+Write-Output "`n[29/34] P2 UI 与内核一致：主页面跑真 wasm，拖牌后 DOM 跟着内核变"
 # 闸门 28 证明的是"适配器对"（对着 p2.html 的探针），这道证明的是"**渲染层**对"：
 # 主页面默认走真 wasm，于是可以断言"屏幕上的敌人血量 == 内核观察向量里的血量"，
 # 以及"从 UI 拖一张牌出去 ⇒ 内核接受 ⇒ **DOM 上的血量跟着变**"（不是只改了内存里的 view）。
@@ -421,7 +424,7 @@ $results += Invoke-Gate -Name 'ui-wasm-ui' -Exe 'C:\Program Files\nodejs\node.ex
   -MustMatch 'UI_WASM_UI PASS mode=wasm hand=\d+ energy=\d+ enemy0=\d+->\d+ dom-synced=1' `
   -TimeoutSec 300
 
-Write-Output "`n[30/32] P2 待决选牌（PendingChoice）+ 演出 beat：真问句、真消耗、真 beat"
+Write-Output "`n[30/34] P2 待决选牌（PendingChoice）+ 演出 beat：真问句、真消耗、真 beat"
 # 会问句的牌（armaments/warcry/headbutt/exhume/dual_wield/nightmare/true_grit+）都不在起手牌里，
 # 而起手牌是随机的 ⇒ "打几把看看能不能碰到"不是夹具。所以用 rd_run_grant_potion + rd_env_use_potion：
 # Elixir 一喝就问"要消耗哪几张"，局面确定、可复现，而且走的是真内核。
@@ -430,7 +433,7 @@ $results += Invoke-Gate -Name 'ui-wasm-choice' -Exe 'C:\Program Files\nodejs\nod
   -MustMatch 'UI_WASM_CHOICE PASS source=\d+ kind=\d+ options=\d+ exhaust=\d+->\d+ beats=ok' `
   -TimeoutSec 300
 
-Write-Output "`n[31/32] P2 定向夹具：同名卡 / 0 能量 / 敌人槽位稳定（X 费不可达，见文档）"
+Write-Output "`n[31/34] P2 定向夹具：同名卡 / 0 能量 / 敌人槽位稳定（X 费不可达，见文档）"
 # 这三条是 plan P2 点名的夹具。同名卡那条尤其重要：手牌槽位是**位置**（打出后压实），
 # 不是身份 —— UI 若把"第 3 张 strike"当成"strike"去查，就会打错副本（Review P2-A）。
 $results += Invoke-Gate -Name 'ui-wasm-fixtures' -Exe 'C:\Program Files\nodejs\node.exe' `
@@ -438,7 +441,7 @@ $results += Invoke-Gate -Name 'ui-wasm-fixtures' -Exe 'C:\Program Files\nodejs\n
   -MustMatch 'UI_WASM_FIXTURES PASS duplicate=\d+ zero-energy=1 slot-stable=1' `
   -TimeoutSec 300
 
-Write-Output "`n[32/32] P2 X 费：真牌、真能量、打出后能量归零（plan P2 最后一条定向夹具）"
+Write-Output "`n[32/34] P2 X 费：真牌、真能量、打出后能量归零（plan P2 最后一条定向夹具）"
 # X 费牌不在起手牌、药水三选一也不给（扫过 14 个种子 × 2 种药水共 28 组），唯一确定性入口是
 # 战斗奖励屏：开局 → 打赢 → fight_end（这一步才生成奖励屏）→ 挑一张 X 费牌 → 下一场抽到它 → 打出去。
 # seed 58 的奖励含 whirlwind（seed 59 含 skewer），所以夹具是确定性的。
@@ -446,6 +449,22 @@ $results += Invoke-Gate -Name 'ui-wasm-xcost' -Exe 'C:\Program Files\nodejs\node
   -ArgLine (Join-Path $ROOT 'native\ui_wasm_xcost_check.mjs') -Workdir $ROOT `
   -MustMatch 'UI_WASM_XCOST PASS seed=\d+ card=\w+ energy=\d+->0 damaged=\d+' `
   -TimeoutSec 300
+
+Write-Output "`n[33/34] P3 场景判定：18 行表的顺序陷阱 + 穷尽性（纯函数，不需要浏览器）"
+# `SC-03b` 必须排在 `SC-03` 之前、`SC-02b` 必须排在 `SC-02` 之前；18 行表逐行有夹具；
+# 任何内核事实的组合都能得到一个场景（`unknownPending` 只在相位越界时非空）。
+$results += Invoke-Gate -Name 'ui-scene' -Exe 'C:\Program Files\nodejs\node.exe' `
+  -ArgLine (Join-Path $ROOT 'native\ui_scene_check.mjs') -Workdir $ROOT `
+  -MustMatch 'UI_SCENE PASS order=\d+\+\d+ pending=\d+ exhaustive=\d+ rows=\d+' `
+  -TimeoutSec 300
+
+Write-Output "`n[34/34] P3 端到端：标题 → 祝福 → 地图 → 战斗（含真实 3D 拾取）→ 奖励 → 地图"
+# 全程用真 DOM 点击（开始/祝福/地图节点/领奖励/继续），一次真实 3D 拖拽（CDP 鼠标事件），
+# 每个阶段断言对账干净，最后断言"不刷新页面场景判定仍然稳定"。
+$results += Invoke-Gate -Name 'ui-next-loop' -Exe 'C:\Program Files\nodejs\node.exe' `
+  -ArgLine (Join-Path $ROOT 'native\ui_next_loop_check.mjs') -Workdir $ROOT `
+  -MustMatch 'UI_NEXT_LOOP PASS nodes=\d+ steps=\d+ scene-chain=SC-00>SC-01>SC-02>SC-03>SC-03b>SC-04>SC-02' `
+  -TimeoutSec 600
 
 Write-Output "`n" + ("-" * 78)
 Write-Output ("{0,-18}{1,6}  {2,-22}{3}" -f '闸门', '退出', '证据', '备注')

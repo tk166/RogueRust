@@ -392,6 +392,201 @@ export class WasmHost {
     return (this.ex.rd_run_fight_end as () => number)();
   }
 
+  // ── 运行层：地图 / 观察 / 牌组 / 遗物 / 遭遇名 / 动作表（P3 的场景层）──────────
+  //
+  // 这一组**只做搬运**：把 i32 读出来，不解释语义。语义在 `run/observe.ts`（纯函数、可单测），
+  // 场景判定在 `run/scene.ts`（纯函数、可单测）。理由与 P2 的 `snapshot.ts` 一样：
+  // 解码是最容易搞错的地方，而它不该需要 wasm 才能测。
+
+  /** 地图节点数（`-1` = 没有局）。 */
+  mapLen(): number {
+    return (this.ex.rd_run_map_len as () => number)();
+  }
+
+  mapRows(): number {
+    return (this.ex.rd_run_map_rows as () => number)();
+  }
+
+  /**
+   * `rd_run_map_node(index, field)`：0 row / 1 col / 2 kind / 3 out_degree /
+   * 4..6 出边（**全局下标**）/ 7 reachable。
+   *
+   * ⚠️ 出边是**全局**下标（`env-abi.md` §11.2 专门解释过为什么不给行内下标）——
+   * 这里原样返回，绝不在 UI 里自己加行偏移。
+   */
+  mapNode(index: number, field: number): number {
+    return (this.ex.rd_run_map_node as (index: number, field: number) => number)(index, field);
+  }
+
+  /**
+   * 走路动作表：`rd_run_action_count()` 是**可达节点个数**，第 `i` 条的 `arg0` 是目标节点
+   * 的全局下标。
+   *
+   * ⚠️ 所以"进入节点 G"必须先在这里找到 `target === G` 的那一条 —— 直接把 G 当
+   * `rd_run_step` 的入参是错的（G 是全局下标，`step` 收的是可达表里的**位置**）。
+   */
+  runActions(): { index: number; kind: number; target: number }[] {
+    const count = Number((this.ex.rd_run_action_count as () => number)());
+    const out: { index: number; kind: number; target: number }[] = [];
+    for (let index = 0; index < count; index += 1) {
+      out.push({
+        index,
+        kind: (this.ex.rd_run_action as (index: number) => number)(index),
+        target: (this.ex.rd_run_action_arg as (index: number, which: number) => number)(index, 0),
+      });
+    }
+    return out;
+  }
+
+  /** 牌组里的定义 id（`strike` / `bash+` …）。 */
+  deckIds(): string[] {
+    const count = (this.ex.rd_run_deck_count as () => number)();
+    const out: string[] = [];
+    for (let index = 0; index < count; index += 1) {
+      out.push(
+        this.readText(
+          () => (this.ex.rd_run_deck_id_len as (index: number) => number)(index),
+          (ptr) =>
+            (this.ex.rd_run_deck_id_into as (index: number, ptr: number) => number)(index, ptr)
+        )
+      );
+    }
+    return out;
+  }
+
+  /**
+   * 遗物 id 列表。
+   *
+   * ⚠️ **没有** `rd_run_relic_count`（内核只导出 `relic_id_len(index)`）⇒ 读到 `-1` 为止。
+   * 上限 64 只是防死循环的护栏；真正的条数是运行层观察向量的第 6 格，对账会拿它比。
+   */
+  relicIds(): string[] {
+    const out: string[] = [];
+    for (let index = 0; index < 64; index += 1) {
+      const len = (this.ex.rd_run_relic_id_len as (index: number) => number)(index);
+      if (len < 0) break;
+      out.push(
+        this.readText(
+          () => len,
+          (ptr) =>
+            (this.ex.rd_run_relic_id_into as (index: number, ptr: number) => number)(index, ptr)
+        )
+      );
+    }
+    return out;
+  }
+
+  /** 当前遭遇的 id（`cultist` / `jaw_worm` …）；没有时是空串。 */
+  encounterId(): string {
+    const len = (this.ex.rd_run_encounter_id_len as () => number)();
+    if (len <= 0) return "";
+    return this.readText(
+      () => len,
+      (ptr) =>
+        (this.ex.rd_run_encounter_id_into as (ptr: number) => number)(ptr)
+    );
+  }
+
+  /** 开局祝福的候选（§346：条数由内核给，**不许**写死 `for slot in 0..2`）。 */
+  startOffers(): { slot: number; id: string; gain: number; gainAmount: number; cost: number; costAmount: number }[] {
+    const call = (name: string) => (this.ex[name] as () => number)();
+    const count = call("rd_run_start_offer_count");
+    const out: { slot: number; id: string; gain: number; gainAmount: number; cost: number; costAmount: number }[] = [];
+    for (let slot = 0; slot < count; slot += 1) {
+      out.push({
+        slot,
+        id: this.readText(
+          () => (this.ex.rd_run_start_offer_len as (slot: number) => number)(slot),
+          (ptr) => (this.ex.rd_run_start_offer_into as (slot: number, ptr: number) => number)(slot, ptr)
+        ),
+        gain: (this.ex.rd_run_start_gain as (slot: number) => number)(slot),
+        gainAmount: (this.ex.rd_run_start_gain_amount as (slot: number) => number)(slot),
+        cost: (this.ex.rd_run_start_cost as (slot: number) => number)(slot),
+        costAmount: (this.ex.rd_run_start_cost_amount as (slot: number) => number)(slot),
+      });
+    }
+    return out;
+  }
+
+  /** 祝福还差什么：0 没有 / 1 删牌 / 2 升级 / 3 变形 / -1 没有局。 */
+  blessingNeeds(): number {
+    return (this.ex.rd_run_blessing_needs as () => number)();
+  }
+
+  /** 遗物欠账：还要改几张牌（`SC-11a`）。 */
+  pickupPicks(): number {
+    return (this.ex.rd_run_pickup_picks as () => number)();
+  }
+
+  /** 遗物欠账：还要加几张牌（`SC-11b`）。 */
+  pickupAdd(): number {
+    return (this.ex.rd_run_pickup_add as () => number)();
+  }
+
+  bossBeaten(): boolean {
+    return (this.ex.rd_run_boss_beaten as () => number)() === 1;
+  }
+
+  /**
+   * 局终原因：`RunEnd` 的判别值（`0` 进行中 / `1` 战败 / `2` 通关 / `3` 地图走完了）。
+   *
+   * ⚠️ 是**数字**不是字符串（`rd_run_over_why` 返回判别值）。数值是 `RunEnd` 的判别值，
+   * 不要重排 —— 页面按它选文案（`run/scene.ts` 的 `overReasonLabel`）。
+   */
+  overWhy(): number {
+    return (this.ex.rd_run_over_why as () => number)();
+  }
+
+  /** 奖励屏上的药水 id（没有就是空串）。 */
+  rewardPotionId(): string {
+    const len = (this.ex.rd_run_reward_potion_len as () => number)();
+    if (len <= 0) return "";
+    return this.readText(
+      () => len,
+      (ptr) => (this.ex.rd_run_reward_potion_into as (ptr: number) => number)(ptr)
+    );
+  }
+
+  rewardRelicId(): string {
+    const len = (this.ex.rd_run_reward_relic_len as () => number)();
+    if (len <= 0) return "";
+    return this.readText(
+      () => len,
+      (ptr) => (this.ex.rd_run_reward_relic_into as (ptr: number) => number)(ptr)
+    );
+  }
+
+  takePotion(): number {
+    return (this.ex.rd_run_take_potion as () => number)();
+  }
+
+  takeRelic(): number {
+    return (this.ex.rd_run_take_relic as () => number)();
+  }
+
+  /** 离开当前待决屏（商店/宝箱/篝火都认）。 */
+  leave(): number {
+    return (this.ex.rd_run_leave as () => number)();
+  }
+
+  rest(): number {
+    return (this.ex.rd_run_rest as () => number)();
+  }
+
+  openChest(): number {
+    return (this.ex.rd_run_open_chest as () => number)();
+  }
+
+  /** 节点 kind 的**内核名字**（`rd_run_kind_name_*`），用于诊断与"未知 kind"兜底。 */
+  kindName(kind: number): string {
+    const len = (this.ex.rd_run_kind_name_len as (kind: number) => number)(kind);
+    if (len <= 0) return "";
+    return this.readText(
+      () => len,
+      (ptr) => (this.ex.rd_run_kind_name_into as (kind: number, ptr: number) => number)(kind, ptr)
+    );
+  }
+
   // ── 药水（夹具用：`?debug` 下造"会问句"的局面）──────────────────────────────
   /**
    * 把一段 ASCII 写进模块的 scratch（`rd_env_scratch_buf`）。
@@ -570,8 +765,18 @@ export class WasmHost {
    * ⚠️ 判据是 `rd_env_active_slot() !== -3`（"查询不创建会话"的哨兵），**不是** `rd_env_done()`
    * —— 后者在没有会话时返回 1（"结束了"），反过来说不出"有没有战斗"。
    */
+  /**
+   * 现在**真的有**一场战斗吗。
+   *
+   * ⚠️ 曾经写成 `rd_env_active_slot() !== -3` —— **那是错的**：内核的 `ensure_session()` 会
+   * **懒建**一个会话（`lib.rs` 的 `rd_env_active_slot` 注释专门警告过查询不该创建状态），
+   * 于是装载之后（还没开打）`active_slot` 返回 `-1`，判定成在战斗，解码出一条
+   * **幽灵战斗**（2 个敌人、5 张手牌）。P2 从没发现，因为它总是先 `fight_begin` 再读。
+   *
+   * 判据只能看运行层：`rd_run_in_fight() == 1`（与场景表 SC-03b 用的是**同一个事实**）。
+   */
   hasCombatSession(): boolean {
-    return (this.ex.rd_env_active_slot as () => number)() !== -3;
+    return (this.ex.rd_run_in_fight as () => number)() === 1;
   }
 
   /**
