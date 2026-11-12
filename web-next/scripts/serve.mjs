@@ -37,7 +37,7 @@ const DIST = join(WEB_NEXT, "dist");
 const WEB = join(REPO, "web");
 
 /** 默认入口。**切换 P7 的默认入口就是改这一行**（独立 commit，单行可回退）。 */
-export const DEFAULT_ENTRY = "legacy";
+export const DEFAULT_ENTRY = "run";
 
 const MIME = {
   ".html": "text/html; charset=utf-8",

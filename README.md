@@ -367,11 +367,11 @@ npm run build               # → dist/（产物入库，闸门不需要 npm 也
 ### 10.2 运行
 
 ```bash
-node web-next/scripts/serve.mjs --port 8080 --entry run     # 新 UI
-node web-next/scripts/serve.mjs --port 8080 --entry legacy  # 旧 UI（默认）
+node web-next/scripts/serve.mjs --port 8080                 # 新 UI（默认）
+node web-next/scripts/serve.mjs --port 8080 --entry legacy   # 旧 UI（回退）
 ```
 
-* `/`            → 默认入口（由 `--entry` 决定；默认值就是**切换开关**，单行可回退）
+* `/`            → **新 UI**（`DEFAULT_ENTRY = "run"`；改成 `"legacy"` 即回退，单行 revert）
 * `/legacy/*`    → 旧入口（永远可达）
 * 这台服务器会校验 `wasm.json` 的 sha256 与磁盘 wasm 一致，不一致**拒绝启动**；
   `.wasm` 的 MIME 是 `application/wasm`（`instantiateStreaming` 的前提）。

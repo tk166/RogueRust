@@ -85,7 +85,7 @@ function Invoke-Gate {
                      '(\d+/\d+ tables)', '(\d+ monsters)', '(\d+) clicks',
                                           # P7：对等 + 部署（必须排在通用 '\d+ fields' 之前：循环 break-on-first-match）
                      '(UI_PARITY PASS checkpoints=\d+ cells=\d+ sha=match old=alive)',
-                     '(UI_DEPLOY PASS entry=(legacy|run) assets=\d+ wasm=application/wasm cache=immutable-for-hashed version=match)',
+                     '(UI_DEPLOY PASS entry=run assets=\d+ wasm=application/wasm cache=immutable-for-hashed version=match)',
                      '(rows=\d+, tests=\d+)', '(\d+ fields)', '(exports=\d+ mentioned=\d+)', '(exports \d+, runObs 19)',
                      '(\d+/\d+ card\(s\) painted)',
                      # P1 的 R3F PoC：真提交数 / 真回弹数 / 触摸与模态隔离 / 最小字号
@@ -529,7 +529,7 @@ $results += Invoke-Gate -Name 'ui-parity' -Exe 'C:\Program Files\nodejs\node.exe
 Write-Output "`n[42/42] P7 部署：wasm MIME / 缓存策略 / 版本一致性 / 两个入口都可起"
 $results += Invoke-Gate -Name 'ui-deploy' -Exe 'C:\Program Files\nodejs\node.exe' `
   -ArgLine (Join-Path $ROOT 'native\ui_deploy_check.mjs') -Workdir $ROOT `
-  -MustMatch 'UI_DEPLOY PASS entry=(legacy|run) assets=\d+ wasm=application/wasm cache=immutable-for-hashed version=match' `
+  -MustMatch 'UI_DEPLOY PASS entry=run assets=\d+ wasm=application/wasm cache=immutable-for-hashed version=match' `
   -TimeoutSec 300
 
 Write-Output "`n" + ("-" * 78)
