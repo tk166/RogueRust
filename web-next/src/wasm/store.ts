@@ -54,6 +54,19 @@ export class GameStore {
    * （第十四轮 Review P1-B）。手势提交前必须比对版本号。
    */
   private stateEpoch = 0;
+  /**
+   * **最近一次被接受的动作产生的 beat**（+ 一个自增序号）。
+   *
+   * 为什么放在这里而不是让界面自己记：beat 是 `dispatch` 的返回值，而 `dispatch` 有**两条**
+   * 调用路径（界面的拖拽提交、探针/驱动的 `dispatchCombat`）。放在界面上会让"探针打出来的
+   * 战斗没有演出"——第一版就是这样（`__p1.beats()` 一直是空的）。
+   * 放在这里，谁 dispatch 谁就有 beat，消费方只看 `beatSeq` 变没变。
+   */
+  private lastBeats: { beats: readonly Beat[]; dropped: number; seq: number } = {
+    beats: [],
+    dropped: 0,
+    seq: 0,
+  };
 
   constructor(host: WasmHost) {
     this.host = host;
@@ -78,6 +91,11 @@ export class GameStore {
 
   get acceptedActions(): number {
     return this.acceptedCount;
+  }
+
+  /** 最近一次被接受的动作的 beat（见 `lastBeats` 的注释）。 */
+  get beats(): { beats: readonly Beat[]; dropped: number; seq: number } {
+    return this.lastBeats;
   }
 
   /** 动作表版本号（见 `stateEpoch` 的注释）。 */
@@ -123,6 +141,9 @@ export class GameStore {
     this.current = this.host.snapshot();
     // beat 是"这一步发生了什么"的权威叙述；接受时才有内容。
     const { beats, dropped } = code === STEP_ACCEPTED ? this.host.beats() : { beats: [], dropped: 0 };
+    if (code === STEP_ACCEPTED) {
+      this.lastBeats = { beats, dropped, seq: this.lastBeats.seq + 1 };
+    }
     for (const listener of this.listeners) listener();
 
     return {

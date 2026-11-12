@@ -341,6 +341,35 @@ try {
     JSON.stringify({ cards: report.cards.entries, monsters: report.monsters.entries, statuses: report.statuses.entries })
   );
 
+  // ── i18n：事件表（P5：id 对照表 + 选项标签）──────────────────────────────
+  //
+  // 判据不是"有多少条"，而是三件具体的事：
+  //   1. 内容里的**每一个**事件根 id 都有中文名（表覆盖，不是碰巧有几个）；
+  //   2. 事件**选项标签**能翻成中文（英文短句 → 中文，查不到要回退并计数）；
+  //   3. 子节点正文**没有**官方中文来源 ⇒ 必须回退到英文并**计数**（不静默）。
+  i18n.resetCoverage();
+  const events = report.events;
+  check(events.entries >= 36, "i18n：事件表覆盖 >= 36 个根事件", String(events.entries));
+  const golden = i18n.eventName("golden_idol");
+  check(golden === "金神像", "i18n：事件名（golden_idol → 金神像）", golden);
+  check(i18n.eventName("shining_light") === "闪耀之光", "i18n：事件名（shining_light → 闪耀之光）");
+  check(i18n.eventName("scrap_pile") === "破烂软泥", "i18n：别名对照（scrap_pile → 破烂软泥）", i18n.eventName("scrap_pile"));
+  check(i18n.eventName("no_such_event") === "no such event", "i18n：未知事件 id 回退（下划线变空格）", i18n.eventName("no_such_event"));
+  const body = i18n.eventText("golden_idol", "An idol of gold sits on a mossy altar.");
+  check(body !== "An idol of gold sits on a mossy altar." && body.length > 0, "i18n：事件正文有中文", body.slice(0, 24));
+  const subBody = i18n.eventText("golden_idol.boulder", "You hear a rumble above you.");
+  check(subBody === "You hear a rumble above you.", "i18n：子节点正文回退英文（没有官方中文来源）", subBody);
+  check(i18n.eventOptionLabel("Take it") === "拿走", "i18n：选项标签（Take it → 拿走）", i18n.eventOptionLabel("Take it"));
+  check(i18n.eventOptionLabel("Reach Inside") === "伸手进去", "i18n：选项标签（Reach Inside → 伸手进去）");
+  const unknownLabel = i18n.eventOptionLabel("Do something impossible");
+  check(unknownLabel === "Do something impossible", "i18n：未知标签回退英文", unknownLabel);
+  const fallbacks = i18n.eventI18nFallbacks();
+  check(
+    fallbacks.texts >= 1 && fallbacks.labels >= 1,
+    "i18n：事件回退被计数（正文 + 标签各一条）",
+    JSON.stringify(fallbacks)
+  );
+
   // ── 状态机 ──────────────────────────────────────────────────────────────
   const targeted = [
     { slot: 0, actionIndex: 1, label: "a" },
@@ -384,7 +413,7 @@ try {
     console.error(`UI_PURE FAIL: ${bad} 条`);
     process.exit(1);
   }
-  console.log(`UI_PURE PASS formation=0..6 hit=5 machine=4 layout=6 decode=8 choice=6 i18n=7 rows=4`);
+  console.log(`UI_PURE PASS formation=0..6 hit=5 machine=4 layout=6 decode=8 choice=6 i18n=18 rows=4`);
 } catch (error) {
   await rm(out, { recursive: true, force: true }).catch(() => {});
   console.error(`UI_PURE ERROR: ${error.message}`);

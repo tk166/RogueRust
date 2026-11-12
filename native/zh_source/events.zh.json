@@ -1,0 +1,1245 @@
+{
+ "total": 52,
+ "offset": 0,
+ "limit": 400,
+ "items": [
+  {
+   "id": "DEAD_ADVENTURER",
+   "name": "冒险者尸体",
+   "act": "exordium",
+   "description": "在搜刮冒险者时你被偷袭了！",
+   "choices": [
+    {
+     "option": "[搜索] 寻找东西。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "BIG_FISH",
+   "name": "大鱼",
+   "act": "exordium",
+   "description": "当你走过一条长廊时，你看见空中 漂浮 着 一根香蕉 ， 一个甜甜圈 ， 和 一个盒子 。 不……仔细一看，它们都是被用绳子系着，从天花板上的几个洞里悬挂下来的。你在接近这几样东西时，上方似乎传来一阵 咯咯 的笑声。 \n 你会怎么做？",
+   "choices": [
+    {
+     "option": "[香蕉] 回复 生命。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[甜甜圈] 最大生命值 + 。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[盒子] 获得一件遗物。 被诅咒——悔恨。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "LIVING_WALL",
+   "name": "活墙壁",
+   "act": "exordium",
+   "description": "你走进一条死路，正准备要回头时，四周突然有墙壁从天花板上 哐 地一下 砸了下来 ！ \n \n 三张脸出现在墙壁上，开始对你说话： \n “忘记你所知道的，我就让你走。” \n “有所改变，我就让你看见新的道路。” \n “如果你想要从我这里通过，你就必须有所成长。”",
+   "choices": [
+    {
+     "option": "[遗忘] 移除你牌组中的一张牌。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[改变] 变化你牌组中的一张牌。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[成长] 升级你牌组中的一张牌。 选择一张牌移除。 选择一张牌变化。 选择一张牌升级。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "THE_CLERIC",
+   "name": "牧师",
+   "act": "exordium",
+   "description": "一个戴着金头盔（？）的奇怪蓝色人形生物脸上带着大大的微笑走到了你面前。 \n “ 你好啊朋友！ 我是 牧师 ！你想不想试试我的服务呐？！”那个生物大声喊叫起来。",
+   "choices": [
+    {
+     "option": "[治疗] 35 金币 ： 回复 。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[净化] 金币 : 从你的牌组中 移除一张牌。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "SCRAP_OOZE",
+   "name": "破烂软泥",
+   "act": "exordium",
+   "description": "你刚走进房间，就听见奇怪的 咕嘟声 和金属的 摩擦声 。在你面前的是一个史莱姆状的生物，它显然是吃了太多的破铜烂铁，消化不良了。 你在这个生物的中央见到了奇怪的光芒，或许是什么有魔法的物品？看起来只要你愿意把手伸进这东西的……开口，你就能得到什么 财宝 。当然，酸液和尖锐的破烂有可能会让你 受伤。",
+   "choices": [
+    {
+     "option": "[伸手进去] 失去 生命。 %: 找到一件遗物。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "GOLDEN_WING",
+   "name": "翅膀雕像",
+   "act": "exordium",
+   "description": "在形状不同的巨石之间，你看见一尊做工精细的翅膀形状的蓝色雕像。 \n 你可以看见雕像的裂缝中有 金币 掉出来。或许里面还有更多……",
+   "choices": [
+    {
+     "option": "[祈祷] 从你的牌组中移除一张牌。 失去 生命。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[摧毁] 获得 ～ 金币。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "MUSHROOMS",
+   "name": "蘑菇",
+   "act": "exordium",
+   "description": "你顺从了这份不自然的食欲，吃下一个又一个蘑菇后，你觉得自己有点晕晕的，然后就失去了意识。当你醒来时，你觉得有点怪怪的 \n 你 回复 生命值的 25% ，但同时被 感染 了。",
+   "choices": [
+    {
+     "option": "[踩扁] 激怒蘑菇们。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[吃下] 回复 点生命。 被诅咒——寄生。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[战斗]",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "LIARS_GAME",
+   "name": "蛇～",
+   "act": "exordium",
+   "description": "你走进一间房间，看见地上有一个大洞。当你靠近洞时，一条巨大的蛇形生物从里面钻了出来。 \n \n “嚯嚯嚯！你好，你好啊！这是谁呀？ 哎呀呀，你好冒险者，我就问一个简单的问题。 \n 最幸福的人生当然就是 什么东西都能买得起 的土豪生活了！　 \n 你同意吗？”",
+   "choices": [
+    {
+     "option": "[同意] 获得 金币。 被诅咒——疑虑。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[反对]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "GOLDEN_IDOL",
+   "name": "金神像",
+   "act": "exordium",
+   "description": "在一个不引人注意的小高台上，你发现了一个 闪闪发光的金神像 安然放置在上面，看起来非常值钱。 \n \n 周围看起来完全没有什么陷阱的样子。",
+   "choices": [
+    {
+     "option": "[Take] Gain the Golden Idol (Relic).",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[Run] Gain the Golden Idol. Take 25% Max HP damage.",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[Leave]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "SHINING_LIGHT",
+   "name": "闪耀之光",
+   "act": "exordium",
+   "description": "你发现在房间中央围绕着 一束很粗的光柱 。 \n \n 光柱上有着 温暖而闪烁的美丽花纹 仿佛在邀请你进入。",
+   "choices": [
+    {
+     "option": "[走进] 随机升级 2 张牌。 失去 生命。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "WORLD_OF_GOOP",
+   "name": "黏液世界",
+   "act": "exordium",
+   "description": "你掉进了一个水坑里。 \n 可是坑里 全是 史莱姆黏液 ！ \n 你感觉到这黏液似乎会灼伤你，便拼命想要从坑中脱身。 \n 你的耳朵、鼻子和全身都被黏液给浸透了。 \n \n 爬出来后，你发现自己的 金币 似乎变少了。你回头一看，发现水坑里不但有你掉落的钱，还有不少其他不幸的冒险者们落下的 金币 。",
+   "choices": [
+    {
+     "option": "[收集金币] 获得 金币。 失去 生命。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[放手吧] 失去 金币。",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "KNOWING_SKULL",
+   "name": "全知头骨",
+   "act": "city",
+   "description": "你发现自己在一个古老的有装饰的房间里，在房间正中央，有一个巨大的头骨被放在精致的高台上，在你靠近时，头骨 迸发出火焰 转向了你。",
+   "choices": [
+    {
+     "option": "[继续]",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[信息？] 告知 Boss 身份。 失去",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[成功？] 获得一张无色牌。 失去 生命。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[来点喝的？] 获得一瓶药水。 失去 生命。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[财富？] 获得 金币。 失去 生命。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[我要怎么离开？] 失去 生命。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "BACK_TO_BASICS",
+   "name": "古老文字",
+   "act": "city",
+   "description": "在攀爬城市区时，你注意到一面墙壁上写满了 先古之民 的文字。你正在努力推理这些奇怪的符号和图案可能的意思，却发现文字开始 发起了光 。 \n 突然之间，文字的意义变得清晰了……",
+   "choices": [
+    {
+     "option": "[简约] 从你的牌组中移除一张牌。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[质朴] 升级所有 打击 与 防御 。 选择一张牌移除。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "VAMPIRES",
+   "name": "吸血鬼（？）",
+   "act": "city",
+   "description": "在一条昏暗的街上，你遇见几个戴着兜帽的人在进行某种黑暗的仪式。当你靠近时，他们全都同时转身面对你，让你觉得十分诡异。 其中个子最高的一个微微一笑，露出了长长的尖牙，向你伸出了一只苍白而瘦长的手： \n “加入我们，兄弟。一起来感受高塔的温暖吧。”",
+   "choices": [
+    {
+     "option": "[接受] 移除所有 打击 牌。 获得5张 噬咬 牌。 失去 最大生命。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[拒绝]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "DRUG_DEALER",
+   "name": "增益研究者",
+   "act": "city",
+   "description": "一个戴着眼罩的邪笑着的男人大摇大摆地走到你面前： \n “嘿陌生人，想不想试试高端的科技？ 可会让你变得比任何训练和祝福都要强哦。 如果你是那种一心求死的英雄的话可不能没有它呢。 \n 你说怎么样？ 想不想试一下？”",
+   "choices": [
+    {
+     "option": "[试一下J.A.X.] 来点猛药。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[当一下实验对象] 选择2张牌进行变化。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[喝一下突变剂] 获得一件特殊遗物。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "THE_LIBRARY",
+   "name": "大图书馆",
+   "act": "city",
+   "description": "你经过一栋被遗弃的华美建筑物。 \n 墙上的标牌掉在了地上，上面写着 “大图书馆” 几个大字。 \n 你走进建筑物中，看见了无数卷轴、手稿和书籍。 \n 你拿起一本，舒服地坐在沙发椅上看了好一会儿。",
+   "choices": [
+    {
+     "option": "[阅读] 从 20 张牌中选择一张加入你的牌组。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[睡觉] 回复 点生命。",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "NEST",
+   "name": "巢穴",
+   "act": "city",
+   "description": "你看见一长串 戴着兜帽的人们 正鱼贯走进一座 看起来没什么特别的大教堂。",
+   "choices": [
+    {
+     "option": "[留在队伍中] 获得 仪式匕首 。 失去 生命。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[抢了钱就跑] 获得",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "GHOSTS",
+   "name": "幽灵议会",
+   "act": "city",
+   "description": "在你向上攀升时，突然四周的墙壁和地面开始冒出 浓重的黑烟 ，逐渐聚成了三个戴着面具的形状，它们交头接耳地说起话来。 “看来这又是一个 涅奥 的玩偶。” \n “我看也是！ 她总能做出最有趣的玩具！” \n \n 你注意到第三个存在有着巨大的嘴，它露出了一个大到夸张的微笑对你说： \n “别管那两个家伙……总之，你想不想尝试一下我们的 力量 呢？”",
+   "choices": [
+    {
+     "option": "[接受] 获得5张 灵体 牌。 失去 最大生命。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[拒绝]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "ADDICT",
+   "name": "流浪汉的恳求",
+   "act": "city",
+   "description": "你想要从一群披着斗篷的人旁边偷偷潜行过去，其中一个跑到了你面前。 \n “你能给我点儿什么吗，朋友？ 求求你了……一点 小钱 就好？” \n “我只是需要找个地方过夜，我身上有财宝可以交换……” \n 他看起来有点疯疯癫癫的，但似乎并不危险。",
+   "choices": [
+    {
+     "option": "[给他金币] 金币： 获得一件遗物。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[抢夺] 获得一件遗物。 被诅咒——羞耻。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "COLOSSEUM",
+   "name": "竞技场",
+   "act": "city",
+   "description": "哐！！！ \n … \n ……… \n …… \n 你被 打晕了 ……",
+   "choices": [
+    {
+     "option": "[继续]",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[战斗]",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[怂了] 逃跑。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[战斗到底] 进行一场艰难的战斗，赢得众多奖赏。",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "BEGGAR",
+   "name": "老乞丐",
+   "act": "city",
+   "description": "一个裹着毛衣的老乞丐在你经过时向你伸出了双手，他对你说：“施舍点钱吧，孩子？”",
+   "choices": [
+    {
+     "option": "[给金币] 金币： 从你的牌组中移除一张牌。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[继续]",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "MASKED_BANDITS",
+   "name": "蒙面强盗",
+   "act": "city",
+   "description": "嘿嘿嘿……谢谢你的 金币 啦！ \n 哎呀，我最喜欢 金币 了，那是多好的东西啊。 \n 闪闪亮的 小可爱们！",
+   "choices": [
+    {
+     "option": "[付钱] 失去所有 金币 。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[战斗！]",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[继续]",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "FORGOTTEN_ALTAR",
+   "name": "被遗忘的祭坛",
+   "act": "city",
+   "description": "在你面前是一个早已被遗忘的神祇的祭坛。 \n 在祭坛上方，是一尊双手伸出的精致女性雕像。 \n 她呼唤着你，要求你献上祭品。",
+   "choices": [
+    {
+     "option": "[Offer] Gain Darkstone Periapt (Relic).",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[Sacrifice] Gain 5 Max HP. Lose HP.",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[Desecrate] Become Cursed - Decay.",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "CURSED_TOME",
+   "name": "诅咒书本",
+   "act": "city",
+   "description": "在一所被遗弃的神庙里，你找到一本翻开着的巨大书本，里面满是 神秘的文字 。 \n \n 你刚试着想要解读这些复杂的文本，它就自己开始 移动变化 成了你熟悉的文字。",
+   "choices": [
+    {
+     "option": "[阅读]",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[继续] 失去 1 生命。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[继续] 失去 2 生命。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[继续] 失去 3 生命。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[停止] 失去 3 生命。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[拿走] 获得书。 失去 生命。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "THE_JOUST",
+   "name": "长枪决斗",
+   "act": "city",
+   "description": "你在巨大的建筑物间穿行时，遇见了一条长长的窄桥，两头似乎都有一名骑士彼此对望着。你走上前去…… \n “停步！” \n \n 一名骑士用手中的长枪对你比划着，强硬地让你停下。",
+   "choices": [
+    {
+     "option": "[继续]",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[主人] 赌 金币 —— 30%: 赢得 金币。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[观战]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "THE_MAUSOLEUM",
+   "name": "陵墓",
+   "act": "city",
+   "description": "你在一系列坟墓间穿行，前方出现了一个圆形房间，中间是一口 镶嵌着许多宝石的 巨大石棺。 \n 你辨认不出石棺上的字迹，但你能注意到有 黑色的雾气 从石棺的两侧渗透出来。",
+   "choices": [
+    {
+     "option": "[打开棺材] 获得一件遗物。 %: 被诅咒——苦恼。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "FALLING",
+   "name": "坠落",
+   "act": "beyond",
+   "description": "你在悬浮在空中的平台上往上跳跃时，不慎滑了一跤。 \n \n 你开始坠落。",
+   "choices": [
+    {
+     "option": "[继续] [落地] 失去",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[锁定] 需要： 技能牌 [释放] 失去",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[锁定] 需要： 能力牌 [猛击] 失去",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "MINDBLOOM",
+   "name": "心灵绽放",
+   "act": "beyond",
+   "description": "你在高塔的混沌深处不断攀行，不知不觉间，你愕然发现自己的思绪开始变得非常…… 真实…… \n \n 各种 怪物 与 财宝 的影像开始有了实体。 \n 这些感觉稍纵即逝，你准备怎么做？",
+   "choices": [
+    {
+     "option": "[我必凯旋] 与一名第一阶段的 Boss 战斗。 获得一件稀有遗物。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[我将富有] 获得 999 金币。 被诅咒—— 2 张凡庸。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[我无伤痛] 回复所有生命. 被诅咒——疑虑。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[我已觉醒] 升级所有牌。 你无法再回复生命。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "SENSORYSTONE",
+   "name": "感知石",
+   "act": "beyond",
+   "description": "你在高塔深处前进时，你遇到一个悬浮在空中缓慢 旋转 且 变幻 着的 发光超立方体 。",
+   "choices": [
+    {
+     "option": "[回忆] 在你的牌组中加入 1 张无色牌。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[回忆] 在你的牌组中加入 2 张无色牌。 失去 点生命。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[回忆] 在你的牌组中加入 3 张无色牌。 失去 点生命。",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "THE_MOAI_HEAD",
+   "name": "摩艾石像",
+   "act": "beyond",
+   "description": "你遇到了一个和四周*完全不搭*的东西。在你面前有一道与周围不同，没有在移动和变化的墙壁，一个巨大的石制头像从墙壁上凸出来。 \n 石像的嘴大张着，里面有许多巨大的染着血迹的牙齿。石像表面上写着许多象形文字，似乎是说有许多人会自己跳进嘴里被石像吞噬。为什么会有人这样做呢？",
+   "choices": [
+    {
+     "option": "[跳进去] 回复所有生命。 失去 最大生命。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[献上：金神像] 获得 333 金币。 失去金神像。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[Leave]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "MYSTERIOUS_SPHERE",
+   "name": "神秘圆球",
+   "act": "beyond",
+   "description": "在四周混乱的地形中间，一个骨质圆球伫立在地上，似乎包裹着一样神秘的发光物体。 \n 你很好奇里面有什么东西，但你注意到圆球周围有一些哨兵正在看守。",
+   "choices": [
+    {
+     "option": "[打开圆球] 战斗。 奖励：稀有遗物。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[战斗]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "SECRETPORTAL",
+   "name": "秘密传送门",
+   "act": "beyond",
+   "description": "在你面前有一样与周围奇异景观完全不符合的东西：在深处地区一面活墙壁上，奇怪地出现了一道石做的拱门，里面有一个 旋转的魔法传送门 。 \n \n 你不知道它会通向哪里，但它应该能够节约你爬塔的时间。",
+   "choices": [
+    {
+     "option": "[进入传送门] 立即传送到Boss房间。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "TOMB_OF_LORD_RED_MASK",
+   "name": "红面具大人之墓",
+   "act": "beyond",
+   "description": "在一条悬浮道路的尽头，你可以看见一处装饰华丽的古墓，当你到达古墓时，你看到有一个可以投放 金币 的开口，但上面的铭文已经被划得看不清楚了。",
+   "choices": [
+    {
+     "option": "[戴上红面具] 获得 222 金币。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[献上: 金币] 失去所有金币。 获得遗物。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "WINDING_HALLS",
+   "name": "蜿蜒走廊",
+   "act": "beyond",
+   "description": "你沿着弯曲的道路慢慢前进，却多次发现自己迷失了方向，仿佛墙壁和地面就在你的眼前突然移动了位置。 \n \n 更糟糕的是，你的脑中似乎还有许多声音在对你轻声低语。",
+   "choices": [
+    {
+     "option": "[寻找来路] 失去 点最大生命。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[拥抱疯狂] 获得2张 疯狂 。 失去 生命。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[集中精神] 被诅咒——苦恼。 获得 生命。",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "SPIRE_HEART",
+   "name": "高塔之心",
+   "act": "beyond",
+   "description": "砰咚 …… 砰咚 …… 砰咚 …… \n 整个房间里弥漫着脉动的恐惧…… \n 这就是高塔的 心脏 吗？ 这一切邪恶的源头？",
+   "choices": [
+    {
+     "option": "[继续]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "DESIGNER",
+   "name": "“尖端”设计师",
+   "act": "shrines",
+   "description": "你发现一家 五彩斑斓 的店，横幅上挂着大大的“尖端”两个字，就走进去想看看里面有什么。 \n “等等，别，不行。你不能进来！” \n \n 一个穿着打扮无比荒唐的男人出现在门口把你拦了下来。",
+   "choices": [
+    {
+     "option": "[小修一下] 失去 金币。 升级一张牌。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[清洁一下] 失去 金币。 移除一张牌。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[全套服务] 失去 金币。 移除一张牌，然后随机升级一张牌。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[一拳过去] 失去 生命。",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "PURIFIER",
+   "name": "净化",
+   "act": "shrines",
+   "description": "在你面前是一个被遗忘神灵的精致神龛。",
+   "choices": [
+    {
+     "option": "[祈祷] 从你的牌组中移除一张牌。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开] 选择一张牌移除。",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "UPGRADE_SHRINE",
+   "name": "升级神龛",
+   "act": "shrines",
+   "description": "在你面前是一个被遗忘神灵的精致神龛。",
+   "choices": [
+    {
+     "option": "[祈祷] 升级一张牌。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开] 选择一张牌升级。",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "WHEEL_OF_CHANGE",
+   "name": "变化大转盘",
+   "act": "shrines",
+   "description": "你见到一位穿着帅气、满面笑容的地精。 \n “是时候转动转盘了！ 你准备好了吗？ 你当然准备好了！”",
+   "choices": [
+    {
+     "option": "[玩小游戏]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "DUPLICATOR",
+   "name": "复制祭坛",
+   "act": "shrines",
+   "description": "在你面前是一个用来崇拜某种古老存在的华丽祭坛。",
+   "choices": [
+    {
+     "option": "[祈祷] 从你的牌组中复制一张牌。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开] 选择一张牌复制。",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "LAB",
+   "name": "实验室",
+   "act": "shrines",
+   "description": "你发现了一个满是试管、烧杯、烧瓶、药瓶、钳子、夹子、玻璃棒、手术钳、眼镜、漏斗、吸液管、玻璃筒、冷凝器甚至还有螺旋玻璃管的房间。 \n \n 你怎么会知道这些工具都叫什么名字的？这不重要，你四处翻找了起来。",
+   "choices": [
+    {
+     "option": "[搜索] 找到一些药水！",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "MATCH_AND_KEEP",
+   "name": "对对碰！",
+   "act": "shrines",
+   "description": "“ 十二张牌！ 搭对就拿走！ 五次机会，没有重来！ \n 准备好了吗？开始！”",
+   "choices": [
+    {
+     "option": "[继续]",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[玩小游戏] 剩余次数：",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "N_LOTH",
+   "name": "恩洛斯",
+   "act": "shrines",
+   "description": "一个驼着背、背后长出几条触手的奇怪生物正在你面前的垃圾堆和废墟里来回地翻找些什么。当你靠近时，他可怜巴巴地拖着脚走到了你面前。 \n “恩洛斯好饿，喂喂恩洛斯。”",
+   "choices": [
+    {
+     "option": "[交出： ] 失去这件遗物。 获得一件特别的遗物。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "WEMEETAGAIN",
+   "name": "我们又见面了！",
+   "act": "shrines",
+   "description": "“我们又见面了！” \n 一个蓬头垢面的男子欢快地出现在你面前向你问好。你不认识这个男人。 \n \n “是我， 兰伟德 啊！所以今天有什么好东西给我吗？和往常一样？哎呀呀，像我这样的人，独自一个可实在不好混啊，对不对？” \n 你满腹狐疑地打量着他，开始思考应该怎么做……",
+   "choices": [
+    {
+     "option": "[给他药水] 失去 。 获得一件遗物。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[给他金币] 失去 金币 。 获得一件遗物。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[给他卡牌] 失去 。 获得一件遗物。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[攻击]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "FACETRADER",
+   "name": "换脸商",
+   "act": "shrines",
+   "description": "你经过一尊举着许多不同的面具的奇怪雕像，但没走几步…… \n 你就听见身后传来一个轻柔的声音： \n “请留步。”",
+   "choices": [
+    {
+     "option": "[触碰] 失去 金币。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[交易] 50%：获得好脸。 50%：获得坏脸。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[继续] 生命， 获得",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "NOTEFORYOURSELF",
+   "name": "留给自己的讯息",
+   "act": "shrines",
+   "description": "一根柱子吸引了你的注意，你发现上面有一块松动的砖块。",
+   "choices": [
+    {
+     "option": "[继续]",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[取之与之] 获得 然后存放一张牌。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[无视]",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "FOUNTAIN_OF_CLEANSING",
+   "name": "神圣泉水",
+   "act": "shrines",
+   "description": "你经过墙壁上的一处饮水池，里面流淌着源源不断 闪着光的水 。",
+   "choices": [
+    {
+     "option": "[喝水] 移除所有诅咒牌。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "BONFIRE_ELEMENTALS",
+   "name": "篝火精灵",
+   "act": "shrines",
+   "description": "你遇见一群看似是 紫色火精灵 的东西在一个巨大的篝火堆旁 起舞 。",
+   "choices": [
+    {
+     "option": "[继续]",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[献上] 根据献上的贡品获得相应的奖励。 选择一张牌献上。",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "THE_WOMAN_IN_BLUE",
+   "name": "蓝衣女子",
+   "act": "shrines",
+   "description": "从黑暗中，一只手伸出来把你拉进了一家小店。眼睛适应了这里的亮度之后，你看见一个穿着鲜艳衣服的苍白女子正伸手展示整整一墙壁的药水。 \n “来买药水，快点！”她对你说。",
+   "choices": [
+    {
+     "option": "[买 1 瓶药水]",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[买 2 瓶药水]",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[买 3 瓶药水] 金币 。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "TRANSMORGRIFIER",
+   "name": "转化神龛",
+   "act": "shrines",
+   "description": "在你面前是一个被遗忘神灵的精致神龛。",
+   "choices": [
+    {
+     "option": "[祈祷] 变化一张牌。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开] 选择一张牌变化。",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "ACCURSED_BLACKSMITH",
+   "name": "邪恶熔炉",
+   "act": "shrines",
+   "description": "你钻进一个小屋，在里面似乎有一个锻造熔炉，旁边的铁匠工具都已经布满了灰尘，可是炉中的火却仍然熊熊燃烧。你觉得有些不安……",
+   "choices": [
+    {
+     "option": "[锻造] 升级你牌组中的一张牌。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[翻查] 获得一件特别遗物。 被诅咒——疼痛。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开] 选择一张牌升级",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  },
+  {
+   "id": "GOLDEN_SHRINE",
+   "name": "金色神龛",
+   "act": "shrines",
+   "description": "在你面前是一座古老神灵的精巧神龛。",
+   "choices": [
+    {
+     "option": "[祈祷] 获得 金币。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[亵渎] 获得 275 金币。 被诅咒——悔恨。",
+     "description": "",
+     "outcome": ""
+    },
+    {
+     "option": "[离开]",
+     "description": "",
+     "outcome": ""
+    }
+   ],
+   "image_url": null
+  }
+ ]
+}

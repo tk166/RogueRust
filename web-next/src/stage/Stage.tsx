@@ -280,6 +280,16 @@ export function Stage({
       enemies.push({ slot: enemy.slot, x: cx, y: cy, r: Math.abs(rx - cx) });
     });
     layout.enemies = enemies;
+
+    // 英雄也投一次（Beat 飘字落在"被作用的人头上"，英雄那侧同样要是真值）。
+    if (heroRef.current) {
+      heroRef.current.getWorldPosition(scratch.world);
+      scratch.projected.copy(scratch.world).project(camera);
+      layout.hero = {
+        x: (scratch.projected.x * 0.5 + 0.5) * size.width + originX,
+        y: (-scratch.projected.y * 0.5 + 0.5) * size.height + originY,
+      };
+    }
     layout.regions = view.regions;
     layout.width = size.width;
     layout.height = size.height;

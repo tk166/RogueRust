@@ -30,6 +30,17 @@ import { Stage } from "../stage/Stage";
 import { layout } from "../stage/layout";
 import { enemyAtScreen, cardAtScreen } from "../input/hitTest";
 import { MachineStore } from "../store";
+import {
+  advance as advanceBeats,
+  createDirector,
+  describeDirector,
+  enqueue as enqueueBeats,
+  isBusy as beatsBusy,
+  planBeats,
+  skipAll as skipBeats,
+  type DirectorState,
+} from "./beats";
+import { BeatLayer } from "./BeatLayer";
 import type { DropOption } from "../input/pointerMachine";
 import { installProbe } from "../probe";
 
@@ -163,6 +174,34 @@ export function CombatScreen(props: CombatScreenProps) {
   /** wasm 侧的视图；Mock 侧由 `scene` 派生。 */
   const [wasmView, setWasmView] = useState<CombatView | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  /**
+   * 关掉动画的两个来源：`?motion=off`（闸门/玩家显式）与系统 `prefers-reduced-motion`。
+   *
+   * ⚠️ 关掉动画**不是另一条代码路径**：导演只是"一条都不播"，局面仍然完全由内核快照驱动，
+   * 所以"关闭动画也能完整游戏"是结构上成立的（plan P5 的退出条件）。
+   */
+  const motionOff = useMemo(() => {
+    // `?motion=off` / `?motion=on` 是**显式**开关（闸门两边都要能测）；
+    // 没给参数时听系统。
+    // ⚠️ 无头 Chrome 的 `prefers-reduced-motion` 实测是 `reduce` ⇒ 闸门里默认**不播**动画。
+    // 所以"动画开着"必须由 `?motion=on` 显式要求，不能靠默认值。
+    const param = new URLSearchParams(window.location.search).get("motion");
+    if (param === "off") return true;
+    if (param === "on") return false;
+    return typeof window.matchMedia === "function"
+      ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      : false;
+  }, []);
+  const [director, setDirector] = useState<DirectorState>(() =>
+    createDirector({ reducedMotion: motionOff })
+  );
+  /** 已经消费到 `GameStore.beats.seq` 的哪一号。 */
+  const beatId = useRef(0);
+  /** 上一帧的时间戳（跨 effect 重建保留，见 rAF effect 的注释）。 */
+  const beatClock = useRef(0);
+  /** 导演状态的**最新**值（探针读它，见 `beats()` 的注释）。 */
+  const directorRef = useRef(director);
+  directorRef.current = director;
   const [detailSlot, setDetailSlot] = useState(-1);
   // [P1-UX] Hover 仅为表现层状态，不影响游戏规则与 Action 列表。
   const [hoverCardSlot, setHoverCardSlot] = useState(-1);
@@ -447,6 +486,11 @@ export function CombatScreen(props: CombatScreenProps) {
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        // 演出在播时，Esc 先"跳过演出"（这是玩家最想要的那件事）。
+        if (beatsBusy(director)) {
+          setDirector((current) => skipBeats(current));
+          return;
+        }
         // ⚠️ 有问句时 Esc 什么都不做：动作表此时为空，关掉弹窗等于把玩家扔进"点不动"的界面。
         if (choice) return;
         if (modalOpen) setModalOpen(false);
@@ -476,6 +520,39 @@ export function CombatScreen(props: CombatScreenProps) {
     if (activePointer.current?.longPressTimer != null) window.clearTimeout(activePointer.current.longPressTimer);
     if (noticeTimer.current !== null) window.clearTimeout(noticeTimer.current);
   }, []);
+
+  // ── Beat 导演：来源是 `GameStore.beats`（**两条 dispatch 路径共用**）──────────
+  useEffect(() => {
+    if (!wasm) return;
+    const consume = () => {
+      const latest = wasm.game.beats;
+      if (latest.seq === beatId.current) return;
+      beatId.current = latest.seq;
+      // 演出只读 beat：**不改变任何状态**（局面仍然来自内核快照）。
+      const planned = planBeats(latest.beats, latest.dropped, { reducedMotion: motionOff });
+      setDirector((current) => enqueueBeats(current, planned));
+    };
+    consume();
+    return wasm.game.subscribe(consume);
+  }, [wasm, motionOff]);
+
+  // ── Beat 导演：只在有东西在播时跑 rAF ───────────────────────────────────
+  useEffect(() => {
+    if (!beatsBusy(director)) return;
+    let frame = 0;
+    // ⚠️ `last` 必须放在 **ref** 里：这个 effect 的依赖是 `director`，而每一帧都会改它
+    // ⇒ effect 每帧重建。第一版把 `last` 写在闭包里，于是每次重建都把它重置成"现在"，
+    // `dt` 永远是 0、`elapsed` 一直是 0、动画看起来"卡在第一帧"（实测 `elapsed: 0`）。
+    beatClock.current = performance.now();
+    const tick = (now: number) => {
+      const dt = now - beatClock.current;
+      beatClock.current = now;
+      setDirector((current) => advanceBeats(current, dt));
+      frame = window.requestAnimationFrame(tick);
+    };
+    frame = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(frame);
+  }, [director]);
 
   // ── 待决选牌：勾选 / 清空 / 确认 ─────────────────────────────────────────
   const onChoicePick = useCallback(
@@ -544,6 +621,11 @@ export function CombatScreen(props: CombatScreenProps) {
       detailSlot: () => detailSlot,
       modalOpen: () => modalOpen,
       choice: () => choice,
+      // 演出诊断：闸门 38 用它断言"播放动画不改变最终状态"与"关动画也能玩"。
+      // ⚠️ 读 **ref** 而不是闭包里的 `director`：`installProbe` 只在依赖变化时重装，
+      // 而 `director` 每帧都变 ⇒ 闭包会一直返回**安装那一刻**的旧值（实测 elapsed 恒 0，
+      // 看起来像"动画没跑"，其实只是探针在读旧快照）。
+      beats: () => ({ ...directorRef.current, summary: describeDirector(directorRef.current) }),
       choicePick: onChoicePick,
       choiceConfirm: onChoiceConfirm,
       choiceClear: onChoiceClear,
@@ -632,6 +714,14 @@ export function CombatScreen(props: CombatScreenProps) {
           {wasmError ? `内核装载失败：${wasmError}` : "正在装载内核…"}
         </div>
       )}
+
+      {/* Beat 演出：DOM 飘字，坐标来自 `layout`（与 3D 同一套投影）。 */}
+      <BeatLayer
+        director={director}
+        layout={layout}
+        hero={layout.hero}
+        onSkip={() => setDirector((current) => skipBeats(current))}
+      />
 
       {/*
         战斗有结果：**只有**外层给了 `onFinish` 才画"继续"（P2 回归页没有下一屏）。

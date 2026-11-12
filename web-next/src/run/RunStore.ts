@@ -562,6 +562,19 @@ export class RunStore {
     return ok;
   }
 
+  /**
+   * 幕间推进：宣告这一幕走完了（`rd_run_end_act`）。
+   *
+   * ⚠️ 这是**内核动作**，不是页面上的一个布尔（§344 之前它就是页面自己记的 `runOver`）。
+   * 所以"点了没反应"这种情况只会是内核拒绝（`-2`），日志里会写清楚。
+   */
+  endAct(): number {
+    const code = this.host.endAct();
+    this.note(code === 0 ? "这一幕结束，进入下一幕" : `幕间推进被拒绝（code ${code}）`, code === 0 ? "good" : "warn");
+    this.refresh();
+    return code;
+  }
+
   // ── P4：商店 ────────────────────────────────────────────────────────────
   /**
    * 买一件东西。`kind` 与货架一一对应（`card` / `relic` / `potion` / `colorless`）。

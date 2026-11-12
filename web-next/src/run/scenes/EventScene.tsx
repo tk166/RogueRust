@@ -9,6 +9,7 @@
 // 3. **效果用一句话说清**（`heal 7 · gold 20` 这种判别值翻人话）—— 不给玩家猜代价。
 // 4. **"选牌"型选项**（`eventNeeds !== 0`）点下去会进牌组选择器（`SC-09`）。
 
+import { eventName, eventOptionLabel, eventText } from "../../i18n/index.js";
 import { effectSummary } from "../models.js";
 
 export interface EventOptionView {
@@ -28,18 +29,11 @@ export interface EventSceneProps {
   readonly busy?: boolean;
 }
 
-/** 事件 id → 中文标题。内容侧没有事件表，就用 id（**不假装翻译过**）。 */
-function eventTitle(id: string): string {
-  const dot = id.lastIndexOf(".");
-  const tail = dot >= 0 ? id.slice(dot + 1) : id;
-  return tail.replace(/_/g, " ");
-}
-
 export function EventScene({ eventId, text, options, needs, onChoose, busy = false }: EventSceneProps) {
   return (
     <section className="scene scene-event" data-scene="SC-08" data-event-id={eventId}>
       <header className="scene-head">
-        <h2>{eventTitle(eventId)}</h2>
+        <h2>{eventName(eventId)}</h2>
         {needs !== 0 && (
           <p className="scene-sub" data-event-needs={needs}>
             {needs === 1 ? "选完还要从牌组删一张" : needs === 2 ? "选完还要升级一张" : "选完还要变形一张"}
@@ -48,7 +42,7 @@ export function EventScene({ eventId, text, options, needs, onChoose, busy = fal
       </header>
 
       <p className="event-text" data-event-text>
-        {text || "（这个事件没有正文）"}
+        {eventText(eventId, text) || "（这个事件没有正文）"}
       </p>
 
       <div className="event-options" data-event-option-count={options.length}>
@@ -63,7 +57,9 @@ export function EventScene({ eventId, text, options, needs, onChoose, busy = fal
             title={option.available ? undefined : "这个选项现在不满足条件"}
             onClick={() => onChoose(option.slot)}
           >
-            <span className="event-option-label">{option.label || `选项 ${option.slot + 1}`}</span>
+            <span className="event-option-label">
+              {option.label ? eventOptionLabel(option.label) : `选项 ${option.slot + 1}`}
+            </span>
             <span className="event-option-effect muted">{effectSummary(option.effects)}</span>
             {!option.available && <span className="event-option-why">不满足条件</span>}
           </button>

@@ -18,7 +18,7 @@
 // TS 的 bundler 解析把 `.js` 映回 `.ts`，Vite 也认。
 import zh from "./zh.js";
 
-export type I18nTable = "cards" | "relics" | "potions" | "monsters" | "statuses";
+export type I18nTable = "cards" | "relics" | "potions" | "monsters" | "statuses" | "events";
 
 interface Entry {
   readonly name: string;
@@ -31,6 +31,7 @@ const TABLES: Record<I18nTable, Record<string, Entry>> = {
   potions: zh.potions as Record<string, Entry>,
   monsters: zh.monsters as Record<string, Entry>,
   statuses: zh.statuses as Record<string, Entry>,
+  events: zh.events as Record<string, Entry>,
 };
 
 /** 生成这些表时 `+` 变体沿用了基础文本的条数（来源只提供英文升级描述）。 */
@@ -42,7 +43,18 @@ const fallbacks: Record<I18nTable, Set<string>> = {
   potions: new Set(),
   monsters: new Set(),
   statuses: new Set(),
+  events: new Set(),
 };
+
+/**
+ * 事件**选项标签**的英文 → 中文。
+ *
+ * ⚠️ 与上面的 `Entry` 表不同：选项标签不是 id，是内容里的英文短句（`Take it` / `[Reach Inside]`），
+ * 所以它是**一张纯映射表**（来源见 `native/zh_events.py` 的文件头：能对上官方中文的用官方，
+ * 对不上的手译并标注）。查不到就回退英文，并单独计数。
+ */
+const EVENT_LABELS = zh.eventLabels as Record<string, string>;
+const eventLabelFallbacks = new Set<string>();
 
 function entry(table: I18nTable, id: string): Entry | null {
   const table_ = TABLES[table];
@@ -92,7 +104,46 @@ export function coverage(): Record<I18nTable, { entries: number; fallbacks: numb
   return out;
 }
 
+/**
+ * 事件显示名。没有条目时回退到 id 的末段（`golden_idol` → `golden idol`），并记一次回退。
+ */
+export function eventName(id: string): string {
+  const found = entry("events", id);
+  if (found && found.name) return found.name;
+  return id.replace(/_/g, " ");
+}
+
+/**
+ * 事件正文：有官方中文就用它，否则用**内容给的英文**（`fallback`）。
+ *
+ * ⚠️ 子节点（`golden_idol.boulder` 这类）没有官方中文来源 —— 它们只有内容里的英文
+ * `TextKey`。所以这里显式收一个 fallback 并**计数**：静默显示英文会让"没翻译"看起来像
+ * "本来就这样"。
+ */
+export function eventText(id: string, fallback: string): string {
+  const found = entry("events", id);
+  if (found && found.text) return found.text;
+  if (fallback) eventLabelFallbacks.add(`text:${id}`);
+  return fallback;
+}
+
+/** 事件选项标签：英文 → 中文（查不到回退英文并计数）。 */
+export function eventOptionLabel(label: string): string {
+  const found = EVENT_LABELS[label];
+  if (found) return found;
+  eventLabelFallbacks.add(label);
+  return label;
+}
+
+/** 事件 i18n 的回退计数（闸门用预算断言）。 */
+export function eventI18nFallbacks(): { texts: number; labels: number; labelsSample: string[] } {
+  const labels = Array.from(eventLabelFallbacks).filter((key) => !key.startsWith("text:"));
+  const texts = Array.from(eventLabelFallbacks).filter((key) => key.startsWith("text:"));
+  return { texts: texts.length, labels: labels.length, labelsSample: labels.slice(0, 20) };
+}
+
 /** 清空回退记录（闸门每次断言前重置，避免上一次的计数污染）。 */
 export function resetCoverage(): void {
   for (const table of Object.keys(fallbacks) as I18nTable[]) fallbacks[table].clear();
+  eventLabelFallbacks.clear();
 }

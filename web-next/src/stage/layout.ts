@@ -69,6 +69,13 @@ export interface ScreenLayout {
    */
   originX: number;
   originY: number;
+  /**
+   * 英雄在屏幕上的位置（CSS 像素，**视口**坐标，与 `enemies` 同一套）。
+   *
+   * Beat 演出的飘字要落在"被作用的人头上"，英雄那一侧也必须是**投影出来的真值** ——
+   * 拿一个 `width * 0.2` 的常数会让飘字在窄屏上离英雄很远（而那种偏差没人会发现）。
+   */
+  hero: { x: number; y: number };
 }
 
 export const layout: ScreenLayout = {
@@ -80,4 +87,5 @@ export const layout: ScreenLayout = {
   frames: 0,
   originX: 0,
   originY: 0,
+  hero: { x: 0, y: 0 },
 };

@@ -337,7 +337,7 @@ export function RunApp() {
             onRestart={() => {
               store.startRun(last.seed, last.ascension);
             }}
-            onContinue={base === SCENE.actCleared ? () => store.settleDefault() : undefined}
+            onContinue={base === SCENE.actCleared ? () => store.endAct() : undefined}
           />
         )}
 

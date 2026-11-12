@@ -59,6 +59,7 @@ export interface RunProbe {
   takePotion(): unknown;
   takeRelic(): unknown;
   settleDefault(): unknown;
+  endAct(): unknown;
 
   // ── P4 动作（与玩家按钮一一对应）──────────────────────────────────────────
   buy(kind: string, slot: number): unknown;
@@ -231,6 +232,10 @@ export function installRunProbe(store: RunStore): void {
       return { ok, scene: window.__run!.scene(), violations: window.__run!.violations() };
     },
 
+    endAct() {
+      const code = store.endAct();
+      return { code, scene: window.__run!.scene(), violations: window.__run!.violations() };
+    },
     buy(kind: string, slot: number) {
       const code = store.buy(kind as "card" | "relic" | "potion" | "colorless", slot);
       return { code, screens: window.__run!.screens(), violations: window.__run!.violations() };

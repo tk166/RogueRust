@@ -569,6 +569,16 @@ export class WasmHost {
     return (this.ex.rd_run_take_relic as () => number)();
   }
 
+  /**
+   * 宣告"这一幕的地图走完了"（`§344` 缺口 G2）。
+   *
+   * 三条前提（内核判，不是页面判）：没有待决问句 / 脚下节点已结算 / 可达为空。
+   * 返回 `0` 接受、`-2` 拒绝（原因在错误缓冲）、`-1` 没有局。
+   */
+  endAct(): number {
+    return (this.ex.rd_run_end_act as () => number)();
+  }
+
   /** 离开当前待决屏（商店/宝箱/篝火都认）。 */
   leave(): number {
     return (this.ex.rd_run_leave as () => number)();

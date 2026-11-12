@@ -339,3 +339,75 @@ body,
 }
 .choice-button.is-primary { background: #2b4a2b; border-color: #4f7a4f; }
 .choice-button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ── Beat 演出（P5）：DOM 飘字，坐标来自 layout（与 3D 同一套投影）──────────── */
+
+.beat-layer {
+  position: absolute;
+  inset: 0;
+  /* 演出绝不拦截输入：拖牌/点敌人都要能穿过去。 */
+  pointer-events: none;
+  z-index: 12;
+}
+
+.beat-float {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.85);
+  animation: beat-rise 520ms ease-out forwards;
+  white-space: nowrap;
+}
+
+.beat-float.is-damage { color: #ff7b6b; }
+.beat-float.is-dot { color: #c9a0ff; font-size: 19px; }
+.beat-float.is-block { color: #7fb2ff; font-size: 19px; }
+.beat-float.is-heal { color: #6ee7a8; }
+.beat-float.is-buff { color: #ffd479; font-size: 17px; }
+.beat-float.is-debuff { color: #ff9f6b; font-size: 17px; }
+.beat-float.is-down { color: #ff5f56; font-size: 24px; letter-spacing: 0.08em; }
+.beat-float.is-card { color: #e8f0ff; font-size: 16px; opacity: 0.92; }
+.beat-float.is-turn { color: #9fb3c8; font-size: 15px; letter-spacing: 0.14em; }
+.beat-float.is-summon { color: #a3f0ff; font-size: 18px; }
+.beat-float.is-neutral { color: #c8d2dc; font-size: 16px; }
+
+@keyframes beat-rise {
+  0% { opacity: 0; transform: translate(-50%, -30%) scale(0.86); }
+  18% { opacity: 1; transform: translate(-50%, -58%) scale(1.06); }
+  100% { opacity: 0; transform: translate(-50%, -128%) scale(1); }
+}
+
+.beat-queue {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line, #2b3440);
+  background: rgba(14, 18, 24, 0.85);
+  color: #9fb3c8;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.beat-note {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: #d29922;
+  pointer-events: none;
+  z-index: 12;
+}
+
+/* 关掉动画时（`?motion=off` 或系统 prefers-reduced-motion）：飘字不播，只留诊断行。 */
+@media (prefers-reduced-motion: reduce) {
+  .beat-float { animation: none; opacity: 0; }
+}

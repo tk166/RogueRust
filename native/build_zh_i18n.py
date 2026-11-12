@@ -35,6 +35,8 @@ import os
 import sys
 import urllib.request
 
+from zh_events import build_events
+
 NL = chr(10)
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.join(ROOT, 'native', 'zh_source')
@@ -95,6 +97,8 @@ def main():
         'potions': {},
         'monsters': {},
         'statuses': {},
+        'events': {},
+        'eventLabels': {},
     }
     problems = []
 
@@ -201,6 +205,19 @@ def main():
 
     out['upgradedWithBaseText'] = upgraded_with_base_text
 
+    # ── 事件：名字/正文/根选项来自 spire-archive（官方 13 语言），id 对照见 `zh_events.py` ──
+    events, event_labels, event_stats = build_events(content)
+    out['events'] = events
+    out['eventLabels'] = event_labels
+    print('  事件       %3d 个（有名字 %d、有正文 %d、根选项 %d 条、标签 %d 条）' % (
+        event_stats['roots'], event_stats['named'], event_stats['text'],
+        event_stats['options'], len(event_labels)))
+    if event_stats['missing']:
+        print('    缺名字：', ', '.join(event_stats['missing']))
+    if event_stats['optionMismatch']:
+        print('    根选项条数不一致（按标签表回退）：',
+              ', '.join('%s %d/%d' % row for row in event_stats['optionMismatch']))
+
     # ── 卡牌元数据：种类（Tags）+ 要不要目标（Program 的 sel.eventTarget）────────
     meta = {}
     for card in content['Cards']:
@@ -247,7 +264,7 @@ def main():
         ['', 'export default zh;'],
     )
 
-    total = sum(len(out[key]) for key in ('cards', 'relics', 'potions', 'monsters', 'statuses'))
+    total = sum(len(out[key]) for key in ('cards', 'relics', 'potions', 'monsters', 'statuses', 'events'))
     print(NL + '写出 %s（%d 条；+ 变体沿用基础文本 %d 条）' % (
         os.path.relpath(OUT, ROOT), total, upgraded_with_base_text))
     print('写出 %s（%d 张）' % (os.path.relpath(META_OUT, ROOT), len(meta)))

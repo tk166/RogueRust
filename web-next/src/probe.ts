@@ -39,6 +39,8 @@ export interface ProbeOptions {
   setModal: (open: boolean) => void;
   /** 只在 `?debug` 下存在：闸门需要造出"只剩一个敌人"的局面。 */
   debugSetEnemyHp?: (slot: number, hp: number) => void;
+  /** Beat 演出导演的状态（plan P5：闸门断言"播放动画不改变最终状态"）。 */
+  beats?: () => unknown;
 }
 
 export interface Probe {
@@ -71,6 +73,8 @@ export interface Probe {
    * 这里认**任意**敌人（高亮与红圈用）。两者必须由**同一个**屏幕命中函数回答 ——
    * 闸门断言它们在合法目标上一致。
    */
+  /** Beat 演出导演的状态（`playing` / `queue` / `dropped` / `unknownKinds`）。 */
+  beats: () => unknown;
   hovered: () => { card: number; enemy: number };
   openDetail: (slot: number) => void;
   setModal: (open: boolean) => void;
@@ -153,6 +157,7 @@ export function installProbe(options: ProbeOptions): void {
       frames: options.layout.frames,
       originX: options.layout.originX,
       originY: options.layout.originY,
+      hero: { ...options.layout.hero },
     }),
     hand: () =>
       options.scene().hand.map((card, slot) => ({
@@ -185,6 +190,7 @@ export function installProbe(options: ProbeOptions): void {
     rebounds: () => options.rebounds().slice(),
     detailSlot: () => options.detailSlot(),
     modalOpen: () => options.modalOpen(),
+    beats: () => options.beats?.() ?? null,
     hovered: () => ({ card: options.hoveredCard(), enemy: options.hoveredEnemy() }),
     i18n: () => {
       const report = i18nCoverage();
