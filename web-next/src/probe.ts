@@ -83,6 +83,7 @@ export interface Probe {
     turn: number;
     round: number;
     result: string;
+    epoch: number;
   };
   /** `?mock` ⇒ mock，否则 wasm。 */
   mode: () => "mock" | "wasm";
@@ -235,6 +236,7 @@ export function installProbe(options: ProbeOptions): void {
         turn: view.turn,
         round: view.round,
         result: view.result,
+        epoch: view.epoch,
       };
     },
     mode: options.mode,

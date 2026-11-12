@@ -1,5 +1,6 @@
-// 生成物：python native/build_zh_i18n.py 重建，不要手改。
-// 来源：spire-archive.com/api/sts1（lang=zh/en）+ sts/content/*.json（交叉核对）。
+// 生成物：`python native/build_zh_i18n.py` 重建，**不要手改**。
+// 来源：spire-archive.com/api/sts1（lang=zh/en）+ `sts/content/*.json`（交叉核对）。
+
 const zh = {
  "note": "内容 id → 中文名/介绍。由 native/build_zh_i18n.py 生成，不要手改。",
  "source": "spire-archive.com/api/sts1 (lang=zh/en) + sts/content/*.json",

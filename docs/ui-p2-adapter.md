@@ -193,6 +193,23 @@ UI_WASM_UI PASS mode=wasm hand=4 energy=2 enemy0=28->22 dom-synced=1
 `ceil/floor` —— 等于把错的规则验证了一遍；现在换成新规则并加了四条退化守卫（n=2 同排、x 分开、
 y 相同；n=4 一排；n=5 是 3+2），证据串加 `rows=4`。
 
+## 5e. 第十四轮 Review 的处置（§361）
+
+审阅提的 3 个 P1 全部成立，其中 **P1-A 复现到了用户可见后果**：真 wasm 下「防御」拖到空白处被回弹
+（能量/格挡/手牌都不变），因为内核为"每张可出的牌 × 每个活敌人"各发一条动作，而 UI 拿
+`some(targetSlot >= 0)` 反推"要不要目标"。
+
+**根因一句话**：动作枚举的 `targetSlot` 不是卡牌的目标声明，是内核的**枚举策略**。
+
+修法：`build_zh_i18n.py` 同时生成 `view/cardMeta.ts`（`id → {kind, targeting}`）——
+`kind` 来自 `Tags`，`targeting` 来自程序里有没有 `sel.eventTarget`（与仓库旧内容的显式 `target`
+字段对拍 10/10 一致）。无目标牌的多条动作**归并成一个代表动作**（不虚构 `targetSlot=-1`）。
+
+其余四项：拒绝语义按返回码分支（`rejected && !unchanged` = 契约级错误，冻结界面）、
+wasm sha **运行时**比对（`load()` 读 `wasm.json`；`dev` 先同步）、消费
+`rd_env_enemy_overflow()`、`ChoiceModal` 查上限、手势 `epoch` 版本校验（松手时四元组不匹配就取消）、
+横屏 `n=4` 回到 2+2。
+
 ## 6. 还没做的
 
 - **卡名是定义 id**（`bash` / `strike` / `defend`）：`rd_env_card_name_*` 返回定义 id，本地化是后续的事；

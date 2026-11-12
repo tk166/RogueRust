@@ -79,9 +79,9 @@ function describeResult(result: ReturnType<GameStore["dispatch"]>) {
 const probe: P2Probe = {
   ready: true,
 
-  async load(url = "./rd_wasm.wasm") {
+  async load(url = "./rd_wasm.wasm", manifestUrl?: string) {
     try {
-      state.host = await WasmHost.load(url);
+      state.host = await WasmHost.load(url, manifestUrl ? { manifestUrl } : {});
       state.store = new GameStore(state.host);
       state.error = null;
       return { ok: true, diagnostics: state.host.diagnostics };

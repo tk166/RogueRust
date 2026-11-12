@@ -3,8 +3,11 @@
 // 三条纪律（plan P2 + 前几轮的教训）：
 // 1. 组件不碰 `instance.exports` —— 它们只读 `GameStore.snapshot()` 与 `subscribe()`。
 // 2. **拒绝不产生成功演出**：`dispatch()` 返回结果，调用方只在 `accepted` 时播放反馈。
-// 3. **拒绝 = 一个字节都不改**：`dispatch()` 自己在前后各读一次观察向量并比对，
-//    不一致就把 `unchanged` 标成 false —— 这不是"信任内核"，是**当场证明**（§纪律 8）。
+// 3. **拒绝 = 可观察向量逐字节不变**：`dispatch()` 前后各读一次 148 格观察向量并比对，
+//    不一致就把 `unchanged` 标成 false —— 这不是"信任内核"，是**当场证明**。
+//    ⚠️ 但它**只覆盖观察向量**：随机数、内部实例、`PendingChoice` 细节等未导出字段都不在里面。
+//    "整个结构体相等"只有 Rust 侧的 full-hash 测试能证明（已有 `hash_full`），不要用 UI 代替
+//    （第十四轮 Review P1-D）。
 
 import type { WasmHost } from "./host";
 import { STEP_ACCEPTED, STEP_BROKEN, STEP_FINISHED, STEP_REJECTED } from "./host";
@@ -13,7 +16,11 @@ import type { Beat, CombatAction, CombatSnapshot, PendingChoice } from "./snapsh
 export interface DispatchResult {
   readonly accepted: boolean;
   readonly code: number;
-  /** `accepted === false` 时，内核是否**真的**没改状态（逐字节比对观察向量）。 */
+  /**
+   * `accepted === false` 时，**可观察向量**是否逐字节不变。
+   *
+   * ⚠️ 只覆盖 148 格观察向量，不覆盖随机数 / 内部实例 / 未导出字段。
+   */
   readonly unchanged: boolean;
   readonly reason: "accepted" | "rejected" | "finished" | "broken";
   readonly action: CombatAction | null;
@@ -38,6 +45,15 @@ export class GameStore {
   private readonly listeners = new Set<Listener>();
   /** 已经发生过多少次**被接受**的动作（回放/调试用）。 */
   private acceptedCount = 0;
+  /**
+   * **动作表版本号**：任何可能改变动作表编号的操作都 +1（接受的动作、选牌确认、刷新）。
+   *
+   * 为什么需要它：`actionIndex` 是**数字位置**，不是身份。玩家按住某张牌的瞬间冻结了
+   * `actionIndex = 3`；松手前若另一条路径（多指同时点"结束回合"、选牌确认）改了状态，
+   * 新的动作表里 `index = 3` 可能是**另一张牌 / 另一个敌人**，照旧执行就会"出另一张牌"
+   * （第十四轮 Review P1-B）。手势提交前必须比对版本号。
+   */
+  private stateEpoch = 0;
 
   constructor(host: WasmHost) {
     this.host = host;
@@ -54,12 +70,19 @@ export class GameStore {
   /** 重新读一次（进战斗、结算奖励之后调用）。没有会话时把快照清成 `null`。 */
   refresh(): CombatSnapshot | null {
     this.current = this.host.hasCombatSession() ? this.host.snapshot() : null;
+    // 动作表可能整体换了一份 ⇒ 版本号前进，进行中的手势必须作废。
+    this.stateEpoch += 1;
     for (const listener of this.listeners) listener();
     return this.current;
   }
 
   get acceptedActions(): number {
     return this.acceptedCount;
+  }
+
+  /** 动作表版本号（见 `stateEpoch` 的注释）。 */
+  get epoch(): number {
+    return this.stateEpoch;
   }
 
   /** 当前可用的动作表（来自内核，不是 UI 自己推的）。没有会话时为空表。 */
@@ -92,7 +115,10 @@ export class GameStore {
             ? "finished"
             : "broken";
 
-    if (code === STEP_ACCEPTED) this.acceptedCount += 1;
+    if (code === STEP_ACCEPTED) {
+      this.acceptedCount += 1;
+      this.stateEpoch += 1;
+    }
     // 无论接受与否都重读：接受后必须与内核一致；被拒绝时重读也等于再确认一次"没变"。
     this.current = this.host.snapshot();
     // beat 是"这一步发生了什么"的权威叙述；接受时才有内容。
@@ -159,6 +185,7 @@ export class GameStore {
       before.length === after.length && before.every((value, index) => value === after[index]);
     if (code === 0) {
       this.current = this.host.hasCombatSession() ? this.host.snapshot() : null;
+      this.stateEpoch += 1;
       for (const listener of this.listeners) listener();
     }
     return { code, accepted: code === 0, unchanged };
@@ -167,5 +194,15 @@ export class GameStore {
   /** 诊断用：`STEP_BROKEN` 表示内核驱动坏了（不是"玩家操作非法"）。 */
   static isBroken(result: DispatchResult): boolean {
     return result.code === STEP_BROKEN;
+  }
+
+  /**
+   * **契约级错误**：内核拒绝了这一步，却把观察向量改了。
+   *
+   * 这不是"玩家操作非法"，是 ABI 违约 —— 界面必须**响亮失败**（冻结操作 + 显示诊断），
+   * 不能显示"状态未改变"那种安慰话（第十四轮 Review P1-D）。
+   */
+  static isContractViolation(result: DispatchResult): boolean {
+    return !result.accepted && !result.unchanged;
   }
 }

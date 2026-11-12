@@ -17,8 +17,10 @@ import type { DropOption } from "../input/pointerMachine";
 import { liveEnemySlots, type MockScene } from "../mock/scene";
 import type { CombatSnapshot } from "../wasm/snapshot";
 import { displayName, displayText } from "../i18n";
+import cardMeta from "./cardMeta";
 
-export type CardKind = "attack" | "skill" | "power";
+/** 与 `cardMeta.ts` 的 `CardMeta["kind"]` 一致（内容包 `Tags` 的五种）。 */
+export type CardKind = "attack" | "skill" | "power" | "status" | "curse";
 
 export interface ViewCard {
   readonly id: string;
@@ -62,6 +64,8 @@ export interface CombatView {
   readonly turn: number;
   readonly round: number;
   readonly result: ViewResult;
+  /** 动作表版本号（手势提交前比对，见 `GameStore.stateEpoch`）。 */
+  readonly epoch: number;
   /** 这张牌此刻允许的落点。**唯一来源**：wasm 是内核动作表，mock 是演示逻辑。 */
   optionsFor(handSlot: number): DropOption[];
   /** 结束回合的落点（`null` = 现在不能结束回合）。 */
@@ -79,16 +83,21 @@ function intentText(kind: number, damage: number): string {
 }
 
 /**
- * 卡牌"种类"（决定牌面颜色）。
+ * 卡牌的元数据（种类 / 要不要玩家选目标）—— **查表，不猜**。
  *
- * ⚠️ **这是展示层的猜测，不是内核事实**：观察向量与动作表都没有"这张牌是攻击/技能/能力"，
- * ABI 冻结的只有 `def_slot`。这里按规则文本里有没有 `damage` 猜，猜错只影响配色。
- * 要变成事实，得让内核在观察向量里加一格（那是 ABI 变更，P3 再说）。
+ * 上一版按规则文本里有没有 `damage` 猜种类（中文一来就全判成技能），并且用
+ * `actions.some(targetSlot >= 0)` 反推"要不要目标" —— 后者是第十四轮 Review P1-A 的根因：
+ * 内核**故意**为"每张可出的牌 × 每个活敌人"各发一条动作，`targetSlot` 是**枚举策略**，
+ * 不是卡牌的目标声明。于是"防御"被当成定向牌，拖到空白处会被回弹（实测：能量/格挡/手牌都不变）。
  */
-function guessKind(rules: string): CardKind {
-  // ⚠️ i18n 之后规则文本是**中文**（"造成 6 点伤害。"）⇒ 必须同时匹配中英两种写法，
-  // 否则所有牌都会被判成"技能"（截图上整手牌一个颜色）。
-  return /damage|伤害/i.test(rules) ? "attack" : "skill";
+function metaOf(cardId: string): { kind: CardKind; targeting: "none" | "singleEnemy" } {
+  const found = cardMeta[cardId];
+  if (found) return found;
+  // `strike+` 之类：剥掉 `+` 查基础条目（与 i18n 表同样的剥壳规则）。
+  const base = cardMeta[cardId.replace(/\++$/, "")];
+  if (base) return base;
+  // 查不到：退回最保守的假设（不要目标 + 技能色），**不**按文案猜。
+  return { kind: "skill", targeting: "none" };
 }
 
 export interface WasmNames {
@@ -103,7 +112,7 @@ export interface WasmNames {
  * `optionsFor` 直接读内核动作表：一张牌有哪些落点、每条动作的 `actionIndex` 是什么，
  * 全部由 `rd_env_action_*` 说了算。UI 不再自己算"能不能打这个敌人"。
  */
-export function viewFromWasm(snapshot: CombatSnapshot, names: WasmNames): CombatView {
+export function viewFromWasm(snapshot: CombatSnapshot, names: WasmNames, epoch = 0): CombatView {
   const hand: ViewCard[] = snapshot.hand.map((card) => {
     // 内核给的是**定义 id**（`strike` / `strike+`）；中文由 i18n 表查，内核不需要知道中文。
     const cardId = names.cardName(card.slot);
@@ -111,13 +120,14 @@ export function viewFromWasm(snapshot: CombatSnapshot, names: WasmNames): Combat
     const actions = snapshot.actions.filter(
       (action) => action.kind === "play" && action.handSlot === card.slot
     );
+    const meta = metaOf(cardId);
     return {
       id: `hand-${card.slot}-${card.defSlot}`,
       name: displayName("cards", cardId),
       cost: card.cost,
-      kind: guessKind(rules),
-      // "需要目标"由内核决定：存在 `targetSlot >= 0` 的动作就是定向牌。
-      targeted: actions.some((action) => action.targetSlot >= 0),
+      kind: meta.kind,
+      // ⚠️ "要不要目标"来自**内容元数据**，不是动作表的 `targetSlot`（见 `metaOf`）。
+      targeted: meta.targeting === "singleEnemy",
       rules,
       playable: actions.length > 0,
     };
@@ -147,17 +157,26 @@ export function viewFromWasm(snapshot: CombatSnapshot, names: WasmNames): Combat
     turn: snapshot.turn,
     round: snapshot.round,
     result: snapshot.result,
+    epoch,
     optionsFor(handSlot: number): DropOption[] {
-      return snapshot.actions
-        .filter((action) => action.kind === "play" && action.handSlot === handSlot)
-        .map((action) => ({
-          slot: action.targetSlot,
-          actionIndex: action.index,
-          label:
-            action.targetSlot >= 0
-              ? `${names.cardName(handSlot)} → 敌人 ${action.targetSlot}`
-              : `打出 ${names.cardName(handSlot)}`,
-        }));
+      const actions = snapshot.actions.filter(
+        (action) => action.kind === "play" && action.handSlot === handSlot
+      );
+      if (actions.length === 0) return [];
+      const cardId = names.cardName(handSlot);
+      const meta = metaOf(cardId);
+      const label = displayName("cards", cardId);
+      if (meta.targeting === "none") {
+        // 内核会为无目标牌也枚举出"×每个活敌人"的多条动作（过度指定目标对规则无害）。
+        // UI 侧把它们**归并成一个代表动作**：业务上"丢哪儿都算数"，`actionIndex` 取第一条
+        // 真实动作（**不虚构** `targetSlot = -1` 的内核条目）。
+        return [{ slot: -1, actionIndex: actions[0].index, label: `打出 ${label}` }];
+      }
+      return actions.map((action) => ({
+        slot: action.targetSlot,
+        actionIndex: action.index,
+        label: `${label} → 敌人 ${action.targetSlot}`,
+      }));
     },
     endTurnOption(): DropOption | null {
       const action = snapshot.actions.find((candidate) => candidate.kind === "endTurn");
@@ -208,6 +227,7 @@ export function viewFromMock(scene: MockScene): CombatView {
     turn: scene.turn,
     round: 1,
     result: "ongoing",
+    epoch: 0,
     optionsFor(handSlot: number): DropOption[] {
       const card = scene.hand[handSlot];
       if (!card) return [];

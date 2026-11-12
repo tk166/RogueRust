@@ -132,8 +132,85 @@ const labelsMatch = view.enemies.every(
 );
 check(labelsMatch, "屏幕上的敌人血量与内核一致（不是陈旧值）", JSON.stringify(labelsBefore));
 
+// ── 1b. 目标语义：**来自内容元数据**，不是动作表的 targetSlot（Review P1-A）─────
+// 内核会为"每张可出的牌 × 每个活敌人"各发一条动作，所以 `targetSlot >= 0` 什么都说明不了。
+// 这里断言"手牌里同时有无目标牌和定向牌"，再各拖一次空白处：
+// 无目标牌要**生效**，定向牌要**回弹**。
+const targetFlags = await evaluate("window.__p1.view().hand.map((c) => ({ name: c.name, targeted: c.targeted }))");
+check(
+  targetFlags.some((card) => card.targeted === false),
+  "手牌里有**无目标**牌（防御/技能），且被标成 targeted=false",
+  JSON.stringify(targetFlags)
+);
+check(
+  targetFlags.some((card) => card.targeted === true),
+  "手牌里有**定向**牌（打击/攻击），且被标成 targeted=true",
+  JSON.stringify(targetFlags)
+);
+
+/** 按下某张牌 → 拖到 `to` → 松开（真实指针事件）。 */
+async function dragCard(slot, to) {
+  const from = await evaluate(`(() => {
+    const card = window.__p1.layout().cards.find((c) => c.slot === ${slot});
+    return card ? { x: card.hitX, y: card.hitY } : null;
+  })()`);
+  if (!from) return false;
+  await page.send("Input.dispatchMouseEvent", {
+    type: "mousePressed", x: from.x, y: from.y, button: "left", buttons: 1, clickCount: 1,
+  });
+  for (let step = 1; step <= 6; step += 1) {
+    const ratio = step / 6;
+    await page.send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: from.x + (to.x - from.x) * ratio,
+      y: from.y + (to.y - from.y) * ratio,
+      button: "left", buttons: 1,
+    });
+    await sleep(16);
+  }
+  await page.send("Input.dispatchMouseEvent", {
+    type: "mouseReleased", x: to.x, y: to.y, button: "left", buttons: 0, clickCount: 1,
+  });
+  await sleep(250);
+  return true;
+}
+
+// ⚠️ 宽高在 layout() 里，不在 view() 里（第一版取 view.width ⇒ undefined ⇒ NaN ⇒ CDP 报
+// "double value expected"）。
+const viewport = await evaluate("({ w: window.__p1.layout().width, h: window.__p1.layout().height })");
+const emptySpot = { x: Math.round(viewport.w / 2), y: Math.round(viewport.h * 0.15) };
+
+// ① 无目标牌拖到空白处 ⇒ **生效**（旧实现会回弹：实测能量/格挡/手牌都不变）
+const untargetedSlot = targetFlags.findIndex((card) => card.targeted === false);
+const beforeUntargeted = await evaluate("window.__p1.view()");
+await dragCard(untargetedSlot, emptySpot);
+const afterUntargeted = await evaluate("window.__p1.view()");
+check(
+  afterUntargeted.hand.length === beforeUntargeted.hand.length - 1 &&
+    (afterUntargeted.hero.block > beforeUntargeted.hero.block ||
+      afterUntargeted.hero.energy < beforeUntargeted.hero.energy ||
+      JSON.stringify(afterUntargeted.hero) !== JSON.stringify(beforeUntargeted.hero)),
+  "无目标牌拖到**空白处**就生效（不需要选敌人）",
+  `block ${beforeUntargeted.hero.block} -> ${afterUntargeted.hero.block}, ` +
+    `hand ${beforeUntargeted.hand.length} -> ${afterUntargeted.hand.length}`
+);
+
+// ② 定向牌拖到空白处 ⇒ **回弹**（不给目标 = 取消）
+const targetedSlot = targetFlags.findIndex((card) => card.targeted === true);
+const beforeTargeted = await evaluate("window.__p1.view()");
+if (targetedSlot >= 0) {
+  await dragCard(targetedSlot, emptySpot);
+}
+const afterTargeted = await evaluate("window.__p1.view()");
+check(
+  afterTargeted.hand.length === beforeTargeted.hand.length &&
+    afterTargeted.hero.energy === beforeTargeted.hero.energy,
+  "定向牌拖到**空白处**回弹（不消耗能量、不出牌）",
+  `energy ${beforeTargeted.hero.energy} -> ${afterTargeted.hero.energy}, ` +
+    `hand ${beforeTargeted.hand.length} -> ${afterTargeted.hand.length}`
+);
+
 // ── 2. 从 UI 拖一张**会打人**的牌出去 ─────────────────────────────────────
-// 卡牌文本来自内核（英文），用它挑一张攻击牌；`targeted` 也来自内核动作表。
 const pick = await evaluate(`(() => {
   const view = window.__p1.view();
   const card = view.hand.find((c) => c.targeted && /damage|伤害/i.test(c.rules ?? ""));
@@ -205,6 +282,52 @@ const labelsFollow = after.enemies.every(
   (enemy) => labelsAfter[String(enemy.slot)] === `${enemy.hp}/${enemy.hpMax}`
 );
 check(labelsFollow, "出牌后屏幕上的血量跟着内核变（DOM 不是陈旧值）", JSON.stringify(labelsAfter));
+
+// ── 3b. 手势过期：按住一张牌，期间另一条路径改了动作表 ⇒ 松手必须取消（Review P1-B）──
+// `actionIndex` 是数字位置、不是身份。这里模拟"多指同时点结束回合"：
+// 按下 → 调 endTurn（动作表换版）→ 松开，期望**不出牌**、能量不变。
+const staleView = await evaluate("window.__p1.view()");
+const staleSlot = staleView.hand.findIndex((card) => card.targeted);
+const stalePoint = await evaluate(`(() => {
+  const card = window.__p1.layout().cards.find((c) => c.slot === ${staleSlot});
+  return card ? { x: card.hitX, y: card.hitY } : null;
+})()`);
+const enemyPoint = await evaluate(
+  "(() => { const e = window.__p1.layout().enemies[0]; return e ? { x: e.x, y: e.y } : null; })()"
+);
+if (stalePoint && enemyPoint) {
+  await page.send("Input.dispatchMouseEvent", {
+    type: "mousePressed", x: stalePoint.x, y: stalePoint.y, button: "left", buttons: 1, clickCount: 1,
+  });
+  await sleep(80);
+  // ⚠️ 另一条路径：结束回合（真实 dispatch，动作表换版）
+  const endedMidDrag = await evaluate("window.__p1.endTurn()");
+  await sleep(150);
+  const midView = await evaluate("window.__p1.view()");
+  // 松手在敌人身上 —— 若没有版本校验，这个 index 可能指向"另一张牌打另一个敌人"
+  await page.send("Input.dispatchMouseEvent", {
+    type: "mouseMoved", x: enemyPoint.x, y: enemyPoint.y, button: "left", buttons: 1,
+  });
+  await sleep(30);
+  await page.send("Input.dispatchMouseEvent", {
+    type: "mouseReleased", x: enemyPoint.x, y: enemyPoint.y, button: "left", buttons: 0, clickCount: 1,
+  });
+  await sleep(300);
+  const afterStale = await evaluate("window.__p1.view()");
+  check(endedMidDrag?.accepted === true, "按住期间另一条路径（结束回合）成功改了动作表", JSON.stringify(endedMidDrag));
+  check(
+    afterStale.hero.energy === midView.hero.energy,
+    "松手**没有**出牌（能量不变）—— 过期手势被取消",
+    `${midView.hero.energy} -> ${afterStale.hero.energy}; hero=${JSON.stringify(afterStale.hero)}`
+  );
+  check(
+    afterStale.epoch > staleView.epoch,
+    "视图版本号在状态变化后前进了（epoch 生效）",
+    `${staleView.epoch} -> ${afterStale.epoch}`
+  );
+} else {
+  check(false, "构造过期手势的场景（拿到牌与敌人的屏幕坐标）");
+}
 
 // ── 4. 结束回合：走内核动作，时间前进 ─────────────────────────────────────
 const clockBefore = await evaluate("window.__p1.view()");

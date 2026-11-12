@@ -105,6 +105,7 @@ const EMPTY_VIEW: CombatView = {
   turn: 0,
   round: 0,
   result: "ongoing",
+  epoch: -1,
   optionsFor: () => [],
   endTurnOption: () => null,
 };
@@ -118,6 +119,8 @@ export function App() {
   const [wasmError, setWasmError] = useState<string | null>(null);
   /** 待决选牌的问句（`rd_env_choice_*`）。`null` = 没有问句。 */
   const [choice, setChoice] = useState<PendingChoice | null>(null);
+  /** 致命错误（ABI 违约 / 驱动损坏）：一旦设置就冻结操作并显示诊断。 */
+  const [fatal, setFatal] = useState<string | null>(null);
   /** 上一次"确认"被拒的原因（内核 `-2`：数量不对）。 */
   const [choiceRefusal, setChoiceRefusal] = useState<string | null>(null);
   /** wasm 侧的视图；Mock 侧由 `scene` 派生。 */
@@ -140,6 +143,8 @@ export function App() {
     if (noticeTimer.current !== null) window.clearTimeout(noticeTimer.current);
     noticeTimer.current = window.setTimeout(() => { setNotice(""); setNoticeKind(null); }, 850);
   }, []);
+  /** 按下那一刻的动作表版本号（P1-B：松手时若变了，这次手势作废）。 */
+  const pressEpoch = useRef(0);
   const commits = useRef<CommitLogEntry[]>([]);
   const rebounds = useRef<string[]>([]);
 
@@ -180,7 +185,7 @@ export function App() {
         const game = new GameStore(host);
         if (cancelled) return;
         setWasm({ host, game });
-        setWasmView(viewFromWasm(game.getSnapshot()!, host));
+        setWasmView(viewFromWasm(game.getSnapshot()!, host, game.epoch));
         setChoice(game.choice());
       } catch (error) {
         if (!cancelled) setWasmError(error instanceof Error ? error.message : String(error));
@@ -196,7 +201,7 @@ export function App() {
     if (!wasm) return;
     const rebuild = () => {
       const snapshot = wasm.game.getSnapshot();
-      setWasmView(snapshot ? viewFromWasm(snapshot, wasm.host) : null);
+      setWasmView(snapshot ? viewFromWasm(snapshot, wasm.host, wasm.game.epoch) : null);
       // 问句是**会话级**查询（不在 148 格里），与快照一起重读。
       setChoice(wasm.game.choice());
     };
@@ -242,20 +247,49 @@ export function App() {
         flash("已出牌 · 动作已提交", "success");
       } else {
         // 真 wasm：动作表里的 `actionIndex` 就是 `rd_env_step` 的入参，**不要**自己再映射一层。
-        const action = wasm.game
-          .actions()
-          .find((candidate) => candidate.index === result.actionIndex) ?? null;
+        //
+        // ⚠️ `actionIndex` 是**数字位置**，不是身份：按住期间若动作表整体换了一份，同一个
+        // `index` 可能是另一张牌 / 另一个敌人。所以先比版本号，再比四元组（P1-B）。
+        // ⚠️ `targetSlot` 只对**定向牌**比：无目标牌的动作被内核过度指定了敌人槽
+        // （防御的每条动作 targetSlot 是 0/1），而状态机的业务目标是 -1 —— 拿 -1 去比
+        // 永远匹配不上，会把每一次正常出牌都判成"过期"（第一版就是这么红的）。
+        const targetedCard = view.hand[result.handSlot]?.targeted ?? false;
+        const stale =
+          wasm.game.epoch !== pressEpoch.current ||
+          !wasm.game.actions().some(
+            (candidate) =>
+              candidate.index === result.actionIndex &&
+              candidate.kind === "play" &&
+              candidate.handSlot === result.handSlot &&
+              (!targetedCard || candidate.targetSlot === result.targetSlot)
+          );
+        const action = stale
+          ? null
+          : (wasm.game.actions().find((candidate) => candidate.index === result.actionIndex) ?? null);
         if (!action) {
-          // 内核没给这条动作 ⇒ 不是"玩家操作非法"，是"UI 与内核不同步"。响亮失败。
-          flash("动作已过期 · 状态未改变", "warning");
+          // 内核没给这条动作（或动作表已换版）⇒ 不是"玩家操作非法"，是"这次手势过期了"。
+          flash("动作表已变化 · 这次操作取消", "warning");
         } else {
           const outcome = wasm.game.dispatch(action);
           if (outcome.accepted) {
             // 演出文案来自内核的 beat（不再靠观察向量 diff 猜"发生了什么"）。
             const line = describeBeats(outcome.beats, outcome.beatsDropped);
             flash(line || "已出牌", "success");
+          } else if (GameStore.isContractViolation(outcome)) {
+            // ⚠️ 拒绝却改了观察向量 = **ABI 违约**，不是玩家操作非法。
+            // 响亮失败并冻结操作，绝不显示"状态未改变"（第十四轮 Review P1-D）。
+            setFatal(
+              `ABI 违约：内核拒绝了这一步（code ${outcome.code}）却改变了观察向量。
+` +
+                "界面已冻结，避免继续在半可信状态下操作。"
+            );
+          } else if (GameStore.isBroken(outcome)) {
+            setFatal(`内核驱动坏了（code ${outcome.code}）：这不是玩家操作问题。`);
+          } else if (outcome.code === -2) {
+            // `-2` = 战斗已结束（不是"被拒绝"）。
+            flash("战斗已经结束", "warning");
           } else {
-            flash("内核拒绝了这一步 · 状态未改变", "warning");
+            flash("动作被拒绝（状态未改变）", "warning");
           }
         }
       }
@@ -275,7 +309,7 @@ export function App() {
   // ── 输入接线：全部走同一个状态机 ────────────────────────────────────────────
   const onCardDown = useCallback(
     (slot: number, pointer: { id: number; type: string; x: number; y: number }) => {
-      if (modalOpen) return;
+      if (modalOpen || fatal) return;
       if (activePointer.current) return; // [P1-UX] 第一指针独占，第二根手指不可偷走当前牌。
       const card = view.hand[slot];
       if (!card) return;
@@ -287,6 +321,8 @@ export function App() {
       };
       activePointer.current = gesture;
       // ⚠️ 落点表来自**视图**（wasm 那边就是内核动作表），UI 不自己推"能不能打这个敌人"。
+      // 同时冻结动作表版本号：松手前若另一条路径改了状态，这次手势必须作废（P1-B）。
+      pressEpoch.current = wasm?.game.epoch ?? 0;
       store.send({ type: "down", handSlot: slot, options: view.optionsFor(slot) });
       if (pointer.type === "touch" || pointer.type === "pen") {
         // [P1-UX] 450ms 长按展示详情；移动超过拖拽阈值即取消定时器。
@@ -300,7 +336,7 @@ export function App() {
         }, 450);
       }
     },
-    [modalOpen, view, store, flash]
+    [modalOpen, fatal, view, store, flash]
   );
 
   // [P1-UX] 全局指针跟踪：即使松开时已经离开 WebGL mesh，动作仍能完成或被正确取消。
@@ -532,6 +568,13 @@ export function App() {
           onOpenModal={() => setModalOpen(true)}
         />
       </Canvas>
+
+      {/* 致命错误（ABI 违约 / 驱动损坏）：冻结操作并显示诊断，**不进半可用**。 */}
+      {fatal && (
+        <div className="wasm-status" data-fatal>
+          {fatal}
+        </div>
+      )}
 
       {/* 装载中 / 装载失败：显示诊断，**不进半可用**。 */}
       {!MOCK_MODE && !wasmView && (

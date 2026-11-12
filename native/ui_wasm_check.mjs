@@ -72,6 +72,31 @@ check(
   loaded?.diagnostics?.contentFingerprint
 );
 
+// ── 1b. 运行时比对清单：篡改 sha 必须**拒绝装载**（Review P2-A 的负控）────────
+// 上一版只把 sha 记进诊断、从不比对 ⇒ "换了 wasm 忘了更新 manifest" 与 "dev 载入旧副本" 都发现不了。
+const tampered = await evaluate(`(async () => {
+  const response = await fetch("./wasm.json");
+  const manifest = await response.json();
+  manifest.sha256 = "0".repeat(64);
+  const blob = new Blob([JSON.stringify(manifest)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  try {
+    // ⚠️ 探针自己会 catch（返回 ok:false / error），所以这里看 ok 与 error，不是看 throw。
+    const result = await window.__p2.load("./rd_wasm.wasm", url);
+    return { ok: result.ok, error: String(result.error ?? "") };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+})()`);
+check(tampered.ok === false, "清单 sha 被篡改 ⇒ 装载被拒绝（运行时比对真的在跑）", JSON.stringify(tampered));
+check(
+  tampered.error.includes("不是同一份构建产物"),
+  "拒绝原因说清楚了（不是同一份构建产物）",
+  tampered.error.slice(0, 80)
+);
+// 负控之后重新正常装载（后续断言要用）
+check((await evaluate("window.__p2.load()"))?.ok === true, "负控之后仍能正常装载");
+
 // 拒绝半可用：装载前 `rd_env_active_slot()` 必须是 -3（查询不创建会话）
 check(
   (await evaluate("window.__p2.run()")).activeSlot === -3,

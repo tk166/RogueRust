@@ -57,6 +57,7 @@ const REQUIRED_EXPORTS = [
   "rd_env_action_arg",
   "rd_env_step",
   "rd_env_active_slot",
+  "rd_env_enemy_overflow",
   "rd_env_choice_pending",
   "rd_env_card_name_len",
   "rd_env_card_name_into",
@@ -145,14 +146,46 @@ export class WasmHost {
     this.diagnostics = diagnostics;
   }
 
-  /** 装载并校验。**校验失败抛 `WasmMismatch`**（带一份可显示的诊断清单）。 */
-  static async load(url: string, fetchImpl: typeof fetch = fetch): Promise<WasmHost> {
+  /**
+   * 装载并校验。**校验失败抛 `WasmMismatch`**（带一份可显示的诊断清单）。
+   *
+   * ⚠️ `manifestUrl`（默认同目录 `wasm.json`）里的 sha256 会与**实际取到的字节**比对：
+   * 上一版只把 sha 记进诊断、从不比对（第十四轮 Review P2-A），于是"换了 wasm 但忘了更新
+   * manifest"和"dev 载入了旧副本"都不会被发现。
+   */
+  static async load(
+    url: string,
+    options: { manifestUrl?: string; fetchImpl?: typeof fetch } = {}
+  ): Promise<WasmHost> {
+    const fetchImpl = options.fetchImpl ?? fetch;
+    const manifestUrl = options.manifestUrl ?? new URL("wasm.json", new URL(url, location.href)).href;
     const response = await fetchImpl(url);
     if (!response.ok) {
       throw new Error(`取 wasm 失败：${url} → HTTP ${response.status}`);
     }
     const bytes = new Uint8Array(await response.arrayBuffer());
     const sha256 = await sha256Hex(bytes);
+
+    // ── 单一构建产物：**运行时**比对，而不是只把 sha 记下来 ──────────────────
+    const manifestResponse = await fetchImpl(manifestUrl);
+    if (!manifestResponse.ok) {
+      throw new Error(
+        `取 wasm 清单失败：${manifestUrl} → HTTP ${manifestResponse.status}。` +
+          "先在 web-next 里跑 `npm run wasm`（把 web/rd_wasm.wasm 同步过来并记 sha256）。"
+      );
+    }
+    const manifest = (await manifestResponse.json()) as { sha256?: string; source?: string };
+    if (!manifest.sha256) {
+      throw new Error(`wasm 清单缺少 sha256：${manifestUrl}`);
+    }
+    if (manifest.sha256 !== sha256) {
+      throw new Error(
+        "wasm 与清单不一致（不是同一份构建产物）：" +
+          "\n  清单 " + manifest.sha256.slice(0, 12) + "…（来自 " + (manifest.source ?? manifestUrl) + "）" +
+          "\n  实际 " + sha256.slice(0, 12) + "…" +
+          "\n  跑 npm run wasm 重新同步，或确认部署没有混用旧副本。"
+      );
+    }
     const { instance } = await WebAssembly.instantiate(bytes, {});
     const ex = instance.exports as Exports;
     const diagnostics = validate(ex, sha256);
@@ -502,7 +535,22 @@ export class WasmHost {
     if (!this.hasCombatSession()) {
       throw new Error("没有战斗会话（rd_env_active_slot() = -3）：先 fight_begin");
     }
+    // ⚠️ 敌人超过 6 个时，观察向量**装不下**（槽位是固定的 6 格，挪不动）。
+    // 内核会把这件事**报出来**（`rd_env_enemy_overflow() = 1`），而不是悄悄丢掉。
+    // 解码器只比对"header 的敌人数 == 扫出来的槽位数"，两者都会是 6 ⇒ **发现不了溢出**，
+    // 所以必须在这里先问（第十四轮 Review P2-D）。
+    if (this.enemyOverflow()) {
+      throw new Error(
+        "这一场战斗的敌人超过观察向量的 6 个槽位：界面无法完整显示，拒绝进入半可信状态。" +
+          "（`rd_env_enemy_overflow() = 1`；扩容需要改 ABI 布局）"
+      );
+    }
     return decodeCombat(this.combatObservation(), this.actions());
+  }
+
+  /** `1` = 敌人超过 6 个（向量装不下）；`0` = 没有；`-1` = 没有会话。 */
+  enemyOverflow(): boolean {
+    return (this.ex.rd_env_enemy_overflow as () => number)() === 1;
   }
 }
 
