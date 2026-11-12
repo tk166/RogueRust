@@ -25,8 +25,61 @@ interface P2Probe {
   choiceClear: () => unknown;
   choiceConfirm: () => unknown;
   beats: () => unknown;
+  rewardCards: () => unknown;
+  /** X 费夹具：打赢第一场 → 奖励里挑一张 X 费牌 → 走到下一场战斗，并把 X 费牌抽到手。 */
+  xCardFixture: (seed: number) => unknown;
+  /** 直接推进到奖励屏（不挑牌），用于扫描"哪个种子的奖励里有 X 费牌"。 */
+  scanReward: (seed: number) => unknown;
   run: () => unknown;
   findPlay: (handSlot: number, targetSlot: number) => unknown;
+}
+
+/** X 费牌的**基础 id**（内容里 5 张，各带 `+` 变体）。 */
+const X_COST_IDS = new Set([
+  "whirlwind",
+  "skewer",
+  "malaise",
+  "transmutation",
+  "conjure_blade",
+]);
+
+/** 把当前战斗打到有结果（上限 200 步，超过就是驱动卡住）。 */
+function playOutFight(host: WasmHost): { result: string; turns: number } {
+  const store = new GameStore(host);
+  let turns = 0;
+  for (let step = 0; step < 200; step += 1) {
+    const snapshot = store.getSnapshot();
+    if (!snapshot) return { result: "no-session", turns };
+    if (snapshot.result !== "ongoing") return { result: snapshot.result, turns };
+    const action =
+      snapshot.actions.find((a) => a.kind === "play" && a.targetSlot >= 0) ??
+      snapshot.actions.find((a) => a.kind === "play") ??
+      snapshot.actions.find((a) => a.kind === "endTurn");
+    if (!action) return { result: "stuck", turns };
+    if (action.kind === "endTurn") turns += 1;
+    store.dispatch(action);
+  }
+  return { result: "timeout", turns };
+}
+
+/** 从"刚结束一场战斗"走到"站在下一个战斗节点并开打"。返回 `fight_begin` 的返回码。 */
+function walkToFight(host: WasmHost): number {
+  for (let hop = 0; hop < 60; hop += 1) {
+    const raw = host.runRaw();
+    if (raw.over === 1) return -1;
+    if (raw.pending === 0) {
+      if (raw.nodeKind >= 0 && raw.nodeResolved === 0) {
+        const isFight = raw.nodeKind === 1 || raw.nodeKind === 2 || raw.nodeKind === 7;
+        if (isFight) return host.fightBegin();
+        host.beginNode();
+        continue;
+      }
+      if (host.runStep(0) !== 0) return -2;
+      continue;
+    }
+    if (!host.settlePendingRun()) return -3;
+  }
+  return -4;
 }
 
 const state: {
@@ -236,6 +289,97 @@ const probe: P2Probe = {
       before.length === after.length && before.every((value, i) => value === after[i]);
     state.store?.refresh();
     return { code, unchanged, choice: host.choice(), snapshot: summarise() };
+  },
+
+  rewardCards: () => state.host?.rewardCards() ?? null,
+
+  /**
+   * 扫描：开局 → 走到战斗 → 打赢 → 返回奖励候选。
+   *
+   * 用于找"哪个种子的奖励里有 X 费牌"（X 费牌不在起手牌、药水也不给）。
+   */
+  scanReward(seed: number) {
+    const host = state.host;
+    if (!host) throw new Error("先 load()");
+    const started = probe.startFight(seed) as { fightCode: number; trail: unknown[] };
+    if (started.fightCode !== 0) return { seed, error: "fight_begin 失败", code: started.fightCode };
+    const played = playOutFight(host);
+    // ⚠️ 打赢之后**还要** `fight_end()` 才会生成奖励屏（`pending 4`）；不调的话
+    // `reward_card_count()` 是 0、gold 是 0（第一版就是这么空着的）。
+    const endCode = played.result === "victory" ? host.fightEnd() : -1;
+    return {
+      seed,
+      result: played.result,
+      endCode,
+      pending: host.run().pending,
+      offers: host.rewardCards(),
+      gold: host.rewardGold(),
+    };
+  },
+
+  /**
+   * X 费夹具：**确定性**地把一张 X 费牌弄进手牌。
+   *
+   * 为什么不用药水：X 费牌被排除在"随机攻击/技能牌"候选之外（扫过 28 组都没有）。
+   * 唯一入口是战斗奖励屏（`rd_run_take_card`）。
+   */
+  xCardFixture(seed: number) {
+    const host = state.host;
+    if (!host) throw new Error("先 load()");
+    const trail: unknown[] = [];
+
+    const started = probe.startFight(seed) as { fightCode: number; trail: unknown[] };
+    trail.push({ step: "firstFight", code: started.fightCode });
+    if (started.fightCode !== 0) return { ok: false, trail, why: "fight_begin 失败" };
+
+    const first = playOutFight(host);
+    trail.push({ step: "playOutFirst", result: first.result, turns: first.turns });
+    if (first.result !== "victory") return { ok: false, trail, why: "第一场没打赢" };
+    // 打赢后必须 `fight_end()` 才生成奖励屏。
+    const endCode = host.fightEnd();
+    trail.push({ step: "fightEnd", code: endCode, pending: host.run().pending });
+
+    const offers = host.rewardCards();
+    trail.push({ step: "reward", offers: offers.map((card) => card.id) });
+    const xCost = offers.find((card) => X_COST_IDS.has(card.id.replace(/\+$/, "")));
+    if (!xCost) return { ok: false, trail, why: "奖励里没有 X 费牌" };
+    const taken = host.takeCard(xCost.slot);
+    trail.push({ step: "takeCard", id: xCost.id, code: taken });
+    if (taken !== 0) return { ok: false, trail, why: "拿牌失败" };
+
+    // 拿完牌 → 关掉奖励屏 → 走到下一个战斗节点 → 开打
+    host.skipReward();
+    const second = walkToFight(host);
+    trail.push({ step: "secondFight", code: second });
+    if (second !== 0) return { ok: false, trail, why: "第二场 fight_begin 失败" };
+
+    state.store = new GameStore(host);
+    // 抽到那张 X 费牌为止（结束回合会重抽；上限 12 回合，超过就是"抽不到"）
+    let turns = 0;
+    let found: { slot: number; cost: number | "X" } | null = null;
+    while (turns < 12) {
+      const snapshot = state.store.getSnapshot();
+      if (!snapshot) break;
+      if (snapshot.result !== "ongoing") break;
+      const names = snapshot.hand.map((card) => ({ slot: card.slot, id: host.cardName(card.slot), cost: card.cost }));
+      const hit = names.find((card) => X_COST_IDS.has(card.id.replace(/\+$/, "")));
+      if (hit) {
+        found = { slot: hit.slot, cost: hit.cost };
+        break;
+      }
+      const endTurn = state.store.findEndTurn();
+      if (!endTurn) break;
+      state.store.dispatch(endTurn);
+      turns += 1;
+    }
+    trail.push({ step: "draw", turns, found });
+    return {
+      ok: found !== null,
+      trail,
+      xCard: found,
+      energy: state.store.getSnapshot()?.hero.energy ?? null,
+      snapshot: summarise(),
+    };
   },
 
   beats() {

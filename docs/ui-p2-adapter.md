@@ -210,6 +210,20 @@ wasm sha **运行时**比对（`load()` 读 `wasm.json`；`dev` 先同步）、�
 `rd_env_enemy_overflow()`、`ChoiceModal` 查上限、手势 `epoch` 版本校验（松手时四元组不匹配就取消）、
 横屏 `n=4` 回到 2+2。
 
+## 5f. X 费夹具（§362）
+
+X 费牌不在起手牌、药水三选一也不给（扫过 28 组），唯一确定性入口是**战斗奖励屏**：
+
+```
+开局 → 打赢 → rd_run_fight_end()（这一步才生成奖励屏）→ 奖励里挑 X 费牌 → 下一场抽到它
+```
+
+⚠️ 第一版漏了 `fight_end()`，`reward_card_count()` 恒 0 —— "打赢了" ≠ "奖励屏已生成"。
+**seed 58 的奖励含 `whirlwind`**，夹具确定性。
+
+闸门 32 实测：`cost === "X"`、能量 3 → **0**、手牌 6 → 5、敌人 46 → 31（3 能量 × 5 伤害）。
+证据串 `UI_WASM_XCOST PASS seed=58 card=whirlwind energy=3->0 damaged=1`。
+
 ## 6. 还没做的
 
 - **卡名是定义 id**（`bash` / `strike` / `defend`）：`rd_env_card_name_*` 返回定义 id，本地化是后续的事；

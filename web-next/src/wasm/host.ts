@@ -67,6 +67,14 @@ const REQUIRED_EXPORTS = [
   "rd_env_enemy_name_into",
   "rd_env_scratch_buf",
   "rd_run_grant_potion",
+  "rd_run_reward_card_count",
+  "rd_run_reward_card_id_len",
+  "rd_run_reward_card_id_into",
+  "rd_run_reward_card_title_len",
+  "rd_run_reward_card_title_into",
+  "rd_run_take_card",
+  "rd_run_skip_reward",
+  "rd_run_reward_gold",
   "rd_run_potion_count",
   "rd_run_potion_id_len",
   "rd_run_potion_id_into",
@@ -422,6 +430,47 @@ export class WasmHost {
   /** 喝一瓶药水。`target` 是目标墙位槽（不需要目标的药水传 `-1`）。 */
   usePotion(slot: number, target: number): number {
     return (this.ex.rd_env_use_potion as (slot: number, target: number) => number)(slot, target);
+  }
+
+  // ── 战斗奖励屏（`rd_run_reward_*`）—— X 费夹具靠它把牌塞进牌组 ────────────────
+  /**
+   * 奖励屏上的候选卡（`rd_run_reward_card_*`）。
+   *
+   * 为什么要它：X 费牌**不在起手牌里**，药水三选一也**不给**（X 费牌被排除在随机候选外，
+   * 扫过 28 组）。唯一确定性入口是"打赢一场 → 奖励里挑一张"，所以先得能列出奖励候选。
+   */
+  rewardCards(): { slot: number; id: string; title: string }[] {
+    const call = (name: string) => (this.ex[name] as () => number)();
+    const count = call("rd_run_reward_card_count");
+    const out: { slot: number; id: string; title: string }[] = [];
+    for (let slot = 0; slot < count; slot += 1) {
+      out.push({
+        slot,
+        id: this.readText(
+          () => (this.ex.rd_run_reward_card_id_len as (slot: number) => number)(slot),
+          (ptr) => (this.ex.rd_run_reward_card_id_into as (slot: number, ptr: number) => number)(slot, ptr)
+        ),
+        title: this.readText(
+          () => (this.ex.rd_run_reward_card_title_len as (slot: number) => number)(slot),
+          (ptr) =>
+            (this.ex.rd_run_reward_card_title_into as (slot: number, ptr: number) => number)(slot, ptr)
+        ),
+      });
+    }
+    return out;
+  }
+
+  rewardGold(): number {
+    return (this.ex.rd_run_reward_gold as () => number)();
+  }
+
+  /** 拿奖励屏上第 `slot` 张牌（进牌组）。`0` = 成功。 */
+  takeCard(slot: number): number {
+    return (this.ex.rd_run_take_card as (slot: number) => number)(slot);
+  }
+
+  skipReward(): number {
+    return (this.ex.rd_run_skip_reward as () => number)();
   }
 
   // ── 待决选牌（`rd_env_choice_*`）──────────────────────────────────────────
