@@ -53,6 +53,15 @@ export function RunApp() {
   const [error, setError] = useState<string | null>(null);
   const [showDeck, setShowDeck] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  /** 动效偏好（`rd.motion`）：玩家在设置里选的，优先于系统偏好。 */
+  const [motion, setMotion] = useState<"on" | "off" | "auto">(() => {
+    try {
+      const stored = window.localStorage.getItem("rd.motion");
+      return stored === "on" || stored === "off" ? stored : "auto";
+    } catch {
+      return "auto";
+    }
+  });
   const [showPiles, setShowPiles] = useState(false);
   /**
    * 牌组选择器的请求（`null` = 没在选）。
@@ -473,7 +482,22 @@ export function RunApp() {
         <PileOverlay piles={store.piles()} onClose={() => setShowPiles(false)} />
       )}
 
-      {showSettings && <SettingsOverlay state={state} onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <SettingsOverlay
+          state={state}
+          motion={motion}
+          onClose={() => setShowSettings(false)}
+          onMotionChange={(value) => {
+            setMotion(value);
+            try {
+              if (value === "auto") window.localStorage.removeItem("rd.motion");
+              else window.localStorage.setItem("rd.motion", value);
+            } catch {
+              // 隐私模式：忽略（设置只在这一局有效）。
+            }
+          }}
+        />
+      )}
 
       {/* ── 日志：最近 3 条 ──────────────────────────────────────────────── */}
       <footer className="run-log" data-run-log={state.log.length}>

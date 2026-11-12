@@ -1187,3 +1187,165 @@ button.primary:disabled {
   font: inherit;
   font-size: 13px;
 }
+
+/* ── P6：安全区 / 触控目标 / 窄屏 / 不横向溢出 ─────────────────────────────── */
+
+/*
+ * 安全区：`viewport-fit=cover` 之后刘海屏会压到内容上，所以每条贴边的横条都要吃
+ * `env(safe-area-inset-*)`。`--safe-*` 是为了**能测**：CDP 没法设真机 inset，
+ * 闸门用 `?safe=44,34` 把变量覆盖成非零值，再断言内容真的让开了。
+ */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+.run-shell {
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+  /* 横向绝不溢出：窄屏上任何一行 flex 折行失败都会让整页左右晃。 */
+  overflow-x: hidden;
+}
+
+.run-topbar,
+.run-subbar {
+  padding-left: calc(14px + var(--safe-left));
+  padding-right: calc(14px + var(--safe-right));
+}
+
+.run-log {
+  padding-bottom: calc(10px + var(--safe-bottom));
+}
+
+/*
+ * 触控目标：窄屏上所有**可点**的东西至少 44×44（Apple HIG / Material 的同一结论）。
+ * 用 `min-height` + `min-width` 而不是放大字号：视觉密度可以保持，命中区必须够大。
+ * ⚠️ 只在窄屏生效 —— 桌面上 44px 的按钮会显得笨重。
+ */
+@media (max-width: 600px) {
+  .run-topbar button,
+  .run-subbar button,
+  .run-topbar .run-deck-button,
+  .run-subbar .run-deck-button {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 8px 12px;
+  }
+
+  .potion-actions button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .map-node {
+    min-width: 56px;
+    min-height: 56px;
+  }
+
+  .blessing,
+  .rest-option,
+  .event-option,
+  .shop-row,
+  .reward-card,
+  .reward-row button,
+  .deck-select-row,
+  .pile-tab,
+  .motion-option {
+    min-height: 44px;
+  }
+
+  .run-overlay-card button,
+  .scene > button {
+    min-height: 44px;
+  }
+
+  /*
+   * 窄屏上**所有**按钮与输入框至少 44px 高。
+   *
+   * 为什么用这么宽的规则：第一版逐个列选择器，结果漏了"标题页表单里的开始按钮"
+   * （98×43，就差 1px）与两个输入框（40 / 16 高）—— 闸门 39 一量就红。
+   * 触控目标不是"大概够大"，是一条**能测**的下限，所以规则也应该是"全部"，不是"我记得的那些"。
+   * 滑块（`input[type=range]`）只抬元素盒子的高度，轨道本身仍然细（视觉不变）。
+   */
+  .scene button,
+  .scene input,
+  .beat-queue,
+  .run-loot button {
+    min-height: 44px;
+  }
+
+  .scene input[type="range"] {
+    /* 轨道居中，盒子够高：拇指的可点区域来自盒子。 */
+    align-self: center;
+  }
+
+  /* 窄屏字号：正文不小于 14px（P1 的可读性基准），标题不缩。 */
+  .run-log,
+  .scene-sub,
+  .scene-foot,
+  .scene-note {
+    font-size: 13px;
+  }
+}
+
+/* 弹窗要能滚（窄屏上牌组/设置一定会超出一屏）。 */
+.run-overlay-card {
+  max-height: calc(100vh - 2 * var(--safe-top) - 24px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.settings-motion {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.motion-option {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #131820;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.motion-option.is-active {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* WebGL 上下文丢失的横幅（真机上会发生）。 */
+.wasm-status[data-context-lost] {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  padding: 12px 16px;
+  background: #2b2016;
+  border: 1px solid var(--warn);
+  color: #ffe0b3;
+  border-radius: 10px;
+  margin: 10px 14px;
+}
+
+.wasm-status[data-context-lost] button {
+  min-height: 44px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--warn);
+  background: #3a2a12;
+  color: #ffe0b3;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* 战斗屏在运行层里：手势不能被子孙的滚动容器抢走（否则触摸拖牌会收到 pointercancel）。 */
+.run-main > .app {
+  touch-action: none;
+  overscroll-behavior: contain;
+}

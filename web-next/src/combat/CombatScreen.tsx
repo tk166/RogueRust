@@ -41,6 +41,7 @@ import {
   type DirectorState,
 } from "./beats";
 import { BeatLayer } from "./BeatLayer";
+import { dprCapFor } from "../stage/perf";
 import type { DropOption } from "../input/pointerMachine";
 import { installProbe } from "../probe";
 
@@ -181,17 +182,46 @@ export function CombatScreen(props: CombatScreenProps) {
    * 所以"关闭动画也能完整游戏"是结构上成立的（plan P5 的退出条件）。
    */
   const motionOff = useMemo(() => {
-    // `?motion=off` / `?motion=on` 是**显式**开关（闸门两边都要能测）；
-    // 没给参数时听系统。
-    // ⚠️ 无头 Chrome 的 `prefers-reduced-motion` 实测是 `reduce` ⇒ 闸门里默认**不播**动画。
+    // 优先级：URL 参数（闸门/临时覆盖）> 玩家在设置里选的（localStorage）> 系统偏好。
+    // ⚠️ 无头 Chrome 的 `prefers-reduced-motion` 实测是 `reduce` ⇒ 闸门里默认**不播**动画，
     // 所以"动画开着"必须由 `?motion=on` 显式要求，不能靠默认值。
     const param = new URLSearchParams(window.location.search).get("motion");
     if (param === "off") return true;
     if (param === "on") return false;
+    try {
+      const stored = window.localStorage.getItem("rd.motion");
+      if (stored === "off") return true;
+      if (stored === "on") return false;
+    } catch {
+      // 隐私模式/禁用 storage：忽略，回落到系统偏好。
+    }
     return typeof window.matchMedia === "function"
       ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
       : false;
   }, []);
+
+  /**
+   * WebGL 上下文丢失（P6 的稳定性要求）。
+   *
+   * 真机上这会发生（切后台、GPU 重置、驱动崩溃）。**不能什么都不做**：canvas 会变成一片黑，
+   * 而玩家会以为游戏卡死。这里做两件事：挂一条诊断横幅 + 给一个"重新初始化"按钮（换 key
+   * 重挂 Canvas）。局面在内核里，所以重挂之后**不需要重打**。
+   */
+  const [contextLost, setContextLost] = useState(false);
+  const [canvasKey, setCanvasKey] = useState(0);
+
+  /**
+   * 窄屏把 DPR 上限压到 1.5（P6 的性能项）。
+   *
+   * 390×700 的画布：dpr 2 ⇒ 780×1400 ≈ 1.09M 像素；dpr 1.5 ⇒ 585×1050 ≈ 0.61M（**-44%**）。
+   * 手机 GPU 上这是最直接的一刀，而且肉眼看不出差别（390 CSS px 宽、1.5 倍已经超过 1080p 的
+   * 横向采样）。宽屏保持 2（桌面字更锐）。
+   */
+  // 规则在 `stage/perf.ts`（探针读同一份，避免"闸门测的是另一份"）。
+  const dprCap = useMemo(
+    () => dprCapFor(typeof window === "undefined" ? 1280 : window.innerWidth),
+    []
+  );
   const [director, setDirector] = useState<DirectorState>(() =>
     createDirector({ reducedMotion: motionOff })
   );
@@ -626,6 +656,28 @@ export function CombatScreen(props: CombatScreenProps) {
       // 而 `director` 每帧都变 ⇒ 闭包会一直返回**安装那一刻**的旧值（实测 elapsed 恒 0，
       // 看起来像"动画没跑"，其实只是探针在读旧快照）。
       beats: () => ({ ...directorRef.current, summary: describeDirector(directorRef.current) }),
+      // P6：移动端/性能的**可复现**度量（闸门 39/40 读它，不读像素）。
+      metrics: () => ({
+        width: window.innerWidth,
+        height: window.innerHeight,
+        dpr: window.devicePixelRatio,
+        dprCap,
+        canvas: (() => {
+          const canvas = document.querySelector("canvas");
+          if (!canvas) return null;
+          const rect = canvas.getBoundingClientRect();
+          return {
+            cssWidth: Math.round(rect.width),
+            cssHeight: Math.round(rect.height),
+            backingWidth: canvas.width,
+            backingHeight: canvas.height,
+            backingPixels: canvas.width * canvas.height,
+          };
+        })(),
+        contextLost,
+        motionOff,
+        overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      }),
       choicePick: onChoicePick,
       choiceConfirm: onChoiceConfirm,
       choiceClear: onChoiceClear,
@@ -654,11 +706,20 @@ export function CombatScreen(props: CombatScreenProps) {
     // 所以这个标记必须由它自己打。
     <div className="app" data-scene="SC-03b">
       <Canvas
+        key={canvasKey}
         className="stage"
         shadows={false}
-        dpr={[1, 2]}
+        dpr={[1, dprCap]}
         camera={{ position: [0, 0.6, 6], fov: 45, near: 0.1, far: 80 }}
-        onCreated={({ camera }) => camera.lookAt(0, 0.1, 0)}
+        onCreated={({ camera, gl }) => {
+          camera.lookAt(0, 0.1, 0);
+          // `webglcontextlost` 必须 `preventDefault()` 才有机会恢复；恢复交给"重新初始化"按钮。
+          gl.domElement.addEventListener("webglcontextlost", (event) => {
+            event.preventDefault();
+            setContextLost(true);
+          });
+          gl.domElement.addEventListener("webglcontextrestored", () => setContextLost(false));
+        }}
         // [P1-UX] 桌面右键详情，使用命中布局投影，避免 DOM 覆盖层拦截 3D 射线。
         onContextMenu={(event) => {
           event.preventDefault();
@@ -700,6 +761,23 @@ export function CombatScreen(props: CombatScreenProps) {
           onOpenModal={() => setModalOpen(true)}
         />
       </Canvas>
+
+      {/* WebGL 上下文丢失：真机上会真的发生。给诊断 + 一键重新初始化。 */}
+      {contextLost && (
+        <div className="wasm-status" data-context-lost>
+          <div>显卡上下文丢失了（切后台 / GPU 重置）。局面还在内核里，重新初始化就能继续。</div>
+          <button
+            type="button"
+            data-context-retry
+            onClick={() => {
+              setContextLost(false);
+              setCanvasKey((key) => key + 1);
+            }}
+          >
+            重新初始化
+          </button>
+        </div>
+      )}
 
       {/* 致命错误（ABI 违约 / 驱动损坏）：冻结操作并显示诊断，**不进半可用**。 */}
       {fatal && (

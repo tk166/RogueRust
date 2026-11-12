@@ -6,6 +6,7 @@
 // ⚠️ 探针里**没有** `setScene` / `forceReward` 这类"造局面"的钩子：P3 的退出条件正是
 // "没有隐藏的手工刷新步骤"，一个能直接改场景的钩子会让闸门绕过整个路由。
 
+import { dprCapFor } from "../stage/perf.js";
 import cardMeta from "../view/cardMeta.js";
 import type { RunStore } from "./RunStore";
 import { sceneLabel } from "./scene.js";
@@ -40,6 +41,13 @@ export interface RunProbe {
   screens(): unknown;
   /** 战斗中的三个牌堆（没有战斗会话时是空表）。 */
   piles(): unknown;
+  /**
+   * P6 的**可复现度量**：视口 / DPR / DPR 上限 / 画布后备像素 / 横向溢出。
+   *
+   * 放在 `__run` 上（而不是只在战斗屏的 `__p1`）：地图/商店屏也要能量，
+   * 而 `__p1` 只有战斗屏挂载时才存在（闸门 39 第一次就是这么炸的）。
+   */
+  metrics(): unknown;
   /** 待决选牌的问句（`rd_env_choice_*`）；`null` = 没有问句。 */
   choice(): unknown;
   choicePick(index: number, on: boolean): unknown;
@@ -164,6 +172,29 @@ export function installRunProbe(store: RunStore): void {
     },
 
     piles: () => store.piles(),
+
+    metrics() {
+      const canvas = document.querySelector("canvas");
+      const rect = canvas?.getBoundingClientRect();
+      const width = window.innerWidth;
+      const cap = dprCapFor(width);
+      return {
+        width,
+        height: window.innerHeight,
+        dpr: window.devicePixelRatio,
+        dprCap: cap,
+        canvas: canvas && rect
+          ? {
+              cssWidth: Math.round(rect.width),
+              cssHeight: Math.round(rect.height),
+              backingWidth: canvas.width,
+              backingHeight: canvas.height,
+              backingPixels: canvas.width * canvas.height,
+            }
+          : null,
+        overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      };
+    },
 
     choice() {
       const game = store.combat;

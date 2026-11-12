@@ -16,9 +16,12 @@ import type { RunState } from "../RunStore";
 export interface SettingsOverlayProps {
   readonly state: RunState;
   readonly onClose: () => void;
+  /** 动效偏好：`"on"` / `"off"` / `"auto"`（跟随系统）。 */
+  readonly motion: "on" | "off" | "auto";
+  readonly onMotionChange: (value: "on" | "off" | "auto") => void;
 }
 
-export function SettingsOverlay({ state, onClose }: SettingsOverlayProps) {
+export function SettingsOverlay({ state, onClose, motion, onMotionChange }: SettingsOverlayProps) {
   const { run, scene, pending } = state;
   return (
     <div className="run-overlay" data-settings>
@@ -56,6 +59,26 @@ export function SettingsOverlay({ state, onClose }: SettingsOverlayProps) {
             </dd>
           </div>
         </dl>
+
+        {/* 动效开关：plan P6 要求"支持减少动态效果选项"。写 localStorage，下一场战斗生效
+            （导演在挂载时读一次，中途切换会让正在播的动画突然消失）。 */}
+        <section className="settings-section" data-settings-motion={motion}>
+          <h4>动效</h4>
+          <div className="settings-motion">
+            {(["auto", "on", "off"] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                className={motion === value ? "motion-option is-active" : "motion-option"}
+                data-motion-option={value}
+                onClick={() => onMotionChange(value)}
+              >
+                {value === "auto" ? "跟随系统" : value === "on" ? "开" : "关（省电/不晕）"}
+              </button>
+            ))}
+          </div>
+          <p className="muted">下一场战斗生效。</p>
+        </section>
 
         <section className="settings-section" data-settings-violations={state.violations.length}>
           <h4>对账（{state.violations.length} 条）</h4>

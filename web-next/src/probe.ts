@@ -41,6 +41,8 @@ export interface ProbeOptions {
   debugSetEnemyHp?: (slot: number, hp: number) => void;
   /** Beat 演出导演的状态（plan P5：闸门断言"播放动画不改变最终状态"）。 */
   beats?: () => unknown;
+  /** P6：视口 / DPR / 画布后备像素 / 上下文状态（闸门 39/40 的度量来源）。 */
+  metrics?: () => unknown;
 }
 
 export interface Probe {
@@ -75,6 +77,8 @@ export interface Probe {
    */
   /** Beat 演出导演的状态（`playing` / `queue` / `dropped` / `unknownKinds`）。 */
   beats: () => unknown;
+  /** P6：视口 / DPR / 画布后备像素 / 上下文状态。 */
+  metrics: () => unknown;
   hovered: () => { card: number; enemy: number };
   openDetail: (slot: number) => void;
   setModal: (open: boolean) => void;
@@ -191,6 +195,7 @@ export function installProbe(options: ProbeOptions): void {
     detailSlot: () => options.detailSlot(),
     modalOpen: () => options.modalOpen(),
     beats: () => options.beats?.() ?? null,
+    metrics: () => options.metrics?.() ?? null,
     hovered: () => ({ card: options.hoveredCard(), enemy: options.hoveredEnemy() }),
     i18n: () => {
       const report = i18nCoverage();

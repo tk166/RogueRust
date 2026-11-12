@@ -9,6 +9,21 @@ import { createRoot } from "react-dom/client";
 import { StrictMode } from "react";
 import { RunApp } from "./run/RunApp";
 
+/**
+ * `?safe=44,34`：把安全区变量覆盖成指定像素。
+ *
+ * 为什么需要它：CDP 改不了真机的 `env(safe-area-inset-*)`（那是设备/浏览器给的），
+ * 而"内容有没有让开刘海"必须**能测**。所以闸门用这个参数把变量设成非零，再断言
+ * 顶栏/日志的**实际位置**让开了那么多 —— 比"我写了 env() 所以应该没事"强。
+ */
+const safe = new URLSearchParams(window.location.search).get("safe");
+if (safe) {
+  const [top, bottom] = safe.split(",");
+  const root = document.documentElement;
+  if (top) root.style.setProperty("--safe-top", `${Number(top)}px`);
+  if (bottom) root.style.setProperty("--safe-bottom", `${Number(bottom)}px`);
+}
+
 const container = document.getElementById("root");
 if (!container) throw new Error("#root missing");
 
