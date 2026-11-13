@@ -28,6 +28,19 @@ import {
 import { shouldShowCurtain } from "./curtain.js";
 import { resolveScene, type SceneInput, type SceneResolution } from "./scene.js";
 
+/** 自动存档的键（`localStorage`）。 */
+const AUTOSAVE_KEY = "rd.autosave";
+
+/** 标题页"继续上次"要显示的东西（都是**存的时候**的快照，读不到就当没有）。 */
+export interface ResumeInfo {
+  readonly text: string;
+  readonly act: number;
+  readonly floor: number;
+  readonly health: number;
+  readonly healthMax: number;
+  readonly at: number;
+}
+
 export interface LogEntry {
   readonly seq: number;
   readonly text: string;
@@ -187,6 +200,8 @@ export class RunStore {
   private curtainSeq = 0;
   /** 关动画（`?motion=off` / 系统偏好）：幕布直接不播。 */
   private readonly motionOff: boolean;
+  /** 上一次写进 `localStorage` 的档案文本（相同就不重写）。 */
+  private lastAutosave: string | null = null;
   private chestBaseline: { gold: number; relicCount: number; relics: string[] } | null = null;
   /** 见 `RunState.lastLoot`。 */
   private lastLoot: RunState["lastLoot"] = null;
@@ -273,6 +288,80 @@ export class RunStore {
     this.lastAct = act;
     this.state = { ...this.state, curtain: this.motionOff ? null : { act, seq: this.curtainSeq } };
     this.emit();
+  }
+
+  /**
+   * 写自动存档。**战斗中不写**（内核拒绝：`CombatState` 不进档案）。
+   *
+   * 失败一律**安静**（隐私模式、配额满）—— 存档是便利，不是玩法；但局终要清，
+   * 否则"死了的局还能继续"。
+   */
+  private autosave(): void {
+    if (typeof window === "undefined") return;
+    try {
+      if (this.state.overWhy === 1 || this.state.overWhy === 2) {
+        window.localStorage.removeItem(AUTOSAVE_KEY);
+        this.lastAutosave = null;
+        return;
+      }
+      const run = this.state.run;
+      if (!run || this.host.run().inFight) return;
+      const len = this.host.archiveFill();
+      if (len <= 0) return;
+      const text = this.host.readArchive(len);
+      if (text === this.lastAutosave) return;
+      this.lastAutosave = text;
+      window.localStorage.setItem(
+        AUTOSAVE_KEY,
+        JSON.stringify({
+          v: 1,
+          at: Date.now(),
+          text,
+          act: this.state.act,
+          floor: run.floor,
+          health: run.health,
+          healthMax: run.healthMax,
+        })
+      );
+    } catch {
+      // 隐私模式 / 配额满：存档只是便利，不打断游戏。
+    }
+  }
+
+  /** 有没有可继续的存档（标题页读它）。坏数据当作没有，并**清掉**。 */
+  resumeInfo(): ResumeInfo | null {
+    if (typeof window === "undefined") return null;
+    let raw: string | null = null;
+    try {
+      raw = window.localStorage.getItem(AUTOSAVE_KEY);
+    } catch {
+      return null;
+    }
+    if (raw === null) return null;
+    try {
+      const parsed = JSON.parse(raw) as Partial<ResumeInfo> & { v?: number };
+      if (parsed.v !== 1 || typeof parsed.text !== "string" || parsed.text.length < 8) {
+        throw new Error("bad shape");
+      }
+      return {
+        text: parsed.text,
+        act: Number(parsed.act ?? 0),
+        floor: Number(parsed.floor ?? 0),
+        health: Number(parsed.health ?? 0),
+        healthMax: Number(parsed.healthMax ?? 0),
+        at: Number(parsed.at ?? 0),
+      };
+    } catch {
+      // 坏存档：清掉并留一条日志（否则每次打开都失败一次，玩家只会觉得"坏了"）。
+      try {
+        window.localStorage.removeItem(AUTOSAVE_KEY);
+      } catch {
+        /* 忽略 */
+      }
+      this.note("自动存档损坏，已丢弃", "warn");
+      this.emit();
+      return null;
+    }
   }
 
   /** 关掉幕布（点一下 / 1.6 秒到）。 */
@@ -471,6 +560,8 @@ export class RunStore {
     if (this.state.violations.length > 0 && this.frozenReason === null) {
       this.frozenReason = this.state.violations[0];
     }
+    // 自动存档：**每次状态变化之后**（局终就清掉）。
+    this.autosave();
     this.emit();
     return this.state;
   }
@@ -791,6 +882,8 @@ export class RunStore {
     if (code === 0) {
       this.frozenReason = null;
       this.injectedViolation = null;
+      // 回档之后允许自动存档立刻重写一次（文本可能相同，但 `lastAutosave` 是"上一次写盘的"）。
+      this.lastAutosave = null;
       this.note("回档成功", "good");
     } else {
       this.note(`回档失败：${message}`, "bad");

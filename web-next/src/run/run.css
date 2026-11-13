@@ -1525,3 +1525,16 @@ button.primary:disabled {
     animation: none;
   }
 }
+
+/* 标题页"继续上次"（自动存档，§372）：比"开始新的一局"更显眼 */
+.title-resume {
+  width: 100%;
+  text-align: center;
+  border-color: #58a6ff;
+  background: linear-gradient(180deg, #12263a, #0d1a28);
+  color: #cfe6ff;
+}
+
+.title-resume:hover {
+  background: linear-gradient(180deg, #17324d, #0f2133);
+}

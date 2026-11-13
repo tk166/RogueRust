@@ -18,11 +18,31 @@ export interface TitleSceneProps {
   readonly lastAscension?: number;
   /** 局终后的重开文案不同。 */
   readonly restart?: boolean;
+  /**
+   * 有没有可继续的自动存档（`localStorage` 里内核写的那一份）。
+   *
+   * 有就多一个"继续上次"按钮，并显示第几幕/第几层/HP —— 玩家刷新/关掉浏览器之后
+   * 能一眼看出"刚才那局还在"。
+   */
+  readonly resume?: {
+    readonly act: number;
+    readonly floor: number;
+    readonly health: number;
+    readonly healthMax: number;
+  } | null;
+  readonly onResume?: () => void;
 }
 
 const DEFAULT_SEED = 1;
 
-export function TitleScene({ onStart, lastSeed, lastAscension, restart = false }: TitleSceneProps) {
+export function TitleScene({
+  onStart,
+  lastSeed,
+  lastAscension,
+  restart = false,
+  resume = null,
+  onResume,
+}: TitleSceneProps) {
   const [seedText, setSeedText] = useState(String(lastSeed ?? DEFAULT_SEED));
   const [ascension, setAscension] = useState(lastAscension ?? 0);
 
@@ -34,6 +54,12 @@ export function TitleScene({ onStart, lastSeed, lastAscension, restart = false }
     <section className="scene scene-title" data-scene="SC-00">
       <h1>RogueRust</h1>
       <p className="scene-sub">一座塔 · 一副牌 · 一条往上爬的路</p>
+
+      {resume && onResume && (
+        <button type="button" className="primary title-resume" data-resume onClick={onResume}>
+          继续上次（第 {resume.act} 幕 · 第 {resume.floor} 层 · 生命 {resume.health}/{resume.healthMax}）
+        </button>
+      )}
 
       <div className="title-form">
         <label className="field">

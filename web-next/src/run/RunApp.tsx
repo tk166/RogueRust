@@ -79,6 +79,11 @@ export function RunApp() {
   const [potionTargeting, setPotionTargeting] = useState(-1);
   /** 上一次用的种子/进阶（局终"再来一局"回填）。 */
   const [last, setLast] = useState<{ seed: number; ascension: number }>({ seed: 1, ascension: 0 });
+  /**
+   * 可继续的自动存档（`localStorage`）。**只在标题页读** —— 读一次就够，读到之后
+   * `importArchive` 会把它变成当前局面。
+   */
+  const [resume, setResume] = useState<{ act: number; floor: number; health: number; healthMax: number; text: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -102,6 +107,12 @@ export function RunApp() {
     store?.getState ?? (() => null),
     store?.getState ?? (() => null)
   );
+
+  // 标题页要显示的"继续上次"：store 建好之后读一次（坏存档会被 store 清掉）。
+  useEffect(() => {
+    if (!store) return;
+    setResume(store.resumeInfo());
+  }, [store]);
 
   // 探针：闸门 34 读这里（语义，不是 DOM 内部结构）。
   useEffect(() => {
@@ -307,10 +318,17 @@ export function RunApp() {
           <TitleScene
             onStart={(seed, ascension) => {
               setLast({ seed, ascension });
+              setResume(null);
               store.startRun(seed, ascension);
             }}
             lastSeed={last.seed}
             lastAscension={last.ascension}
+            resume={resume}
+            onResume={() => {
+              if (!resume) return;
+              const outcome = store.importArchive(resume.text);
+              if (outcome.code === 0) setResume(null);
+            }}
           />
         )}
 

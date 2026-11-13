@@ -50,6 +50,10 @@ export interface RunProbe {
   frozen(): string | null;
   /** 第几幕（`rd_run_act`，1 起）。 */
   act(): number;
+  /** 自动存档：`localStorage` 里那一份的元信息（`null` = 没有/坏）。 */
+  autosave(): unknown;
+  /** 清掉自动存档（闸门用它验"局终会清"与"坏档被丢"）。 */
+  clearAutosave(): unknown;
   /** 幕布状态（`null` = 没有幕布；§2.3 的纯演出）。 */
   curtain(): { act: number; seq: number } | null;
   /** 点一下继续（与点击幕布同一条路）。 */
@@ -208,6 +212,15 @@ export function installRunProbe(store: RunStore): void {
     frozen: () => store.frozen(),
 
     act: () => store.getState().act,
+    autosave: () => store.resumeInfo(),
+    clearAutosave() {
+      try {
+        window.localStorage.removeItem("rd.autosave");
+      } catch {
+        /* 忽略 */
+      }
+      return { autosave: store.resumeInfo() };
+    },
     curtain: () => store.getState().curtain,
     dismissCurtain() {
       store.dismissCurtain();

@@ -56,8 +56,10 @@ web/*.wasm
 web-next/node_modules/
 # 子集字体是 `native/ui_font_measure.py` 的产物，字节数记在 font-measure.json 里
 docs/ui-next-p1/subset-*
-# P2：`web-next` 用的 wasm 是**复制**自 `web/rd_wasm.wasm` 的（唯一构建产物），不入库
+# P2：`web-next/public/` 的 wasm 是**复制**自 `web/rd_wasm.wasm` 的（唯一构建产物），不入库
 web-next/public/rd_wasm.wasm
 web-next/public/wasm.json
-web-next/dist/rd_wasm.wasm
-web-next/dist/wasm.json
+# ★ 但 `dist/` 里的那一份**必须入库**：它决定"`git clone` 下来能不能直接玩"。
+# 之前它被忽略 ⇒ 新克隆的 dist 有 HTML/JS 却没有 wasm ⇒ 页面直接"内核装载失败"，
+# 陌生人第一步就卡住（而且只有装了 Rust 才救得回来）。1.4 MB 换"开箱能玩"，值。
+# ⚠️ 改内核之后必须 `npm run wasm && npm run build`，否则入库的是旧二进制（闸门 28 的 sha 比对会红）。
