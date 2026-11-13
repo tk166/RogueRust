@@ -50,6 +50,12 @@ export interface RunProbe {
   frozen(): string | null;
   /** 第几幕（`rd_run_act`，1 起）。 */
   act(): number;
+  /** 幕布状态（`null` = 没有幕布；§2.3 的纯演出）。 */
+  curtain(): { act: number; seq: number } | null;
+  /** 点一下继续（与点击幕布同一条路）。 */
+  dismissCurtain(): unknown;
+  /** 夹具（**只在 `?debug`**）：把幕布推到"换到第 act 幕"（只动演出层）。 */
+  simulateActChange?(act: number): unknown;
   /** 幕间待选的 Boss 遗物 id（空 = 没有待选）。 */
   bossRelics(): string[];
   /** 取走第 `slot` 件（内核动作）。 */
@@ -202,6 +208,17 @@ export function installRunProbe(store: RunStore): void {
     frozen: () => store.frozen(),
 
     act: () => store.getState().act,
+    curtain: () => store.getState().curtain,
+    dismissCurtain() {
+      store.dismissCurtain();
+      return { curtain: store.getState().curtain };
+    },
+    simulateActChange: new URLSearchParams(window.location.search).has("debug")
+      ? (act: number) => {
+          store.simulateActChange(act);
+          return { curtain: store.getState().curtain };
+        }
+      : undefined,
     bossRelics: () => [...store.getState().bossRelics],
     takeBossRelic(slot: number) {
       const code = store.takeBossRelic(slot);

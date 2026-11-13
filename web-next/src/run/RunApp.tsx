@@ -48,6 +48,8 @@ import { PickupOverlay } from "./overlays/PickupOverlay";
 import { PileOverlay } from "./overlays/PileOverlay";
 import { PotionBar } from "./overlays/PotionBar";
 import { SettingsOverlay } from "./overlays/SettingsOverlay";
+import { ActCurtain } from "./ActCurtain";
+import { CURTAIN_MS } from "./curtain.js";
 import { installRunProbe } from "./runProbe";
 import "./run.css";
 
@@ -137,6 +139,14 @@ export function RunApp() {
       setDeckRequest({ purpose: "event" });
     }
   }, [state, deckRequest]);
+
+  // 幕布：1.6 秒后自己关（与旧页面一致）。点一下也能提前关 —— 两条路都只调 `dismissCurtain`。
+  const curtainSeq = state?.curtain?.seq ?? null;
+  useEffect(() => {
+    if (curtainSeq === null) return;
+    const timer = window.setTimeout(() => store?.dismissCurtain(), CURTAIN_MS);
+    return () => window.clearTimeout(timer);
+  }, [curtainSeq, store]);
 
   const deckGroups = useMemo(() => {
     const counts = new Map<string, number>();
@@ -254,6 +264,16 @@ export function RunApp() {
             </span>
           )}
         </div>
+      )}
+
+      {/* ── 幕间幕布（§2.3）：纯演出，不挡操作 ─────────────────────────────── */}
+      {state.curtain && (
+        <ActCurtain
+          key={state.curtain.seq}
+          act={state.curtain.act}
+          seq={state.curtain.seq}
+          onDismiss={() => store.dismissCurtain()}
+        />
       )}
 
       {/* ── 战利品横幅：宝箱"打开即结束"，所以战利品要在这里说 ──────────────── */}

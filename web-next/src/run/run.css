@@ -1466,3 +1466,62 @@ button.primary:disabled {
 .boss-relic-id {
   font-size: 11px;
 }
+
+/* ── 幕间幕布（`ui-state-model.md` §2.3）：纯演出 ────────────────────────────
+ *
+ * 旧页面（`web/index.html` 的 `#actCurtain`）就长这样：全屏、径向渐变、1.6 秒淡出。
+ * ⚠️ 覆盖层本身 `pointer-events: none` —— 换幕之后第一件该做的事就是点地图，
+ * 幕布不能在这 1.6 秒里把点击吃掉。只有"点一下继续"那一行可点。 */
+.act-curtain {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 50% 40%, rgba(20, 28, 40, 0.92), rgba(6, 9, 14, 0.97));
+  pointer-events: none;
+  animation: curtain-in 240ms ease-out;
+}
+
+.act-curtain-inner {
+  text-align: center;
+  padding: 2rem 3rem;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.act-curtain-act {
+  font-size: 2.6rem;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  color: #f0d68a;
+  text-shadow: 0 0 18px rgba(240, 214, 138, 0.35);
+}
+
+.act-curtain-line {
+  margin-top: 0.9rem;
+  color: #b9c4d2;
+  font-size: 1rem;
+}
+
+.act-curtain-hint {
+  margin-top: 1.4rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+@keyframes curtain-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 关动画：幕布直接不播（`RunStore` 在 `motionOff` 时根本不置位，这里是第二道保险）。 */
+@media (prefers-reduced-motion: reduce) {
+  .act-curtain {
+    animation: none;
+  }
+}

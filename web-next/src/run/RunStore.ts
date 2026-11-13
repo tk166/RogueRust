@@ -25,6 +25,7 @@ import {
   type MapModel,
   type RunSnapshot,
 } from "./observe.js";
+import { shouldShowCurtain } from "./curtain.js";
 import { resolveScene, type SceneInput, type SceneResolution } from "./scene.js";
 
 export interface LogEntry {
@@ -53,6 +54,13 @@ export interface RunState {
   readonly act: number;
   /** 幕间待选的 Boss 遗物（空 = 没有待选）。 */
   readonly bossRelics: readonly string[];
+  /**
+   * 幕间幕布（`ui-state-model.md` §2.3）：`null` = 没有幕布。
+   *
+   * **纯演出**：只记"第几幕"，不参与任何判断。`seq` 让组件知道"又换了一次幕"
+   * （同一幕连开两局时也要能重播）。
+   */
+  readonly curtain: { readonly act: number; readonly seq: number } | null;
   /** 当前相位（`rd_run_pending`）：0 = 没有待决屏。诊断与"未实现屏"都用它。 */
   readonly pending: number;
   readonly seed: number;
@@ -174,6 +182,11 @@ export class RunStore {
   private frozenReason: string | null = null;
   /** 测试钩子注入的违约（`?debug` 下用，见 `injectViolation`）。 */
   private injectedViolation: string | null = null;
+  /** 上一次见到的幕号（幕布靠它判"变大了"）。 */
+  private lastAct = 0;
+  private curtainSeq = 0;
+  /** 关动画（`?motion=off` / 系统偏好）：幕布直接不播。 */
+  private readonly motionOff: boolean;
   private chestBaseline: { gold: number; relicCount: number; relics: string[] } | null = null;
   /** 见 `RunState.lastLoot`。 */
   private lastLoot: RunState["lastLoot"] = null;
@@ -181,6 +194,20 @@ export class RunStore {
 
   constructor(host: WasmHost) {
     this.host = host;
+    // 与 `CombatScreen` 同一个优先级：URL > localStorage > 系统。演出层读的是同一份偏好。
+    const param = new URLSearchParams(window.location.search).get("motion");
+    let stored: string | null = null;
+    try {
+      stored = window.localStorage.getItem("rd.motion");
+    } catch {
+      stored = null;
+    }
+    const prefersReduced =
+      typeof window.matchMedia === "function"
+        ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        : false;
+    this.motionOff =
+      param === "off" ? true : param === "on" ? false : stored === "off" ? true : stored === "on" ? false : prefersReduced;
     this.state = {
       run: null,
       map: null,
@@ -188,6 +215,7 @@ export class RunStore {
       bossReachable: false,
       act: 1,
       bossRelics: [],
+      curtain: null,
       pending: 0,
       seed: 0,
       ascension: 0,
@@ -219,6 +247,40 @@ export class RunStore {
   };
 
   readonly getState = (): RunState => this.state;
+
+  /**
+   * 幕布判定：`act` **变大** ⇒ 置一次幕布。纯演出，不改任何游戏事实。
+   *
+   * `act` 变小（重开一局）不算换幕 —— 那是"新的一局"，标题屏已经说清了。
+   */
+  private nextCurtain(act: number): RunState["curtain"] {
+    const previous = this.lastAct;
+    this.lastAct = act;
+    // 判定在 `ActCurtain.tsx` 的纯函数里（闸门 33 直接测它，不靠"真换一次幕"）。
+    if (!shouldShowCurtain(previous, act, this.motionOff)) return this.state.curtain;
+    this.curtainSeq += 1;
+    return { act, seq: this.curtainSeq };
+  }
+
+  /**
+   * 测试钩子（**只在 `?debug` 下存在**）：把幕布**演出**推到"换到第 `act` 幕"。
+   *
+   * ⚠️ 它**只动演出层**：`lastAct` 与 `curtain`，不碰任何游戏事实（act/floor/地图都由内核给）。
+   * 存在的理由：幕布由"真换幕"触发，而打赢 Boss 没法按需制造（同 §370 的三选一夹具）。
+   */
+  simulateActChange(act: number): void {
+    this.curtainSeq += 1;
+    this.lastAct = act;
+    this.state = { ...this.state, curtain: this.motionOff ? null : { act, seq: this.curtainSeq } };
+    this.emit();
+  }
+
+  /** 关掉幕布（点一下 / 1.6 秒到）。 */
+  dismissCurtain(): void {
+    if (this.state.curtain === null) return;
+    this.state = { ...this.state, curtain: null };
+    this.emit();
+  }
 
   /** 现在能不能改状态：`null` = 能；否则是"为什么不能"。 */
   frozen(): string | null {
@@ -330,6 +392,9 @@ export class RunStore {
       scene,
       bossReachable: actions.some((action) => action.target === BOSS_SENTINEL),
       act: raw.exists ? raw.act : 0,
+      // §2.3：**触发条件是"act 变大"**（不需要新导出）。换幕时内核已经把 floor 归 0、地图换新，
+      // 玩家需要注意到这件事 —— 否则"回到第 0 层"看起来像 bug。
+      curtain: this.nextCurtain(raw.exists ? raw.act : 0),
       bossRelics: Array.from({ length: Math.max(0, this.host.bossRelicCount()) }, (_, slot) =>
         this.host.bossRelicId(slot)
       ),
@@ -493,6 +558,9 @@ export class RunStore {
     // 新开一局是**唯一**的解除冻结途径（粘性，见 `frozenReason`）。
     this.frozenReason = null;
     this.injectedViolation = null;
+    // 新开一局：幕号回到 1，幕布不该因为"上次是 3"而重播。
+    this.lastAct = 0;
+    this.state = { ...this.state, curtain: null };
     this.host.startRun(seed, ascension);
     this.note(`开局：seed ${seed} · 进阶 ${ascension}`, "good");
     this.refresh();
