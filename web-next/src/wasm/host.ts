@@ -935,6 +935,47 @@ export class WasmHost {
     return (this.ex.rd_run_restore_from as (ptr: number, len: number) => number)(ptr, bytes.length);
   }
 
+  // ── 回放脚本（`rd_run_script_*` / `rd_run_replay_*`）──────────────────────
+  /**
+   * 让内核把回放脚本写进它自己的缓冲，返回长度；`<0` = 拒绝（原因见 `lastError`）。
+   *
+   * ⚠️ **战斗中导不出**：一场战斗只有"结果"进脚本，回放它必然分叉 —— 内核直接拒绝。
+   */
+  scriptFill(): number {
+    return (this.ex.rd_run_script_fill as () => number)();
+  }
+
+  /** 读回脚本文本（`scriptFill` 之后调用）。 */
+  readScript(len: number): string {
+    const ptr = Number((this.ex.rd_run_script_buf as () => number)());
+    const bytes = new Uint8Array(this.ex.memory.buffer, ptr, len).slice();
+    return this.decoder.decode(bytes);
+  }
+
+  /**
+   * 回放 `text`。`0` = 每一步都复现；`n > 0` = 第 `n` 步分叉；`-1` 没有槽；`-2` 拒绝。
+   *
+   * 脚本头自带 seed/ascension/内容指纹，所以**不需要先有局**（内核自己开局）。
+   */
+  replayFrom(text: string): number {
+    const bytes = new TextEncoder().encode(text);
+    const capacity = (this.ex.rd_run_script_capacity as () => number)();
+    if (bytes.length > capacity) return -2;
+    const ptr = Number((this.ex.rd_run_script_buf as () => number)());
+    new Uint8Array(this.ex.memory.buffer, ptr, bytes.length).set(bytes);
+    return (this.ex.rd_run_replay_from as (ptr: number, len: number) => number)(ptr, bytes.length);
+  }
+
+  /** 上一次回放验过多少步。 */
+  replayChecked(): number {
+    return (this.ex.rd_run_replay_checked as () => number)();
+  }
+
+  /** 上一次回放在第几步分叉（`0` = 没有）。 */
+  replayDiverged(): number {
+    return (this.ex.rd_run_replay_diverged as () => number)();
+  }
+
   /** 最近一次拒绝的原因（`rd_run_last_error_*`）。 */
   lastError(): string {
     const len = (this.ex.rd_run_last_error_len as () => number)();

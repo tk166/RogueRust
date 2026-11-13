@@ -202,6 +202,15 @@ export class RunStore {
   private readonly motionOff: boolean;
   /** 上一次写进 `localStorage` 的档案文本（相同就不重写）。 */
   private lastAutosave: string | null = null;
+  /**
+   * 这一局是不是"回放出来的"。
+   *
+   * ⚠️ 内核在回放期间**不记账**（`session.replaying`），而回放会先 `rd_run_start` 清空 journal
+   * ⇒ 回放之后那一局**没有脚本**。如果玩家接着玩再导出，头部仍写 `RDR1,S,seed`，但记录只有
+   * 回放之后那几步 —— 那份脚本**导入必然分叉**（缺前缀）。
+   * 所以回放之后一律拒绝导出脚本，并在提示里说清"用存档留档"。
+   */
+  private replayed = false;
   private chestBaseline: { gold: number; relicCount: number; relics: string[] } | null = null;
   /** 见 `RunState.lastLoot`。 */
   private lastLoot: RunState["lastLoot"] = null;
@@ -651,6 +660,7 @@ export class RunStore {
     this.injectedViolation = null;
     // 新开一局：幕号回到 1，幕布不该因为"上次是 3"而重播。
     this.lastAct = 0;
+    this.replayed = false;
     this.state = { ...this.state, curtain: null };
     this.host.startRun(seed, ascension);
     this.note(`开局：seed ${seed} · 进阶 ${ascension}`, "good");
@@ -843,6 +853,62 @@ export class RunStore {
     return code;
   }
 
+  // ── 回放（`rd_run_script_*` / `rd_run_replay_*`）───────────────────────────
+  /**
+   * 导出回放脚本；`null` = 内核拒绝（战斗中 / 没有局 / 哈希缓冲不够）。
+   *
+   * 与存档**不同**：存档描述"现在这一局"，脚本描述"这一局是怎么走到现在的"（每步都带指纹）。
+   */
+  exportReplay(): string | null {
+    if (this.replayed) {
+      this.note("回放之后这一局没有脚本（回放期间内核不记账）—— 要留档请用「导出这一局」", "warn");
+      this.refresh();
+      return null;
+    }
+    const len = this.host.scriptFill();
+    if (len <= 0) {
+      this.note(`导出回放失败：${this.host.lastError() || `code ${len}`}`, "warn");
+      this.refresh();
+      return null;
+    }
+    const text = this.host.readScript(len);
+    this.note(`导出回放：${len} 字节`, "good");
+    this.refresh();
+    return text;
+  }
+
+  /**
+   * 导入并**逐步对拍**。
+   *
+   * 脚本头自带 seed/ascension/内容指纹 ⇒ 不需要先有局（内核自己 `rd_run_start`）。
+   * 返回码：`0` 全部复现 / `n > 0` 第 n 步分叉 / `-1` 没有槽 / `-2` 拒绝（原因在 `lastError`）。
+   */
+  importReplay(text: string): { code: number; checked: number; diverged: number; message: string } {
+    const code = this.host.replayFrom(text);
+    const checked = this.host.replayChecked();
+    const diverged = this.host.replayDiverged();
+    const message =
+      code === 0
+        ? `已逐步对拍 ${checked} 步，无分叉`
+        : code > 0
+          ? `第 ${diverged || code} 步分叉（前 ${checked} 步一致）`
+          : this.host.lastError() || `回放被拒绝（code ${code}）`;
+    this.note(
+      code === 0 ? `回放成功：${checked} 步` : `回放失败：${message}`,
+      code === 0 ? "good" : "bad"
+    );
+    // 回放会把局面改成"脚本末尾那一刻" ⇒ 冻结要解（这是内核校验过的状态）。
+    if (code === 0) {
+      this.frozenReason = null;
+      this.injectedViolation = null;
+      this.lastAutosave = null;
+      // 见 `replayed` 的注释：回放之后 journal 是空的。
+      this.replayed = true;
+    }
+    this.refresh();
+    return { code, checked, diverged, message };
+  }
+
   // ── 存档 / 回档（第十五轮 Review §6 的缺口）──────────────────────────────
   //
   // 内核已经有一份**可信**的档案格式（`MAGIC-base64-校验和`，含内容指纹），所以界面只做搬运：
@@ -884,6 +950,9 @@ export class RunStore {
       this.injectedViolation = null;
       // 回档之后允许自动存档立刻重写一次（文本可能相同，但 `lastAutosave` 是"上一次写盘的"）。
       this.lastAutosave = null;
+      // 回档是"从档案接着打"，脚本头部会变成 `RDR1,A,<档案>` —— 那条路是内核支持的，所以
+      // 这里**不**设 `replayed`（它只拦"回放之后 journal 为空"那种情况）。
+      this.replayed = false;
       this.note("回档成功", "good");
     } else {
       this.note(`回档失败：${message}`, "bad");

@@ -557,6 +557,8 @@ export function RunApp() {
           onClose={() => setShowSettings(false)}
           onExport={() => store.exportArchive()}
           onImport={(text) => store.importArchive(text)}
+          onExportReplay={() => store.exportReplay()}
+          onImportReplay={(text) => store.importReplay(text)}
           onMotionChange={(value) => {
             setMotion(value);
             try {

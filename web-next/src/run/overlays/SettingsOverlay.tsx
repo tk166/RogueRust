@@ -24,6 +24,10 @@ export interface SettingsOverlayProps {
   readonly onExport: () => string | null;
   /** 从档案文本回档；返回内核的返回码与人话原因。 */
   readonly onImport: (text: string) => { code: number; message: string };
+  /** 导出回放脚本（内核写）；`null` = 拒绝（战斗中/没有局）。 */
+  readonly onExportReplay: () => string | null;
+  /** 导入回放脚本并**逐步对拍**。 */
+  readonly onImportReplay: (text: string) => { code: number; checked: number; diverged: number; message: string };
 }
 
 export function SettingsOverlay({
@@ -33,10 +37,15 @@ export function SettingsOverlay({
   onMotionChange,
   onExport,
   onImport,
+  onExportReplay,
+  onImportReplay,
 }: SettingsOverlayProps) {
   const [archive, setArchive] = useState("");
   const [importText, setImportText] = useState("");
   const [result, setResult] = useState<string | null>(null);
+  const [replayOut, setReplayOut] = useState("");
+  const [replayIn, setReplayIn] = useState("");
+  const [replayResult, setReplayResult] = useState<string | null>(null);
   const { run, scene, pending } = state;
   return (
     <div className="run-overlay" data-settings>
@@ -177,6 +186,93 @@ export function SettingsOverlay({
             </button>
             {result !== null && <span className="muted" data-archive-result>{result}</span>}
           </div>
+        </section>
+
+        {/*
+          回放（`rd_run_script_*` / `rd_run_replay_*`）：与存档**不同** —— 存档描述"现在这一局"，
+          脚本描述"这一局是怎么走到现在的"（每一步都带指纹）。导入时内核**逐步对拍**，
+          所以"分叉在第几步"是可说的，不是"看起来不一样"。
+        */}
+        <section className="settings-section" data-settings-replay>
+          <h4>回放</h4>
+          <div className="settings-archive-actions">
+            <button
+              type="button"
+              data-replay-export
+              onClick={async () => {
+                const text = onExportReplay();
+                setReplayOut(text ?? "");
+                if (text === null) {
+                  setReplayResult("导出被拒绝（战斗中不能导出：一场战斗只有结果进脚本）");
+                  return;
+                }
+                // "导出（至剪贴板）"：先尝试写剪贴板，失败也把文本留在下面的框里。
+                let copied = false;
+                try {
+                  await navigator.clipboard?.writeText(text);
+                  copied = true;
+                } catch {
+                  copied = false;
+                }
+                setReplayResult(`已导出 ${text.length} 字节${copied ? "，已复制到剪贴板" : "（剪贴板不可用，请手动复制下面的文本）"}`);
+              }}
+            >
+              导出回放（至剪贴板）
+            </button>
+            <button
+              type="button"
+              data-replay-copy
+              disabled={replayOut === ""}
+              onClick={async () => {
+                try {
+                  await navigator.clipboard?.writeText(replayOut);
+                  setReplayResult("已复制到剪贴板");
+                } catch {
+                  setReplayResult("剪贴板不可用，请手动复制");
+                }
+              }}
+            >
+              再复制一次
+            </button>
+          </div>
+          <textarea
+            className="settings-archive-box"
+            data-replay-out
+            readOnly
+            rows={4}
+            value={replayOut}
+            placeholder="点「导出回放」之后，脚本会出现在这里（头部是 RDR1,S,seed,asc,内容指纹）"
+          />
+
+          <textarea
+            className="settings-archive-box"
+            data-replay-in
+            rows={4}
+            value={replayIn}
+            placeholder="把回放脚本粘到这里，再点「导入回放」——内核会**逐步对拍**"
+            onChange={(event) => setReplayIn(event.target.value)}
+          />
+          <div className="settings-archive-actions">
+            <button
+              type="button"
+              data-replay-import
+              disabled={replayIn.trim() === ""}
+              onClick={() => {
+                const outcome = onImportReplay(replayIn.trim());
+                setReplayResult(outcome.message);
+              }}
+            >
+              导入回放（逐步对拍）
+            </button>
+            {replayResult !== null && (
+              <span className="muted" data-replay-result>
+                {replayResult}
+              </span>
+            )}
+          </div>
+          <p className="muted">
+            脚本自带 seed / 进阶 / 内容指纹，所以导入**不需要先开一局**；内容版本不同会被直接拒绝。
+          </p>
         </section>
 
         <section className="settings-section">

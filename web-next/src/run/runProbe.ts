@@ -50,6 +50,10 @@ export interface RunProbe {
   frozen(): string | null;
   /** 第几幕（`rd_run_act`，1 起）。 */
   act(): number;
+  /** 导出回放脚本（`null` = 内核拒绝）。 */
+  exportReplay(): string | null;
+  /** 导入回放并逐步对拍。 */
+  importReplay(text: string): unknown;
   /** 自动存档：`localStorage` 里那一份的元信息（`null` = 没有/坏）。 */
   autosave(): unknown;
   /** 清掉自动存档（闸门用它验"局终会清"与"坏档被丢"）。 */
@@ -212,6 +216,11 @@ export function installRunProbe(store: RunStore): void {
     frozen: () => store.frozen(),
 
     act: () => store.getState().act,
+    exportReplay: () => store.exportReplay(),
+    importReplay(text: string) {
+      const outcome = store.importReplay(text);
+      return { ...outcome, scene: window.__run!.scene(), run: window.__run!.run() };
+    },
     autosave: () => store.resumeInfo(),
     clearAutosave() {
       try {

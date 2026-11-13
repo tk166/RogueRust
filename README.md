@@ -238,7 +238,7 @@ python -m http.server 8000
 | `kernel/rd-firmware/` | 裸机启动壳（独立的 `[workspace]`，只在 riscv 目标上存在）——**只为证明链接得过** |
 | `kernel/rd-hashdump` `rd-rngdump` `rd-sizeprobe` `rd-fightdump` | 诊断二进制：哈希对拍、洗牌序列对拍、RISC-V 代码体积、把一局战斗逐步打出来 |
 | `tools/contentc/` | **Python 内容编译器**：JSON 源 → `rdcf` 二进制镜像（段目录 + 字符串池 + 效果程序 IR） |
-| `tools/acceptance.ps1` | **聚合验收**：50 道闸门（含 `coverage-matrix`、`state-fields`、`ui-state`、`ui-abi`、`ui-next`、`ui-pointer`、`ui-pure`、`ui-wasm`、`ui-wasm-ui`、`ui-wasm-choice`、`ui-wasm-fixtures`、`ui-wasm-xcost`、`ui-scene`、`ui-next-loop`、`ui-p4-models`、`ui-next-p4`、`ui-beats`、`ui-next-p5`、`ui-mobile` 与 `ui-soak-p6`），一道红就整体红 |
+| `tools/acceptance.ps1` | **聚合验收**：51 道闸门（含 `coverage-matrix`、`state-fields`、`ui-state`、`ui-abi`、`ui-next`、`ui-pointer`、`ui-pure`、`ui-wasm`、`ui-wasm-ui`、`ui-wasm-choice`、`ui-wasm-fixtures`、`ui-wasm-xcost`、`ui-scene`、`ui-next-loop`、`ui-p4-models`、`ui-next-p4`、`ui-beats`、`ui-next-p5`、`ui-mobile` 与 `ui-soak-p6`），一道红就整体红 |
 | `tools/rdcf_verify.py` `rdcf_terms.py` | 内容镜像的**独立**字节级校验（段目录 / count×stride / term 表形状） |
 | `web/` | 前端（零构建、零 CDN）：`index.html` + `ui_render.js`（战斗语义）+ `ui_panels.js`（14 个节点状态）+ `map.html` + `pixels.mjs`（像素度量）+ 门 13–20 的脚本 |
 | `native/RogueDeck.Oracle` `RogueDeck.Native` | C# 侧：对拍导出（NativeAOT）与 RL 环境 ABI |
@@ -413,8 +413,9 @@ npm run build && node web-next/scripts/serve.mjs --port 8080
 
 ### 10.4 已知缺口
 
-* **回放**：内核导出齐全，新入口**没有界面**（旧入口有）。**存档/回档已经补上**（设置面板里
-  导出/导入；闸门 44），**自动存档**也已补（`localStorage` + 标题页"继续上次"，闸门 49）。
+* **回放**（§373 已补）：设置面板里"导出回放（至剪贴板）" + "导入回放（逐步对拍）"，
+  分叉会报在第几步。仍是"只验不播"（导入后直接跳到脚本末尾，没有逐步重放演出）。
+  **存档/回档**（闸门 44）与**自动存档**（闸门 49）都已补。
 * **GLB 角色资产**：没有资产管线，只有程序化外观表 + 降级（`docs/ui-p5-beats.md` §6）。
 * **幕间**（§370 已补）：幕数显示（顶栏 + 地图标题）+ **Boss 遗物三选一**（内核
   `offer_boss_relics` / `take_boss_relic`，`SC-13`）+ **幕间幕布**（§371，换幕时 1.6 秒的演出，
