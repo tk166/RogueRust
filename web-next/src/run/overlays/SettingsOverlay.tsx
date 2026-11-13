@@ -11,6 +11,7 @@
 // * Esc / 关闭按钮收起；
 // * 不提供"改状态"的按钮（没有隐藏的作弊入口：那会让闸门绕过整个路由）。
 
+import { useState } from "react";
 import type { RunState } from "../RunStore";
 
 export interface SettingsOverlayProps {
@@ -19,9 +20,23 @@ export interface SettingsOverlayProps {
   /** 动效偏好：`"on"` / `"off"` / `"auto"`（跟随系统）。 */
   readonly motion: "on" | "off" | "auto";
   readonly onMotionChange: (value: "on" | "off" | "auto") => void;
+  /** 导出当前这一局（内核写的档案文本）；`null` = 拒绝（战斗中/没有局）。 */
+  readonly onExport: () => string | null;
+  /** 从档案文本回档；返回内核的返回码与人话原因。 */
+  readonly onImport: (text: string) => { code: number; message: string };
 }
 
-export function SettingsOverlay({ state, onClose, motion, onMotionChange }: SettingsOverlayProps) {
+export function SettingsOverlay({
+  state,
+  onClose,
+  motion,
+  onMotionChange,
+  onExport,
+  onImport,
+}: SettingsOverlayProps) {
+  const [archive, setArchive] = useState("");
+  const [importText, setImportText] = useState("");
+  const [result, setResult] = useState<string | null>(null);
   const { run, scene, pending } = state;
   return (
     <div className="run-overlay" data-settings>
@@ -101,6 +116,67 @@ export function SettingsOverlay({ state, onClose, motion, onMotionChange }: Sett
         <section className="settings-section" data-settings-potions={state.potions.length}>
           <h4>药水（{state.potions.length}）</h4>
           <p className="muted">{state.potions.join("、") || "无"}</p>
+        </section>
+
+        {/* 存档 / 回档（第十五轮 Review §6）：默认入口切到新 UI 之后，这一条从"可以没有"
+            变成"必须有"——否则玩家刷新一下就丢局。 */}
+        <section className="settings-section" data-settings-archive>
+          <h4>存档</h4>
+          <div className="settings-archive-actions">
+            <button
+              type="button"
+              data-archive-export
+              onClick={() => {
+                const text = onExport();
+                setArchive(text ?? "");
+                setResult(text === null ? "导出被拒绝（战斗中不能存档）" : `已导出 ${text.length} 字节`);
+              }}
+            >
+              导出这一局
+            </button>
+            <button
+              type="button"
+              data-archive-copy
+              disabled={archive === ""}
+              onClick={() => {
+                void navigator.clipboard?.writeText(archive);
+                setResult("已复制到剪贴板");
+              }}
+            >
+              复制
+            </button>
+          </div>
+          <textarea
+            className="settings-archive-box"
+            data-archive-out
+            readOnly
+            rows={4}
+            value={archive}
+            placeholder="点「导出这一局」之后，档案会出现在这里"
+          />
+
+          <textarea
+            className="settings-archive-box"
+            data-archive-in
+            rows={4}
+            value={importText}
+            placeholder="把档案粘到这里，再点「回档」"
+            onChange={(event) => setImportText(event.target.value)}
+          />
+          <div className="settings-archive-actions">
+            <button
+              type="button"
+              data-archive-import
+              disabled={importText.trim() === ""}
+              onClick={() => {
+                const outcome = onImport(importText.trim());
+                setResult(`${outcome.message}（code ${outcome.code}）`);
+              }}
+            >
+              回档
+            </button>
+            {result !== null && <span className="muted" data-archive-result>{result}</span>}
+          </div>
         </section>
 
         <section className="settings-section">

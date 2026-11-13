@@ -14,11 +14,20 @@
 import type { RunSnapshot } from "../observe.js";
 
 export interface EndSceneProps {
+  /**
+   * 这一屏**自己**的场景 id（`data-scene` 用它）。
+   *
+   * ⚠️ 以前这里从 `kind` 反推（`over ? SC-12b : SC-12a`），于是 `SC-02b` 会报成 `SC-12a`
+   * —— 身份被抹掉，而闸门看不见（那条路径不可达）。现在由 `scene.ts::endSceneFor` 给。
+   */
+  readonly sceneId: string;
   readonly kind: "over" | "actCleared";
   readonly run: RunSnapshot;
   /** `RunEnd` 判别值：0 进行中 / 1 战败 / 2 通关 / 3 地图走完了。 */
   readonly overWhy: number;
   readonly ascension: number;
+  /** 对账失败/冻结时禁用（第十五轮 Review §2）。 */
+  readonly busy?: boolean;
   readonly onRestart: () => void;
   readonly onContinue?: () => void;
 }
@@ -37,10 +46,19 @@ export function overReasonLabel(overWhy: number): string {
   }
 }
 
-export function EndScene({ kind, run, overWhy, ascension, onRestart, onContinue }: EndSceneProps) {
+export function EndScene({
+  sceneId,
+  kind,
+  run,
+  overWhy,
+  ascension,
+  busy = false,
+  onRestart,
+  onContinue,
+}: EndSceneProps) {
   const over = kind === "over";
   return (
-    <section className="scene scene-end" data-scene={over ? "SC-12b" : "SC-12a"}>
+    <section className="scene scene-end" data-scene={sceneId}>
       <header className="scene-head">
         <h2>{over ? (overWhy === 2 ? "通关" : "这一局结束") : "这一幕打完了"}</h2>
         <p className="scene-sub">
@@ -75,12 +93,12 @@ export function EndScene({ kind, run, overWhy, ascension, onRestart, onContinue 
       </dl>
 
       {over ? (
-        <button type="button" className="primary" data-restart onClick={onRestart}>
+        <button type="button" className="primary" data-restart disabled={busy} onClick={onRestart}>
           再来一局
         </button>
       ) : (
         onContinue && (
-          <button type="button" className="primary" data-act-continue onClick={onContinue}>
+          <button type="button" className="primary" data-act-continue disabled={busy} onClick={onContinue}>
             继续
           </button>
         )

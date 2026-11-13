@@ -119,9 +119,34 @@ for (const entry of ["legacy", "run"]) {
     const map = await head(`${site.base}/assets/nope.js.map`);
     check(map.status === 404, "没有源码映射可下载", String(map.status));
 
-    // 越界访问要拒绝（`..` 穿越）。
-    const escape = await head(`${site.base}/../package.json`);
-    check(escape.status === 403 || escape.status === 404, "越界路径被拒绝", String(escape.status));
+    // 越界访问要拒绝。⚠️ 第一版只测了 `/../package.json` —— 它恰好落在 `dist` 之外，
+    // 所以"越界被拒绝"一直绿着，而真正的失败模式（**同前缀兄弟目录**）没被测到。
+    // 第十五轮 Review §5 用 Node 的 path 构造复现了 `dist-backup` 这一条。
+    const traversal = [
+      "/../package.json",
+      "/../dist-backup/private.txt",
+      "/..%2fdist-backup/x.txt",
+      "/%2e%2e/dist2/x",
+      "/legacy/../web-backup/x.txt",
+      "/%zz",
+    ];
+    let leaked = 0;
+    for (const path of traversal) {
+      const response = await head(`${site.base}${path}`);
+      if (response.status === 200) {
+        leaked += 1;
+        console.log(`     越界成功（不该）: ${path} → 200, ${response.bytes} B`);
+      }
+    }
+    check(leaked === 0, "越界路径全部被拒绝（含同前缀兄弟目录与编码穿越）", `${leaked} 条漏了`);
+
+    // 缓存策略必须**按文件名有没有哈希**分，而不是"`/assets/*` 一律 immutable"。
+    const noHash = await head(`${site.base}/assets/logo.png`);
+    check(
+      noHash.cache === "no-cache" || noHash.status === 404,
+      "不带哈希的 assets 不是 immutable（404 也算通过：文件不存在）",
+      `${noHash.status} ${noHash.cache}`
+    );
   } finally {
     await site.close();
   }

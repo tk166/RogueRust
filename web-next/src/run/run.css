@@ -1349,3 +1349,40 @@ button.primary:disabled {
   touch-action: none;
   overscroll-behavior: contain;
 }
+
+/* 存档 / 回档（第十五轮 Review §6）：默认入口切到新 UI 之后这一块是必需品 */
+.settings-archive-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 6px 0;
+}
+
+.settings-archive-actions button {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.settings-archive-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.settings-archive-box {
+  width: 100%;
+  margin: 4px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #0f1319;
+  color: var(--text);
+  font: 11px/1.45 var(--mono, ui-monospace, monospace);
+  word-break: break-all;
+  resize: vertical;
+}

@@ -147,6 +147,14 @@ export interface CombatScreenProps {
   /** `?mock` 的确定局面（P1 闸门用）；不给就是 `initialScene()`。 */
   readonly mockScene?: MockScene;
   /**
+   * 运行层已冻结（对账失败）：战斗屏必须**一起**停下来。
+   *
+   * ⚠️ 这条 prop 存在的理由：`CombatScreen` 是**直接**调 `GameStore.dispatch` 的，
+   * 只守 `RunStore` 的动作方法挡不住它（第十五轮 Review §2）。真正的闸门在
+   * `GameStore.setDispatchGuard`，这条 prop 只负责"把原因显示出来 + 不再接手势"。
+   */
+  readonly frozen?: boolean;
+  /**
    * 战斗有结果之后玩家点"继续"时调用（P3 用它 `fight_end()` → 奖励屏）。
    *
    * ⚠️ 不给这个回调时**不显示**"继续"按钮：P2 的回归页没有下一屏，画一个死按钮
@@ -399,6 +407,9 @@ export function CombatScreen(props: CombatScreenProps) {
 ` +
                 "界面已冻结，避免继续在半可信状态下操作。"
             );
+          } else if (GameStore.isFrozen(outcome)) {
+            // 冻结不是"玩家操作非法"：内核那一步**根本没被调用**（见 GameStore.dispatch）。
+            setFatal(`界面已冻结：${props.frozen ? "对账失败" : "契约违约"}。先重开一局。`);
           } else if (GameStore.isBroken(outcome)) {
             setFatal(`内核驱动坏了（code ${outcome.code}）：这不是玩家操作问题。`);
           } else if (outcome.code === -2) {
@@ -425,7 +436,7 @@ export function CombatScreen(props: CombatScreenProps) {
   // ── 输入接线：全部走同一个状态机 ────────────────────────────────────────────
   const onCardDown = useCallback(
     (slot: number, pointer: { id: number; type: string; x: number; y: number }) => {
-      if (modalOpen || fatal) return;
+      if (modalOpen || fatal || props.frozen) return;
       if (activePointer.current) return; // [P1-UX] 第一指针独占，第二根手指不可偷走当前牌。
       const card = view.hand[slot];
       if (!card) return;
@@ -761,6 +772,13 @@ export function CombatScreen(props: CombatScreenProps) {
           onOpenModal={() => setModalOpen(true)}
         />
       </Canvas>
+
+      {/* 运行层冻结：战斗屏也必须停下来（以前这里完全不知道外面冻了）。 */}
+      {props.frozen && (
+        <div className="wasm-status" data-combat-frozen>
+          界面已冻结（运行层对账失败）：这一场不能再出牌。先重开一局。
+        </div>
+      )}
 
       {/* WebGL 上下文丢失：真机上会真的发生。给诊断 + 一键重新初始化。 */}
       {contextLost && (

@@ -22,7 +22,13 @@ export interface DispatchResult {
    * ⚠️ 只覆盖 148 格观察向量，不覆盖随机数 / 内部实例 / 未导出字段。
    */
   readonly unchanged: boolean;
-  readonly reason: "accepted" | "rejected" | "finished" | "broken";
+  /**
+   * `"frozen"`：**契约违约后界面被冻结**，这一步根本没有发给内核（第十五轮 Review §2）。
+   *
+   * 与 `"rejected"` 的区别很重要：`rejected` 是"内核拒绝了玩家这一手"，
+   * `frozen` 是"我们不敢再问内核了" —— 前者可以继续玩，后者必须停下来看诊断。
+   */
+  readonly reason: "accepted" | "rejected" | "finished" | "broken" | "frozen";
   readonly action: CombatAction | null;
   readonly before: CombatSnapshot;
   readonly after: CombatSnapshot;
@@ -67,6 +73,19 @@ export class GameStore {
     dropped: 0,
     seq: 0,
   };
+  /**
+   * 冻结判据（由 `RunStore` 注入）。
+   *
+   * ⚠️ 为什么必须在这里：`CombatScreen` 是**直接**调 `GameStore.dispatch` 的（P2 的设计），
+   * 只在 `RunStore` 的动作方法上把门，战斗动作就完全绕过冻结 —— 第十五轮 Review §2 指出的
+   * 正是这件事。返回非 `null` 表示"现在不许动"，字符串是给玩家看的原因。
+   */
+  private dispatchGuard: (() => string | null) | null = null;
+
+  /** 注入冻结判据（`RunStore` 在构造战斗 store 时调用）。 */
+  setDispatchGuard(guard: (() => string | null) | null): void {
+    this.dispatchGuard = guard;
+  }
 
   constructor(host: WasmHost) {
     this.host = host;
@@ -117,6 +136,22 @@ export class GameStore {
   dispatch(action: CombatAction): DispatchResult {
     const before = this.current;
     if (!before) throw new Error("没有战斗会话：先 fight_begin");
+    // **冻结时一步都不发给内核**（连 `rd_env_step` 都不调）：这样"冻结"是可证的
+    // （观察向量不变），而不是"发了但内核没理"。
+    const blocked = this.dispatchGuard?.() ?? null;
+    if (blocked !== null) {
+      return {
+        accepted: false,
+        code: STEP_REJECTED,
+        unchanged: true,
+        reason: "frozen",
+        action,
+        before,
+        after: before,
+        beats: [],
+        beatsDropped: 0,
+      };
+    }
     const beforeVector = this.host.combatObservation();
     const code = this.host.step(action.index);
     const afterVector = this.host.combatObservation();
@@ -225,5 +260,10 @@ export class GameStore {
    */
   static isContractViolation(result: DispatchResult): boolean {
     return !result.accepted && !result.unchanged;
+  }
+
+  /** 界面被冻结（契约违约之后）—— 不是"玩家操作非法"。 */
+  static isFrozen(result: DispatchResult): boolean {
+    return result.reason === "frozen";
   }
 }

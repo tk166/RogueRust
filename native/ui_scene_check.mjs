@@ -313,6 +313,24 @@ try {
   }
   check(shortThrew, "观察向量太短响亮失败（不静默补 0）");
 
+  // ── 8b. 终局类场景的**身份与能力**（第十五轮 Review §4 的负控）────────────
+  //
+  // 以前 `EndScene` 自己把 `data-scene` 算成 `over ? SC-12b : SC-12a`，于是 `SC-02b`
+  // **报成 SC-12a**；"继续"按钮也只在 `SC-12a` 时给 ⇒ 一旦 `SC-02b` 可达就是"没有下一步"。
+  // 那条路径在当前内容下不可达，所以闸门 34/36 的 `domScene() == scene.base` 从未执行到它。
+  // 现在身份/能力由纯函数给，这里逐条钉住。
+  const over = scene.endSceneFor(scene.SCENE.over);
+  const actCleared = scene.endSceneFor(scene.SCENE.actCleared);
+  const actEnd = scene.endSceneFor(scene.SCENE.actEnd);
+  check(over !== null && over.sceneId === "SC-12b" && over.canContinue === false, "SC-12b：身份 SC-12b、没有继续", JSON.stringify(over));
+  check(actCleared !== null && actCleared.sceneId === "SC-12a" && actCleared.canContinue === true, "SC-12a：身份 SC-12a、能继续", JSON.stringify(actCleared));
+  check(actEnd !== null && actEnd.sceneId === "SC-02b", "SC-02b：**报自己的 id**（不再冒充 SC-12a）", JSON.stringify(actEnd));
+  check(actEnd !== null && actEnd.canContinue === true, "SC-02b：能继续（内核动作是 end_act）", JSON.stringify(actEnd));
+  check(
+    scene.endSceneFor(scene.SCENE.map) === null && scene.endSceneFor(scene.SCENE.combat) === null,
+    "非终局类返回 null（组件不会误用它）"
+  );
+
   // ── 9. 标签/实现状态的自洽 ────────────────────────────────────────────────
   check(
     [...allScenes].every((id) => sceneLabel(id) !== id && sceneLabel(id).length > 0),

@@ -894,6 +894,57 @@ export class WasmHost {
     };
   }
 
+  // ── 存档 / 回档（`rd_run_archive_*` / `rd_run_restore_from`）───────────────
+  //
+  // 档案是**内核**写的文本：`MAGIC-base64-校验和`。所以版本/内容指纹/损坏都由内核判，
+  // 页面只负责搬运 —— 页面自己写序列化必然与内核漂（而且回档失败会变成"半新半旧"）。
+
+  /** 档案缓冲容量（`MAX_ARCHIVE`）。超过它内核会拒绝，所以先问再写。 */
+  archiveCapacity(): number {
+    return (this.ex.rd_run_archive_capacity as () => number)();
+  }
+
+  /**
+   * 让内核把当前这局写成档案（写进它自己的缓冲），返回长度；`<0` = 拒绝（原因见 `lastError`）。
+   *
+   * ⚠️ 战斗**不能存档**（`CombatState` 不进档案），这条判断在内核里。
+   */
+  archiveFill(): number {
+    return (this.ex.rd_run_archive_fill as () => number)();
+  }
+
+  /** 读回档案文本（`archiveFill` 之后调用）。 */
+  readArchive(len: number): string {
+    const ptr = Number((this.ex.rd_run_archive_buf as () => number)());
+    const bytes = new Uint8Array(this.ex.memory.buffer, ptr, len).slice();
+    return this.decoder.decode(bytes);
+  }
+
+  /**
+   * 从档案文本回档。返回 `0` 成功 / `-1` 没有局 / `-2` 拒绝 / `-3` 坏文本。
+   *
+   * **全有或全无**：内核先装到本地 `RunState`，最后一步才赋值，所以坏档案不会把当前这局
+   * 改成半新半旧。这里把文本写进**内核自己的档案缓冲**再调它，不需要猜 `__heap_base`。
+   */
+  restoreFrom(text: string): number {
+    const bytes = new TextEncoder().encode(text);
+    const capacity = this.archiveCapacity();
+    if (bytes.length > capacity) return -3;
+    const ptr = Number((this.ex.rd_run_archive_buf as () => number)());
+    new Uint8Array(this.ex.memory.buffer, ptr, bytes.length).set(bytes);
+    return (this.ex.rd_run_restore_from as (ptr: number, len: number) => number)(ptr, bytes.length);
+  }
+
+  /** 最近一次拒绝的原因（`rd_run_last_error_*`）。 */
+  lastError(): string {
+    const len = (this.ex.rd_run_last_error_len as () => number)();
+    if (len <= 0) return "";
+    return this.readText(
+      () => len,
+      (ptr) => (this.ex.rd_run_last_error_into as (ptr: number) => number)(ptr)
+    );
+  }
+
   /** 节点 kind 的**内核名字**（`rd_run_kind_name_*`），用于诊断与"未知 kind"兜底。 */
   kindName(kind: number): string {
     const len = (this.ex.rd_run_kind_name_len as (kind: number) => number)(kind);

@@ -32,6 +32,8 @@ export interface RewardSceneProps {
   readonly potion: string;
   readonly relic: string;
   readonly deckSize: number;
+  /** 对账失败/冻结时禁用（第十五轮 Review §2：这一屏以前没有 busy）。 */
+  readonly busy?: boolean;
   readonly onTakeCard: (slot: number) => void;
   readonly onTakePotion: () => void;
   readonly onTakeRelic: () => void;
@@ -44,6 +46,7 @@ export function RewardScene({
   potion,
   relic,
   deckSize,
+  busy = false,
   onTakeCard,
   onTakePotion,
   onTakeRelic,
@@ -77,7 +80,7 @@ export function RewardScene({
             </span>
             <span className="reward-label">药水</span>
             <span className="reward-value">{displayName("potions", potion)}</span>
-            <button type="button" data-take-potion onClick={onTakePotion}>
+            <button type="button" data-take-potion disabled={busy} onClick={onTakePotion}>
               收下
             </button>
           </div>
@@ -90,7 +93,7 @@ export function RewardScene({
             </span>
             <span className="reward-label">遗物</span>
             <span className="reward-value">{displayName("relics", relic)}</span>
-            <button type="button" data-take-relic onClick={onTakeRelic}>
+            <button type="button" data-take-relic disabled={busy} onClick={onTakeRelic}>
               收下
             </button>
           </div>
@@ -108,6 +111,7 @@ export function RewardScene({
             className="reward-card"
             data-reward-card={card.slot}
             data-reward-card-id={card.id}
+            disabled={busy}
             onClick={() => onTakeCard(card.slot)}
           >
             {/*
@@ -121,7 +125,7 @@ export function RewardScene({
         {cards.length === 0 && <p className="muted">这一场没有给牌。</p>}
       </div>
 
-      <button type="button" className="primary" data-reward-skip onClick={onSkip}>
+      <button type="button" className="primary" data-reward-skip disabled={busy} onClick={onSkip}>
         领完了 · 继续
       </button>
     </section>

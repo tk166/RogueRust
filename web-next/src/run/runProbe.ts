@@ -42,6 +42,20 @@ export interface RunProbe {
   /** 战斗中的三个牌堆（没有战斗会话时是空表）。 */
   piles(): unknown;
   /**
+   * 冻结状态（`null` = 没冻结）。
+   *
+   * 第十五轮 Review §2：以前"界面已冻结"只是横幅上的一句话，操作层并不拦。现在
+   * `RunStore` 的每个动作入口 + `GameStore.dispatchGuard` 都过同一个判据，探针读的就是它。
+   */
+  frozen(): string | null;
+  /**
+   * 测试钩子（**只在 `?debug` 下存在**）：注入一条对账违约，把界面推进冻结态。
+   *
+   * 为什么需要它：闸门 43 要证明"冻结之后所有入口都动不了"，而真实的 ABI 违约没法按需制造。
+   * 纪律与 `grantPotion` 一致：只在 debug 页面存在，正式路径没有这个入口。
+   */
+  injectViolation?(text: string | null): unknown;
+  /**
    * P6 的**可复现度量**：视口 / DPR / DPR 上限 / 画布后备像素 / 横向溢出。
    *
    * 放在 `__run` 上（而不是只在战斗屏的 `__p1`）：地图/商店屏也要能量，
@@ -172,6 +186,16 @@ export function installRunProbe(store: RunStore): void {
     },
 
     piles: () => store.piles(),
+
+    frozen: () => store.frozen(),
+
+    // `?debug` 才装（闸门 43 用它注入违约）。
+    injectViolation: new URLSearchParams(window.location.search).has("debug")
+      ? (text: string | null) => {
+          store.injectViolation(text);
+          return { frozen: store.frozen(), violations: [...store.getState().violations] };
+        }
+      : undefined,
 
     metrics() {
       const canvas = document.querySelector("canvas");

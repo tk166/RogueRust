@@ -27,7 +27,7 @@ import { WasmHost } from "../wasm/host";
 import { campfireOptionsFromMask, unknownCampfireBits, shelfRows, type DeckPickPurpose } from "./models.js";
 import { BOSS_SENTINEL, nodeKindLabel } from "./observe.js";
 import { RunStore } from "./RunStore";
-import { isImplemented, sceneLabel, SCENE } from "./scene.js";
+import { endSceneFor, isImplemented, sceneLabel, SCENE } from "./scene.js";
 import { BlessingScene } from "./scenes/BlessingScene";
 import { ChestScene } from "./scenes/ChestScene";
 import { EndScene } from "./scenes/EndScene";
@@ -104,7 +104,8 @@ export function RunApp() {
     installRunProbe(store);
   }, [store]);
 
-  const blocked = state?.violations.length ? true : false;
+  // ⚠️ 冻结是**粘性**的：`violations` 可能变空，但 `frozen` 一旦置位就不解（见 RunStore）。
+  const blocked = Boolean(state?.violations.length) || Boolean(state?.frozen);
 
   const onEnter = useCallback(
     (index: number) => {
@@ -283,7 +284,11 @@ export function RunApp() {
         )}
 
         {base === SCENE.blessing && (
-          <BlessingScene blessings={state.blessings} onChoose={(slot) => store.chooseBlessing(slot)} />
+          <BlessingScene
+            blessings={state.blessings}
+            busy={blocked}
+            onChoose={(slot) => store.chooseBlessing(slot)}
+          />
         )}
 
         {base === SCENE.map && map && run && (
@@ -319,6 +324,7 @@ export function RunApp() {
             mode="wasm"
             host={store.hostForCombat}
             game={store.combat}
+            frozen={blocked}
             onFinish={() => store.fightEnd()}
           />
         )}
@@ -330,6 +336,7 @@ export function RunApp() {
             potion={state.reward.potion}
             relic={state.reward.relic}
             deckSize={run.deckSize}
+            busy={blocked}
             onTakeCard={(slot) => store.takeRewardCard(slot)}
             onTakePotion={() => store.takeRewardPotion()}
             onTakeRelic={() => store.takeRewardRelic()}
@@ -337,18 +344,25 @@ export function RunApp() {
           />
         )}
 
-        {(base === SCENE.over || base === SCENE.actCleared || base === SCENE.actEnd) && run && (
-          <EndScene
-            kind={base === SCENE.over ? "over" : "actCleared"}
-            run={run}
-            overWhy={state.overWhy}
-            ascension={state.ascension}
-            onRestart={() => {
-              store.startRun(last.seed, last.ascension);
-            }}
-            onContinue={base === SCENE.actCleared ? () => store.endAct() : undefined}
-          />
-        )}
+        {(() => {
+          // 身份与能力都由**纯函数**给（`scene.ts::endSceneFor`），组件只负责画。
+          const end = endSceneFor(base);
+          if (!end || !run) return null;
+          return (
+            <EndScene
+              sceneId={end.sceneId}
+              kind={end.kind}
+              run={run}
+              overWhy={state.overWhy}
+              ascension={state.ascension}
+              busy={blocked}
+              onRestart={() => {
+                store.startRun(last.seed, last.ascension);
+              }}
+              onContinue={end.canContinue ? () => store.endAct() : undefined}
+            />
+          );
+        })()}
 
         {base === SCENE.shop && run && (
           <ShopScene
@@ -421,18 +435,12 @@ export function RunApp() {
         )}
       </main>
 
-      {/* ── 覆盖层（`SC-11a`/`SC-11b`：遗物欠账）─────────────────────────── */}
-      {scene.overlays.length > 0 && (
-        <div className="run-overlay" data-run-overlay={scene.overlays.join(",")}>
-          <div className="run-overlay-card">
-            <h3>{scene.overlays.map(sceneLabel).join(" / ")}</h3>
-            <p className="muted">遗物要求你改牌/加牌 —— 牌组选择器在 P4。</p>
-            <button type="button" className="primary" data-overlay-settle onClick={() => store.settleDefault()}>
-              用内核的默认动作通过
-            </button>
-          </div>
-        </div>
-      )}
+      {/*
+        ⚠️ 这里曾经还有一个"通用覆盖层"（`data-run-overlay`），文案写着"牌组选择器在 P4"、
+        带一个 `settleDefault()` 按钮。P4 做完之后它就成了**第二套**遗物模态：与下面的
+        `PickupOverlay` 同时存在于 DOM，而且给了一条"用默认动作跳过欠账"的错路
+        （第十五轮 Review §3）。已删除 —— 遗物欠账**只有** `PickupOverlay` 一条路。
+      */}
 
       {/* ── 牌组选择器：`pending 7/8` 自动弹出，其余由按钮触发 ────────────── */}
       {deckRequest && (
@@ -487,6 +495,8 @@ export function RunApp() {
           state={state}
           motion={motion}
           onClose={() => setShowSettings(false)}
+          onExport={() => store.exportArchive()}
+          onImport={(text) => store.importArchive(text)}
           onMotionChange={(value) => {
             setMotion(value);
             try {

@@ -191,6 +191,48 @@ function firstMatch(input: SceneInput): SceneId {
   return SCENE.map;
 }
 
+/**
+ * 终局类场景的**身份与能力**（纯函数）。
+ *
+ * ⚠️ 抽出来的理由（第十五轮 Review §4）：`EndScene` 以前自己把 `data-scene` 算成
+ * `over ? "SC-12b" : "SC-12a"`，于是 `SC-02b`（幕尽头）**报成 `SC-12a`**，而且"继续"
+ * 按钮只在 `SC-12a` 时给 ⇒ 一旦 `SC-02b` 真的可达，画面就是"这一幕打完了但没有下一步"。
+ * 那是个**潜伏软锁**，而闸门 34/36 的 `domScene() == scene.base` 抓不到它
+ * （`SC-02b` 在当前内容下不可达，那条断言从未被执行）。
+ *
+ * 所以：身份与能力放在这里，闸门 33 **纯函数**就能钉住，不依赖"某条路径真的走得到"。
+ */
+export interface EndSceneShape {
+  /** 这一屏自己报的 `data-scene`（**必须**等于场景 id，不能借别的 id）。 */
+  readonly sceneId: SceneId;
+  /** `EndScene` 的两种语气：局终 / 幕。
+   *
+   * ⚠️ 两种语气共用一套布局，但**身份不同** —— 这正是以前被抹掉的东西。 */
+  readonly kind: "over" | "actCleared";
+  /**
+   * 有没有"继续"。
+   *
+   * `SC-12a`（幕通关）与 `SC-02b`（幕尽头）都能继续：前者是"打赢了 Boss 进入下一幕"，
+   * 后者是"地图走完了" —— 两者对应的内核动作都是 `rd_run_end_act`。
+   * `SC-12b`（局终）没有继续，只有"再来一局"。
+   */
+  readonly canContinue: boolean;
+}
+
+/** 终局类场景 → 身份/能力。非终局类返回 `null`。 */
+export function endSceneFor(scene: SceneId): EndSceneShape | null {
+  switch (scene) {
+    case SCENE.over:
+      return { sceneId: SCENE.over, kind: "over", canContinue: false };
+    case SCENE.actCleared:
+      return { sceneId: SCENE.actCleared, kind: "actCleared", canContinue: true };
+    case SCENE.actEnd:
+      return { sceneId: SCENE.actEnd, kind: "actCleared", canContinue: true };
+    default:
+      return null;
+  }
+}
+
 /** 这一屏在 P3 里**实现了**吗（没实现的走 `UnsupportedScene`，见 `scenes/UnsupportedScene.tsx`）。 */
 export function isImplemented(scene: SceneId): boolean {
   switch (scene) {

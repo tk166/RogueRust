@@ -20,6 +20,8 @@ export interface Blessing {
 export interface BlessingSceneProps {
   readonly blessings: readonly Blessing[];
   readonly onChoose: (slot: number) => void;
+  /** 对账失败/冻结时禁用（第十五轮 Review §2：这一屏以前没有 busy）。 */
+  readonly busy?: boolean;
 }
 
 /**
@@ -82,7 +84,7 @@ function blessingTitle(id: string): { title: string; followUp?: string } {
   return { title: dot >= 0 ? id.slice(dot + 1) : id };
 }
 
-export function BlessingScene({ blessings, onChoose }: BlessingSceneProps) {
+export function BlessingScene({ blessings, onChoose, busy = false }: BlessingSceneProps) {
   return (
     <section className="scene scene-blessing" data-scene="SC-01">
       <header className="scene-head">
@@ -100,6 +102,7 @@ export function BlessingScene({ blessings, onChoose }: BlessingSceneProps) {
               className="blessing"
               data-blessing={blessing.slot}
               data-blessing-id={blessing.id}
+              disabled={busy}
               onClick={() => onChoose(blessing.slot)}
             >
               <span className="blessing-title">{title}</span>
