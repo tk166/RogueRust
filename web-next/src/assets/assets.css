@@ -1,0 +1,202 @@
+/* 素材库预览页（`assets.html`）+ 二维字母徽章（全站共用）。
+ *
+ * 徽章是**产品里也在用**的（奖励/商店/牌组/药水/状态），所以样式放在这里而不是预览页的局部：
+ * 一处定义，两处使用。 */
+
+:root {
+  --asset-line: #2b3440;
+  --asset-bg: #0d1014;
+  --asset-panel: #161b22;
+  --asset-text: #e6edf3;
+  --asset-muted: #8b949e;
+}
+
+/* ── 二维字母徽章 ───────────────────────────────────────────────────────── */
+
+.asset-badge {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5) inset, 0 1px 3px rgba(0, 0, 0, 0.4);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  user-select: none;
+}
+
+.asset-badge--md {
+  border-radius: 8px;
+}
+
+.asset-badge__letters {
+  /* 描边保证浅色调色板（bone）上也读得清 —— `paint-order` 让描边画在字下面。 */
+  -webkit-text-stroke: 2.5px rgba(0, 0, 0, 0.55);
+  paint-order: stroke fill;
+  font-variant-numeric: tabular-nums;
+}
+
+.asset-badge__plus {
+  position: absolute;
+  right: -3px;
+  bottom: -4px;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: #1b2530;
+  color: #8ef0b0;
+  font-size: 9px;
+  font-weight: 700;
+  border: 1px solid #2f4a38;
+}
+
+/* ── 预览页 ─────────────────────────────────────────────────────────────── */
+
+.assets-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--asset-bg);
+  color: var(--asset-text);
+  font: 13px/1.5 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+.assets-head {
+  padding: 12px 16px 8px;
+  border-bottom: 1px solid var(--asset-line);
+  background: var(--asset-panel);
+}
+
+.assets-head h1 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.assets-head p {
+  margin: 2px 0 8px;
+  font-size: 12px;
+}
+
+.assets-tabs,
+.badge-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.assets-tab,
+.badge-tab {
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--asset-line);
+  background: #131820;
+  color: var(--asset-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.assets-tab.is-active,
+.badge-tab.is-active {
+  border-color: #f0a13a;
+  color: var(--asset-text);
+}
+
+.assets-stage {
+  height: 42vh;
+  min-height: 240px;
+  border-bottom: 1px solid var(--asset-line);
+  background: radial-gradient(circle at 50% 70%, #141a22, #0d1014 70%);
+}
+
+.assets-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 16px 24px;
+}
+
+.asset-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+
+.asset-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--asset-line);
+  background: #11161d;
+}
+
+.asset-list code {
+  min-width: 160px;
+  color: #cfe6ff;
+}
+
+.asset-tag {
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid #6b2b2b;
+  background: #2a1416;
+  color: #ffb3ab;
+  font-size: 10px;
+}
+
+.badge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.badge-cell {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border-radius: 8px;
+  border: 1px solid var(--asset-line);
+  background: #11161d;
+}
+
+.badge-cell code {
+  font-size: 10px;
+  color: var(--asset-muted);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assets-foot {
+  margin: 14px 0 0;
+  font-size: 11px;
+}
+
+.muted {
+  color: var(--asset-muted);
+}
+
+/* 敌人列表：可选 + 高亮（61 个不塞进一个画布，选中一个看一个） */
+.asset-list li.is-selected {
+  border-color: #f0a13a;
+  background: #1b1710;
+}
+
+.asset-list li button {
+  padding: 1px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--asset-line);
+  background: #131820;
+  color: var(--asset-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}

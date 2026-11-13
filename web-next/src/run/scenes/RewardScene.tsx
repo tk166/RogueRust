@@ -18,6 +18,8 @@
 // * 三张牌各自"拿"；
 // * 底部一个"跳过 / 继续"，**永远可点** —— 玩家可能不想要任何一张牌（牌组越薄越好）。
 
+import { Badge } from "../../assets/Badge.js";
+import { badgeLook } from "../../assets/registry.js";
 import { displayName } from "../../i18n/index.js";
 
 export interface RewardCard {
@@ -79,7 +81,10 @@ export function RewardScene({
               ⚗
             </span>
             <span className="reward-label">药水</span>
-            <span className="reward-value">{displayName("potions", potion)}</span>
+            <span className="reward-value reward-with-badge">
+              <Badge look={badgeLook("potions", potion)} title={potion} />
+              {displayName("potions", potion)}
+            </span>
             <button type="button" data-take-potion disabled={busy} onClick={onTakePotion}>
               收下
             </button>
@@ -92,7 +97,10 @@ export function RewardScene({
               ✦
             </span>
             <span className="reward-label">遗物</span>
-            <span className="reward-value">{displayName("relics", relic)}</span>
+            <span className="reward-value reward-with-badge">
+              <Badge look={badgeLook("relics", relic)} title={relic} />
+              {displayName("relics", relic)}
+            </span>
             <button type="button" data-take-relic disabled={busy} onClick={onTakeRelic}>
               收下
             </button>
@@ -118,7 +126,11 @@ export function RewardScene({
               ⚠️ 中文名**优先用 i18n**：内核的 `reward_card_title` 是 `CARD.NameKey`（英文
               `Spot Weakness`），直接显示会让中文界面里混进英文牌名。
             */}
-            <span className="reward-card-title">{displayName("cards", card.id) || card.title}</span>
+            <span className="reward-card-head">
+              {/* 卡面素材：两位字母 + 调色板（`assets/registry.ts` 的流水线产物）。 */}
+              <Badge look={badgeLook("cards", card.id)} size="md" upgraded={card.id.endsWith("+")} title={card.id} />
+              <span className="reward-card-title">{displayName("cards", card.id) || card.title}</span>
+            </span>
             <span className="reward-card-id muted">{card.id}</span>
           </button>
         ))}

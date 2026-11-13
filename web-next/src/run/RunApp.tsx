@@ -22,6 +22,8 @@
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { CombatScreen } from "../combat/CombatScreen";
+import { Badge } from "../assets/Badge.js";
+import { badgeLook } from "../assets/registry.js";
 import { displayName } from "../i18n/index.js";
 import { WasmHost } from "../wasm/host";
 import { campfireOptionsFromMask, unknownCampfireBits, shelfRows, type DeckPickPurpose } from "./models.js";
@@ -526,6 +528,7 @@ export function RunApp() {
             <ul className="run-deck-list">
               {deckGroups.map(([id, count]) => (
                 <li key={id} data-deck-card={id}>
+                  <Badge look={badgeLook("cards", id)} title={id} upgraded={id.endsWith("+")} />
                   <span>{displayName("cards", id)}</span>
                   <span className="muted"> ×{count}</span>
                 </li>

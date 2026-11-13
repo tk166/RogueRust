@@ -1386,3 +1386,39 @@ button.primary:disabled {
   word-break: break-all;
   resize: vertical;
 }
+
+/* 徽章在产品界面里的排布（素材流水线：`assets/Badge.tsx` 一处实现） */
+.reward-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reward-with-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shop-row-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.run-deck-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.run-deck-list .asset-badge {
+  width: 20px;
+  height: 20px;
+}
+
+.potion-slot .asset-badge {
+  width: 18px;
+  height: 18px;
+}

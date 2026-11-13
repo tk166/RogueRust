@@ -26,6 +26,8 @@ export default defineConfig({
         p2: "p2.html",
         // P3 的产品路径（）。与  分开： 是回归夹具。
         run: "run.html",
+        // 素材库预览页（P8）：三维原型 / 敌人 / 二维徽章
+        assets: "assets.html",
       },
     },
     // 不内联：把每个 chunk 的字节数留在产物里，好让"压缩传输体积"是个**量出来的**数字。

@@ -20,6 +20,8 @@ import * as THREE from "three";
 import type { CombatView } from "../view/combatView";
 import { layout, type CardScreen, type EnemyScreen } from "./layout";
 import { computeCombatFormation } from "./formation";
+import { EnemyFigure } from "./EnemyFigure";
+import { enemyLook } from "../assets/registry";
 import {
   CARD_H,
   CARD_W,
@@ -364,27 +366,17 @@ export function Stage({
               enemyRefs.current[index] = node;
             }}
           >
-            {index % 2 === 0 ? (
-              <mesh>
-                <sphereGeometry args={[0.44, 12, 9]} />
-                <meshStandardMaterial
-                  color={dead ? "#2b3239" : targeted ? "#7ddc8a" : hovered ? "#78c786" : "#4c9a5a"}
-                  roughness={0.45}
-                  flatShading
-                  emissive={targeted ? "#1f5c2c" : "#000000"}
-                />
-              </mesh>
-            ) : (
-              <mesh rotation={[0, 0.4, 0]}>
-                <dodecahedronGeometry args={[0.46, 0]} />
-                <meshStandardMaterial
-                  color={dead ? "#2b3239" : targeted ? "#e0b46a" : hovered ? "#c89b63" : "#9c6b3c"}
-                  roughness={0.6}
-                  flatShading
-                  emissive={targeted ? "#5a3c10" : "#000000"}
-                />
-              </mesh>
-            )}
+            {/*
+              敌人外观来自**素材注册表**（`assets/registry.ts` → 清单 → 16 种几何原型）。
+              ⚠️ 以前这里按 `index % 2` 挑球/十二面体 —— 那只证明"两个敌人长得不一样"，
+              而真正的需求是"每个敌人都有**它自己**的样子"。现在加敌人只改清单。
+              死亡时压暗而不是换几何：形状是身份，不该因为倒下而变。
+            */}
+            <EnemyFigure
+              look={enemyLook(enemy.id)}
+              opacity={dead ? 0.35 : 1}
+              yaw={index % 2 === 0 ? 0.18 : -0.22}
+            />
             {/* [P1-UX] 用面向相机的轮廓环替代水平地面环：竖屏/固定镜头也明显可见。
                 青色=可选，绿色=当前有效目标；这只是 UI 提示，动作合法性仍由 options 决定。 */}
             {(eligible || illegalHover) && (

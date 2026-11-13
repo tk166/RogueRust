@@ -10,6 +10,8 @@
 // 3. **扔药水要二次确认**：扔了就没了（内核没有撤销）。用一次点击"扔" + 一次"确定"。
 // 4. 空槽也画（灰色）：玩家要能看出腰带还剩几个位置。
 
+import { Badge } from "../../assets/Badge.js";
+import { badgeLook } from "../../assets/registry.js";
 import { displayName } from "../../i18n/index.js";
 import { potionTargeting, potionUsable } from "../models.js";
 
@@ -58,6 +60,7 @@ export function PotionBar({
             : undefined;
         return (
           <div className="potion-slot" key={potion.slot} data-potion-slot={potion.slot} data-potion-id={potion.id}>
+            <Badge look={badgeLook("potions", potion.id)} title={potion.id} />
             <span className="potion-name" title={why}>
               {displayName("potions", potion.id)}
             </span>

@@ -225,7 +225,7 @@ python -m http.server 8000
 | `kernel/rd-firmware/` | 裸机启动壳（独立的 `[workspace]`，只在 riscv 目标上存在）——**只为证明链接得过** |
 | `kernel/rd-hashdump` `rd-rngdump` `rd-sizeprobe` `rd-fightdump` | 诊断二进制：哈希对拍、洗牌序列对拍、RISC-V 代码体积、把一局战斗逐步打出来 |
 | `tools/contentc/` | **Python 内容编译器**：JSON 源 → `rdcf` 二进制镜像（段目录 + 字符串池 + 效果程序 IR） |
-| `tools/acceptance.ps1` | **聚合验收**：44 道闸门（含 `coverage-matrix`、`state-fields`、`ui-state`、`ui-abi`、`ui-next`、`ui-pointer`、`ui-pure`、`ui-wasm`、`ui-wasm-ui`、`ui-wasm-choice`、`ui-wasm-fixtures`、`ui-wasm-xcost`、`ui-scene`、`ui-next-loop`、`ui-p4-models`、`ui-next-p4`、`ui-beats`、`ui-next-p5`、`ui-mobile` 与 `ui-soak-p6`），一道红就整体红 |
+| `tools/acceptance.ps1` | **聚合验收**：46 道闸门（含 `coverage-matrix`、`state-fields`、`ui-state`、`ui-abi`、`ui-next`、`ui-pointer`、`ui-pure`、`ui-wasm`、`ui-wasm-ui`、`ui-wasm-choice`、`ui-wasm-fixtures`、`ui-wasm-xcost`、`ui-scene`、`ui-next-loop`、`ui-p4-models`、`ui-next-p4`、`ui-beats`、`ui-next-p5`、`ui-mobile` 与 `ui-soak-p6`），一道红就整体红 |
 | `tools/rdcf_verify.py` `rdcf_terms.py` | 内容镜像的**独立**字节级校验（段目录 / count×stride / term 表形状） |
 | `web/` | 前端（零构建、零 CDN）：`index.html` + `ui_render.js`（战斗语义）+ `ui_panels.js`（14 个节点状态）+ `map.html` + `pixels.mjs`（像素度量）+ 门 13–20 的脚本 |
 | `native/RogueDeck.Oracle` `RogueDeck.Native` | C# 侧：对拍导出（NativeAOT）与 RL 环境 ABI |
@@ -385,6 +385,18 @@ node native/ui_deploy_check.mjs           # MIME / 缓存 / 版本一致性 / �
 node native/ui_mobile_check.mjs           # 390×844 触控 + 安全区 + DPR 上限
 node native/ui_soak_p6_check.mjs          # 重开/长局/重载/context lost/动效偏好
 ```
+
+### 10.3b 素材库（`assets.html`）
+
+```bash
+python native/build_assets.py     # 内容变了就重跑：生成 web-next/src/assets/manifest.ts
+npm run build && node web-next/scripts/serve.mjs --port 8080
+# 打开 http://127.0.0.1:8080/assets.html
+```
+
+* **三维敌人**：16 种立体几何排列组合（`assets/geometry.ts`，纯数据），61 个敌人按清单分配原型；
+* **二维元素**：卡/遗物/药水/状态各两位大写字母 + 调色板（`assets/registry.ts`）；
+* 产品界面（奖励/商店/牌组/药水）已经在用这些徽章；三维敌人也已经在战斗里用上了。
 
 ### 10.4 已知缺口
 

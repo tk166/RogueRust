@@ -10,6 +10,8 @@
 // 4. **删卡服务每家店一次**（`§343`）：用 `removalAvailable()` 决定，不看"我买过没有"。
 // 5. **离开永远可点**：商店不是必经关卡。
 
+import { Badge } from "../../assets/Badge.js";
+import { badgeLook, type BadgeKind } from "../../assets/registry.js";
 import { displayName } from "../../i18n/index.js";
 import { removalUsable, type ShelfRow } from "../models.js";
 
@@ -28,6 +30,19 @@ export interface ShopSceneProps {
   readonly onRemove: () => void;
   readonly onLeave: () => void;
   readonly busy?: boolean;
+}
+
+/** 货架 → 二维素材表（无色牌复用 `cards` 表：它也是卡）。 */
+function badgeKindOf(kind: ShopShelfView["kind"]): BadgeKind {
+  switch (kind) {
+    case "card":
+    case "colorless":
+      return "cards";
+    case "relic":
+      return "relics";
+    default:
+      return "potions";
+  }
 }
 
 function shelfName(kind: ShopShelfView["kind"], id: string): string {
@@ -90,6 +105,7 @@ export function ShopScene({
                   onClick={() => onBuy(shelf.kind, row.slot)}
                 >
                   <span className="shop-row-name">
+                    {!sold && <Badge look={badgeLook(badgeKindOf(shelf.kind), row.id)} title={row.id} />}
                     {sold ? "已售出" : shelfName(shelf.kind, row.id)}
                   </span>
                   <span className="shop-row-price">
