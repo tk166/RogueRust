@@ -23,7 +23,8 @@
 | `SC-09` 事件选牌 | 有 | `DeckSelectOverlay` | 对等 |
 | `SC-10` 事件候选 | 有 | `EventOfferScene` | 对等 |
 | `SC-11a/b` 遗物欠账 | 有（弹窗） | `PickupOverlay`（覆盖层，关不掉） | 对等 |
-| `SC-12a/b` 幕通关/局终 | 有 | `EndScene` | 对等 |
+| `SC-12a/b` 幕通关/局终 | 有 | `EndScene` | 对等（`SC-12a` 仍不可达：换幕立刻发生） |
+| `SC-13` 幕间·Boss 遗物（§370） | 无（旧入口只换幕，不给 Boss 遗物） | `BossRelicScene` | **新入口更好** |
 
 ## 2. 旧入口有、新入口**没有**（如实记录）
 

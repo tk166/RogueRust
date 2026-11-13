@@ -121,6 +121,7 @@
 | 9 | **SC-09** | 事件选牌 | `pending == 8` | 弹窗 | `showDeckPicker` | `pick_event_card` → 0 |
 | 10 | **SC-10** | 事件候选 | `pending == 9` | 节点面板（行表） | `renderNode` | `event_offer_take` → 0 |
 | 11 | **SC-04** | 战斗奖励 | `pending == 4` | 节点面板（行表） | `renderNode` | `take_card`/`skip_reward` → 0 |
+| 11b | **SC-13** | 幕间·Boss 遗物（§370） | `rd_run_boss_relic_count() > 0`（**与 `pending` 分开**：奖励屏先关，三选一后到） | 节点面板 | `renderNode` | `rd_run_take_boss_relic(slot)` → 0 |
 | 12 | **SC-08** | 事件 | `pending == 5` | 节点面板 | `renderNode` | `choose` → 0 / 4 / 8 / 9 / 战斗 |
 | 13 | **SC-07** | 宝箱 | `pending == 3` | 节点面板 | `renderNode` | `open_chest`/`leave` → 0 |
 | 14 | **SC-05** | 商店 | `pending == 2` | 节点面板（四排） | `renderNode` | `leave` → 0 |
@@ -683,6 +684,7 @@
 | `rd_run_grant_potion(ptr, len)` | 直接塞一瓶药水 | §161 的调试入口；与"拿药水"同一个授予点 |
 | `rd_run_grant_relic(ptr, len)` | 直接塞一件遗物 | 同上 |
 | `rd_env_reset()` | 把战斗会话重建成开战态 | 见 §3.4 L6 |
+| `rd_run_offer_boss_relics()` | 强制生成一次幕间三选一（§370） | 与换幕时**同一个** `offer_boss_relics`；闸门 47 用它造 offer（打赢 Boss 没法按需制造） |
 
 > 为什么它们必须留在 ABI 里：**"能不能被直接构造成某个局面"决定了它能不能被测试**。
 > 只靠"打十几步刚好撞上"的夹具，在内容一改就全红（§106 的教训）。
@@ -970,6 +972,8 @@
 | `rd_run_shop_potion_id_len` | `slot` | 药水货架 id | SC-05 |
 | `rd_run_shop_relic_id_len` | `slot` | 遗物货架 id | SC-05 |
 | `rd_run_pickup_offer_title_len` | `slot` | 加牌候选的显示名 | SC-11b |
+| `rd_run_boss_relic_count` | — | 幕间待选的 Boss 遗物件数（`0` = 没有；§370） | SC-13 |
+| `rd_run_boss_relic_id_len` | `slot` | 待选 Boss 遗物的 id | SC-13 |
 
 ### 8.2 战斗层（15 对）
 

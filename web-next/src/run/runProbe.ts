@@ -48,6 +48,18 @@ export interface RunProbe {
    * `RunStore` 的每个动作入口 + `GameStore.dispatchGuard` 都过同一个判据，探针读的就是它。
    */
   frozen(): string | null;
+  /** 第几幕（`rd_run_act`，1 起）。 */
+  act(): number;
+  /** 幕间待选的 Boss 遗物 id（空 = 没有待选）。 */
+  bossRelics(): string[];
+  /** 取走第 `slot` 件（内核动作）。 */
+  takeBossRelic(slot: number): unknown;
+  /**
+   * 夹具专用（**只在 `?debug` 下存在**）：强制生成一次三选一。
+   *
+   * 与换幕时走同一个内核入口，只是触发时机由闸门决定（打赢 Boss 没法按需制造）。
+   */
+  offerBossRelics?(): unknown;
   /**
    * 测试钩子（**只在 `?debug` 下存在**）：注入一条对账违约，把界面推进冻结态。
    *
@@ -188,6 +200,24 @@ export function installRunProbe(store: RunStore): void {
     piles: () => store.piles(),
 
     frozen: () => store.frozen(),
+
+    act: () => store.getState().act,
+    bossRelics: () => [...store.getState().bossRelics],
+    takeBossRelic(slot: number) {
+      const code = store.takeBossRelic(slot);
+      return {
+        code,
+        scene: window.__run!.scene(),
+        relics: window.__run!.bossRelics(),
+        violations: window.__run!.violations(),
+      };
+    },
+    offerBossRelics: new URLSearchParams(window.location.search).has("debug")
+      ? () => {
+          const code = store.offerBossRelics();
+          return { code, scene: window.__run!.scene(), relics: window.__run!.bossRelics() };
+        }
+      : undefined,
 
     // `?debug` 才装（闸门 43 用它注入违约）。
     injectViolation: new URLSearchParams(window.location.search).has("debug")

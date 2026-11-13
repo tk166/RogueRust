@@ -945,6 +945,38 @@ export class WasmHost {
     );
   }
 
+  // ── 幕间 Boss 遗物三选一（§370）────────────────────────────────────────
+  /** 待选几件（`0` = 没有待选；`-1` = 没有局）。 */
+  bossRelicCount(): number {
+    return (this.ex.rd_run_boss_relic_count as () => number)();
+  }
+
+  /** 待选第 `slot` 件的 id（越界是空串）。 */
+  bossRelicId(slot: number): string {
+    const len = (this.ex.rd_run_boss_relic_id_len as (slot: number) => number)(slot);
+    if (len <= 0) return "";
+    return this.readText(
+      () => len,
+      (ptr) =>
+        (this.ex.rd_run_boss_relic_id_into as (slot: number, ptr: number) => number)(slot, ptr)
+    );
+  }
+
+  /** 取走第 `slot` 件。`0` 拿到 / `-1` 没有这个槽 / `-2` 拒绝（原因在 error 缓冲）。 */
+  takeBossRelic(slot: number): number {
+    return (this.ex.rd_run_take_boss_relic as (slot: number) => number)(slot);
+  }
+
+  /**
+   * **夹具专用**：强制生成一次三选一（`?debug`）。
+   *
+   * 与换幕时走的是**同一个** `offer_boss_relics`，只是触发时机由调用方决定 —— 闸门要验
+   * "三选一的界面与取走路径"，而打赢一场 Boss 战没法按需制造。
+   */
+  offerBossRelics(): number {
+    return (this.ex.rd_run_offer_boss_relics as () => number)();
+  }
+
   /** 节点 kind 的**内核名字**（`rd_run_kind_name_*`），用于诊断与"未知 kind"兜底。 */
   kindName(kind: number): string {
     const len = (this.ex.rd_run_kind_name_len as (kind: number) => number)(kind);

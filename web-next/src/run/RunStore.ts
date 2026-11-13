@@ -44,6 +44,15 @@ export interface RunState {
    * 少了它，第 15 层之后就没有可点的格子（软锁）。
    */
   readonly bossReachable: boolean;
+  /**
+   * 第几幕（`rd_run_act`，1 起）。
+   *
+   * ⚠️ 观察向量（19 格）里**没有** act，它只能从 `rd_run_act()` 单独读。换幕之后 `floor`
+   * 会归 0，所以只显示层数会变成"第 0 层" —— 幕数必须一起显示。
+   */
+  readonly act: number;
+  /** 幕间待选的 Boss 遗物（空 = 没有待选）。 */
+  readonly bossRelics: readonly string[];
   /** 当前相位（`rd_run_pending`）：0 = 没有待决屏。诊断与"未实现屏"都用它。 */
   readonly pending: number;
   readonly seed: number;
@@ -177,6 +186,8 @@ export class RunStore {
       map: null,
       scene: { base: "SC-00", overlays: [], unknownPending: null },
       bossReachable: false,
+      act: 1,
+      bossRelics: [],
       pending: 0,
       seed: 0,
       ascension: 0,
@@ -307,6 +318,7 @@ export class RunStore {
       actionCount: actions.length,
       pickupPicks: this.host.pickupPicks(),
       pickupAdd: this.host.pickupAdd(),
+      bossRelicCount: this.host.bossRelicCount(),
     };
     const scene = resolveScene(input);
 
@@ -317,6 +329,10 @@ export class RunStore {
       map,
       scene,
       bossReachable: actions.some((action) => action.target === BOSS_SENTINEL),
+      act: raw.exists ? raw.act : 0,
+      bossRelics: Array.from({ length: Math.max(0, this.host.bossRelicCount()) }, (_, slot) =>
+        this.host.bossRelicId(slot)
+      ),
       pending,
       seed: raw.seed,
       ascension: raw.ascension,
@@ -644,6 +660,26 @@ export class RunStore {
     if (!this.canMutate("幕间推进")) return -1;
     const code = this.host.endAct();
     this.note(code === 0 ? "这一幕结束，进入下一幕" : `幕间推进被拒绝（code ${code}）`, code === 0 ? "good" : "warn");
+    this.refresh();
+    return code;
+  }
+
+  /** §370：取走幕间三选一里的第 `slot` 件（内核动作；拿到就清空这一手）。 */
+  takeBossRelic(slot: number): number {
+    if (!this.canMutate("选 Boss 遗物")) return -1;
+    const id = this.state.bossRelics[slot] ?? "";
+    const code = this.host.takeBossRelic(slot);
+    this.note(
+      code === 0 ? `幕间遗物：拿了 ${id || `第 ${slot + 1} 件`}` : `选 Boss 遗物失败（code ${code}）`,
+      code === 0 ? "good" : "warn"
+    );
+    this.refresh();
+    return code;
+  }
+
+  /** 夹具专用（`?debug`）：强制生成一次三选一（与换幕时同一条内核路径）。 */
+  offerBossRelics(): number {
+    const code = this.host.offerBossRelics();
     this.refresh();
     return code;
   }

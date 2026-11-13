@@ -1422,3 +1422,47 @@ button.primary:disabled {
   width: 18px;
   height: 18px;
 }
+
+/* §370 幕间：Boss 遗物三选一（也是"这一幕通关"那一屏） */
+.scene-boss-relic {
+  max-width: 640px;
+}
+
+.boss-relic-list {
+  display: grid;
+  gap: 10px;
+}
+
+.boss-relic {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #5a3c10;
+  background: linear-gradient(180deg, #241a0c, #1a1409);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.boss-relic:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: linear-gradient(180deg, #2f2210, #221a0c);
+}
+
+.boss-relic:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.boss-relic-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.boss-relic-id {
+  font-size: 11px;
+}

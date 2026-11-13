@@ -93,6 +93,9 @@ pub const MAX_ACT: u8 = 3;
 /// storage and rule is what lets a relic raise the count without a second array.
 pub const MAX_RUN_POTIONS: usize = 5;
 
+/// Boss 遗物三选一的**固定**三个槽（StS 每幕 Boss 后正好三选一）。
+pub const BOSS_RELIC_OFFER: usize = 3;
+
 /// The wiki's three starting potion slots (§157; Ascension 11 takes one away -- see
 /// [`A_POTION_SLOT`]).
 pub const BASE_POTION_SLOTS: u8 = 3;
@@ -2114,6 +2117,13 @@ pub struct RunState {
     relics_len: u8,
     potions: [RunId; MAX_RUN_POTIONS],
     potions_len: u8,
+    /// 幕间三选一的 Boss 遗物（`boss_relic_offer_len == 0` = 没有待选）。
+    ///
+    /// 与 `Pending` **分开**：打赢 Boss 的那一步会先掷奖励屏（`Pending::Reward`），
+    /// 而三选一是在奖励屏关掉**之后**才该出现的 —— 塞进 `pending` 会把奖励屏顶掉（§329 记过
+    /// 同一类顺序问题）。
+    boss_relic_offer: [RunId; BOSS_RELIC_OFFER],
+    boss_relic_offer_len: u8,
     /// The potion drop chance **right now** (§157): starts at 40, `-10` after a drop, `+10` after a
     /// miss, reset when an act starts.
     potion_chance: i32,
@@ -2325,6 +2335,8 @@ impl RunState {
             relics_len: 0,
             potions: [RunId::EMPTY; MAX_RUN_POTIONS],
             potions_len: 0,
+            boss_relic_offer: [RunId::EMPTY; BOSS_RELIC_OFFER],
+            boss_relic_offer_len: 0,
             potion_chance: POTION_DROP_START,
             map,
             map_generation_failed: false,
@@ -2915,6 +2927,91 @@ impl RunState {
         self.relics_len -= 1;
         self.relics[len - 1] = RunId::EMPTY;
         Ok(())
+    }
+
+    /// 幕间待选的 Boss 遗物（空切片 = 没有待选）。
+    #[must_use]
+    pub fn boss_relic_offer(&self) -> &[RunId] {
+        &self.boss_relic_offer[..self.boss_relic_offer_len as usize]
+    }
+
+    /// 换幕之后生成三选一（**只含 Boss 档、排除已持有、互不重复**）。
+    ///
+    /// 为什么自己抽而不是 `pick_relic`：那个入口会先把**不可掉落的档位**（`Boss`/`Shop`/`Event`）
+    /// 过滤掉 —— 它们不在 `RELIC_RARITY_WEIGHTS` 里。Boss 遗物恰恰全是 `Boss` 档，走那条路会
+    /// 得到空池（`RunId::EMPTY`），于是"三选一"安静地变成"没得选"。
+    pub fn offer_boss_relics(
+        &mut self,
+        relic_pool: &[PoolRelic<'_>],
+    ) -> Result<(), RunError> {
+        if self.boss_relic_offer_len != 0 {
+            return Err(RunError::WrongPhase);
+        }
+        let mut candidates = [PoolRelic {
+            id: "",
+            rarity: Rarity::Common,
+        }; MAX_POOL];
+        let mut count = 0usize;
+        for entry in relic_pool {
+            if entry.rarity != Rarity::Boss || self.holds_relic(entry.id) {
+                continue;
+            }
+            if count >= candidates.len() {
+                return Err(RunError::Capacity);
+            }
+            candidates[count] = *entry;
+            count += 1;
+        }
+        if count == 0 {
+            // 没有 Boss 遗物可给（内容没配 / 全都拿过了）⇒ **不生成空的三选一**。
+            return Ok(());
+        }
+        let mut offer = [RunId::EMPTY; BOSS_RELIC_OFFER];
+        let mut len = 0usize;
+        while len < BOSS_RELIC_OFFER {
+            // 从"还没被选进这一手"的候选里均匀抽一个（StS 的 Boss 三选一也是均匀，不按权重）。
+            let mut remaining = 0usize;
+            let mut slots = [0usize; MAX_POOL];
+            for (slot, entry) in candidates[..count].iter().enumerate() {
+                if offer[..len].iter().any(|taken| taken.as_str() == entry.id) {
+                    continue;
+                }
+                slots[remaining] = slot;
+                remaining += 1;
+            }
+            if remaining == 0 {
+                break;
+            }
+            let pick = self.rng.roll(RunStream::Chest, remaining as u32)? as usize;
+            let chosen = slots[pick];
+            offer[len] = RunId::new(candidates[chosen].id).map_err(|_| RunError::BadId)?;
+            len += 1;
+        }
+        self.boss_relic_offer = offer;
+        self.boss_relic_offer_len = len as u8;
+        Ok(())
+    }
+
+    /// 取走三选一里的第 `slot` 个（拿到手就清空这一手）。
+    pub fn take_boss_relic(
+        &mut self,
+        slot: u8,
+        card_pool: &[PoolCard<'_>],
+    ) -> Result<RunId, RunError> {
+        if self.boss_relic_offer_len == 0 {
+            return Err(RunError::WrongPhase);
+        }
+        if slot as usize >= self.boss_relic_offer_len as usize {
+            // 复用现成的"槽里没有东西"语义（），不为一个越界新造变体。
+            return Err(RunError::EmptyOffer(slot));
+        }
+        let relic = self.boss_relic_offer[slot as usize];
+        // ⚠️ 先入腰带再清空：`push_relic` 失败时（不认识的遗物/容量满）这一手**原样保留**，
+        // 玩家还能再选 —— 与"拒绝 ⇒ 一个字节都不改"同一条纪律。
+        self.push_relic(relic.as_str(), card_pool)?;
+        self.boss_relic_offer = [RunId::EMPTY; BOSS_RELIC_OFFER];
+        self.boss_relic_offer_len = 0;
+        Ok(relic)
     }
 
     pub fn push_relic(
@@ -9519,6 +9616,101 @@ mod tests {
             "event {}% is not near 85% (counts {counts:?})",
             per_cent(counts[3])
         );
+    }
+
+    /// §370：幕间三选一 Boss 遗物。
+    ///
+    /// 四条判据（每一条都对应一个"安静地错"的形态）：
+    /// * 只从 **Boss 档**里选（`pick_relic` 会把 Boss 过滤掉，所以这条必须自己验）；
+    /// * **排除已持有**（否则会给你一件你已经有的一模一样的遗物）；
+    /// * 三件**互不重复**；
+    /// * `take` 之后清空，且**越界/没有待选都响亮拒绝**。
+    #[test]
+    fn boss_relic_offer_is_three_distinct_unheld_boss_relics() {
+        const POOL: [PoolRelic<'static>; 6] = [
+            PoolRelic { id: "astrolabe", rarity: Rarity::Boss },
+            PoolRelic { id: "black_star", rarity: Rarity::Boss },
+            PoolRelic { id: "sozu", rarity: Rarity::Boss },
+            PoolRelic { id: "runic_pyramid", rarity: Rarity::Boss },
+            // 非 Boss 档：**永远不该出现在三选一里**。
+            PoolRelic { id: "anchor", rarity: Rarity::Common },
+            PoolRelic { id: "blood_vial", rarity: Rarity::Common },
+        ];
+        let mut run = ironclad();
+        // 已经有一件 Boss 遗物 ⇒ 它不该再被给。
+        run.push_relic("astrolabe", &TYPED_CARDS).expect("astrolabe");
+        run.offer_boss_relics(&POOL).expect("an offer");
+        let offer = run.boss_relic_offer();
+        assert_eq!(offer.len(), 3, "StS 的三选一就是三件");
+        let mut seen = std::vec::Vec::new();
+        for relic in offer {
+            let id = relic.as_str();
+            assert!(
+                matches!(id, "black_star" | "sozu" | "runic_pyramid"),
+                "只从 Boss 档且未持有的里选，拿到的是 {id}"
+            );
+            assert!(!seen.contains(&id), "三件不能重复，{id} 出现了两次");
+            seen.push(id);
+        }
+        // 取走一件 ⇒ 清空，且腰带真的多了一件。
+        let before = run.relics().len();
+        let taken = run.take_boss_relic(0, &TYPED_CARDS).expect("take");
+        assert_eq!(run.boss_relic_offer().len(), 0, "取走之后这一手就空了");
+        assert_eq!(run.relics().len(), before + 1, "遗物真的进了腰带");
+        assert!(run.holds_relic(taken.as_str()), "拿到的那件必须在腰带上");
+        // 再取一次 ⇒ 响亮拒绝（不是安静地什么都不做）。
+        assert_eq!(run.take_boss_relic(0, &TYPED_CARDS), Err(RunError::WrongPhase));
+    }
+
+    /// §370：越界槽位与"池子里一件 Boss 遗物都没有"。
+    #[test]
+    fn boss_relic_offer_refuses_bad_slots_and_empty_pools() {
+        const COMMONS: [PoolRelic<'static>; 1] = [PoolRelic {
+            id: "anchor",
+            rarity: Rarity::Common,
+        }];
+        let mut run = ironclad();
+        // 池子里没有 Boss 档 ⇒ **不生成空的三选一**（界面上"三选一但一件都没有"是最坏的形态）。
+        run.offer_boss_relics(&COMMONS).expect("no-op");
+        assert_eq!(run.boss_relic_offer().len(), 0, "没有 Boss 遗物就什么都不生成");
+        // 没有待选时取 ⇒ WrongPhase。
+        assert_eq!(run.take_boss_relic(0, &TYPED_CARDS), Err(RunError::WrongPhase));
+        // 有待选时越界 ⇒ EmptyOffer。
+        const BOSSES: [PoolRelic<'static>; 2] = [
+            PoolRelic { id: "sozu", rarity: Rarity::Boss },
+            PoolRelic { id: "black_star", rarity: Rarity::Boss },
+        ];
+        run.offer_boss_relics(&BOSSES).expect("an offer");
+        assert_eq!(run.boss_relic_offer().len(), 2, "池子只有两件就给两件");
+        assert_eq!(
+            run.take_boss_relic(2, &TYPED_CARDS),
+            Err(RunError::EmptyOffer(2)),
+            "越界槽位要响亮拒绝"
+        );
+    }
+
+    /// §370：三选一**必须进档案**（否则回档之后"我还欠你一个三选一"会凭空消失）。
+    #[test]
+    fn boss_relic_offer_survives_an_archive_round_trip() {
+        const BOSSES: [PoolRelic<'static>; 3] = [
+            PoolRelic { id: "sozu", rarity: Rarity::Boss },
+            PoolRelic { id: "black_star", rarity: Rarity::Boss },
+            PoolRelic { id: "runic_pyramid", rarity: Rarity::Boss },
+        ];
+        let mut run = ironclad();
+        run.offer_boss_relics(&BOSSES).expect("an offer");
+        let wanted: std::vec::Vec<&str> = run.boss_relic_offer().iter().map(|id| id.as_str()).collect();
+        let mut buffer = [0u8; crate::state::archive::MAX_ARCHIVE];
+        let len = crate::state::archive::write(&run, 0, &mut buffer).expect("write");
+        let text = std::str::from_utf8(&buffer[..len]).expect("utf8");
+        let mut restored = ironclad();
+        crate::state::archive::restore(text, 0, &mut restored).expect("restore");
+        let got: std::vec::Vec<&str> = restored
+            .boss_relic_offer()
+            .iter()
+            .map(|id| id.as_str())
+            .collect();
+        assert_eq!(got, wanted, "三选一要原样回来");
     }
 
     /// §272：`tiny_chest` 每第 4 个 `?` 房是宝箱；`juzu_bracelet` 永不出现怪物。

@@ -31,6 +31,7 @@ import { BOSS_SENTINEL, nodeKindLabel } from "./observe.js";
 import { RunStore } from "./RunStore";
 import { endSceneFor, isImplemented, sceneLabel, SCENE } from "./scene.js";
 import { BlessingScene } from "./scenes/BlessingScene";
+import { BossRelicScene } from "./scenes/BossRelicScene";
 import { ChestScene } from "./scenes/ChestScene";
 import { EndScene } from "./scenes/EndScene";
 import { EventOfferScene } from "./scenes/EventOfferScene";
@@ -184,6 +185,14 @@ export function RunApp() {
         <div className="run-stat" data-run-gold={run?.gold ?? 0}>
           ◈ {run?.gold ?? 0}
         </div>
+        {/*
+          §370：**幕数必须显示**。换幕之后 `floor` 归 0，只画层数会变成"第 0 层" —— 玩家会
+          以为回到开头。`act` 只能从 `rd_run_act()` 读（观察向量里没有它）。
+        */}
+        <div className="run-stat" data-run-act={state.act}>
+          {/* 还没开局时 `act` 是 0 —— 显示"第 0 幕"会让人以为已经开始了。 */}
+          {state.act > 0 ? `第 ${state.act} 幕` : "—"}
+        </div>
         <div className="run-stat" data-run-floor={run?.floor ?? 0}>
           第 {run?.floor ?? 0} 层
         </div>
@@ -297,6 +306,7 @@ export function RunApp() {
           <MapScene
             run={run}
             map={map}
+            act={state.act}
             inert={blocked || scene.overlays.length > 0}
             bossReachable={state.bossReachable}
             bossIndex={BOSS_SENTINEL}
@@ -365,6 +375,16 @@ export function RunApp() {
             />
           );
         })()}
+
+        {base === SCENE.bossRelic && run && (
+          <BossRelicScene
+            clearedAct={Math.max(1, state.act - 1)}
+            nextAct={Math.max(2, state.act)}
+            relics={state.bossRelics}
+            busy={blocked}
+            onTake={(slot) => store.takeBossRelic(slot)}
+          />
+        )}
 
         {base === SCENE.shop && run && (
           <ShopScene

@@ -77,11 +77,16 @@ try {
     actionCount: 3,
     pickupPicks: 0,
     pickupAdd: 0,
+    bossRelicCount: 0,
   });
   const resolve = (overrides = {}) => resolveScene({ ...base(), ...overrides });
 
   // ── 1. 表本身：顺序与完整性 ────────────────────────────────────────────────
-  check(SCENE_ORDER.length === 16, "SCENE_ORDER 有 16 条（18 行表去掉两个覆盖层）", String(SCENE_ORDER.length));
+  check(
+    SCENE_ORDER.length === 17,
+    "SCENE_ORDER 有 17 条（18 行表去掉两个覆盖层 + §370 的 SC-13）",
+    String(SCENE_ORDER.length)
+  );
   check(new Set(SCENE_ORDER).size === SCENE_ORDER.length, "SCENE_ORDER 没有重复");
   check(OVERLAY_ORDER.length === 2, "覆盖层 2 条", String(OVERLAY_ORDER.length));
   check(
@@ -89,7 +94,7 @@ try {
     "覆盖层不在 base 顺序表里（否则同一屏会被判两次）"
   );
   const allScenes = new Set(Object.values(SCENE));
-  check(allScenes.size === 18, "SCENE 常量共 18 个", String(allScenes.size));
+  check(allScenes.size === 19, "SCENE 常量共 19 个（18 行表 + §370 的 SC-13）", String(allScenes.size));
   check(
     SCENE_ORDER.every((id) => allScenes.has(id)) && OVERLAY_ORDER.every((id) => allScenes.has(id)),
     "顺序表里的每一项都是已知场景"
@@ -99,6 +104,11 @@ try {
   const idx = (id) => SCENE_ORDER.indexOf(id);
   check(idx(SCENE.combat) < idx(SCENE.preCombat), "SC-03b（战斗中）排在 SC-03（战斗前）之前");
   check(idx(SCENE.actEnd) < idx(SCENE.map), "SC-02b（幕尽头）排在 SC-02（地图兜底）之前");
+  check(
+    idx(SCENE.reward) < idx(SCENE.bossRelic) && idx(SCENE.bossRelic) < idx(SCENE.map),
+    "SC-13（幕间三选一）排在奖励之后、地图之前",
+    `${idx(SCENE.reward)} < ${idx(SCENE.bossRelic)} < ${idx(SCENE.map)}`
+  );
   check(idx(SCENE.map) === SCENE_ORDER.length - 1, "SC-02 是最后一条（兜底）");
 
   // `pending` 表：1..9 每档都在，且 0 不许有值。
@@ -126,6 +136,8 @@ try {
     ["SC-09 事件选牌", { pending: 8 }, SCENE.eventCard, []],
     ["SC-10 事件候选", { pending: 9 }, SCENE.eventOffer, []],
     ["SC-04 战斗奖励", { pending: 4 }, SCENE.reward, []],
+    // §370：幕间三选一。**排奖励之后**：打赢 Boss 那一步先掷奖励屏，三选一在它关掉之后。
+    ["SC-13 幕间·Boss 遗物", { bossRelicCount: 3 }, SCENE.bossRelic, []],
     ["SC-08 事件", { pending: 5 }, SCENE.event, []],
     ["SC-07 宝箱", { pending: 3 }, SCENE.chest, []],
     ["SC-05 商店", { pending: 2 }, SCENE.shop, []],
@@ -195,6 +207,7 @@ try {
                         actionCount,
                         pickupPicks: 0,
                         pickupAdd: 0,
+                        bossRelicCount: 0,
                       });
                       if (typeof got.base !== "string") throw new Error("base 不是字符串");
                       if (!allScenes.has(got.base)) throw new Error(`未知 base ${got.base}`);
@@ -225,8 +238,10 @@ try {
   // 覆盖：这张表能真的产出**大多数**场景（没产出的那些要有理由）。
   const unreachable = [...allScenes].filter((id) => !seen.has(id));
   check(
-    unreachable.every((id) => [SCENE.pickupChange, SCENE.pickupAdd, SCENE.blessingCard].includes(id)),
-    "穷尽扫描只漏了覆盖层与需要 pending=7 的那一屏",
+    unreachable.every((id) =>
+      [SCENE.pickupChange, SCENE.pickupAdd, SCENE.blessingCard, SCENE.bossRelic].includes(id)
+    ),
+    "穷尽扫描只漏了覆盖层、pending=7 与 SC-13（后者由 bossRelicCount 触发，扫描里恒 0）",
     JSON.stringify(unreachable)
   );
 
@@ -345,8 +360,9 @@ try {
       isImplemented(SCENE.event) &&
       isImplemented(SCENE.eventCard) &&
       isImplemented(SCENE.eventOffer) &&
-      isImplemented(SCENE.blessingCard),
-    "P4 的七屏也标成已实现"
+      isImplemented(SCENE.blessingCard) &&
+      isImplemented(SCENE.bossRelic),
+    "P4 的七屏 + §370 的 SC-13 都标成已实现"
   );
 } finally {
   await rm(out, { recursive: true, force: true });

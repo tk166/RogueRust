@@ -37,6 +37,8 @@ export interface MapSceneProps {
    */
   readonly bossReachable: boolean;
   readonly bossIndex: number;
+  /** 第几幕（§370）。换幕后 `floor` 是 0，所以标题必须带上幕数。 */
+  readonly act: number;
   /** 遗物欠账/局终等覆盖层要求地图**不可操作**。 */
   readonly inert?: boolean;
 }
@@ -50,6 +52,7 @@ export function MapScene({
   onBlocked,
   bossReachable,
   bossIndex,
+  act,
   inert = false,
 }: MapSceneProps) {
   const current = run.node;
@@ -103,7 +106,7 @@ export function MapScene({
     <section className="scene scene-map" data-scene="SC-02">
       <header className="scene-head">
         <h2>
-          第 {run.floor} 层 <span className="muted">/ {map.rows}</span>
+          第 {act} 幕 · 第 {run.floor} 层 <span className="muted">/ {map.rows}</span>
         </h2>
         <p className="scene-sub">
           点击高亮节点前进 · 共 {map.nodes.filter((node) => node.reachable).length} 个可去之处

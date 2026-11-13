@@ -42,11 +42,11 @@
 | 状态 | 150 | 139 | 6 | 5 | 0 | 150 | 1 | 0 |
 | 遭遇 | 64 | 46 | 18 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 36 | 36 | 0 | 0 | 0 | 0 | 0 | 0 |
-| 遗物 | 152 | 137 | 15 | 0 | 0 | 0 | 0 | 0 |
+| 遗物 | 152 | 138 | 14 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 957 | 700 | 245 | 12 | 476 | 196 | 85 | 0 |
+| **合计** | 957 | 701 | 244 | 12 | 476 | 196 | 85 | 0 |
 
-扫描到的具名测试：**1235** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
+扫描到的具名测试：**1238** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
 
 事件：池里有 **39** 个位次、**36** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -859,16 +859,16 @@
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
 | akabeko | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
-| anchor | yes | the_same_state_hashes_the_same_and_a_change_moves_it, every_invariant_names_itself_when_violated …(+19) | — | — | — | §320/the_same_state_hashes_the_same_and_a_change_moves_it |
+| anchor | yes | the_same_state_hashes_the_same_and_a_change_moves_it, every_invariant_names_itself_when_violated …(+21) | — | — | — | §320/the_same_state_hashes_the_same_and_a_change_moves_it |
 | ancient_tea_set | yes | the_node_relics_pay_on_the_right_kind_of_room, the_tea_set_charge_is_spent_by_the_next_fight | — | — | — | §271/the_node_relics_pay_on_the_right_kind_of_room |
 | art_of_war | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
-| astrolabe | yes | the_pickup_picks_do_not_take_over_the_screen | — | — | — | §273/§274/the_pickup_picks_do_not_take_over_the_screen |
+| astrolabe | yes | the_pickup_picks_do_not_take_over_the_screen, boss_relic_offer_is_three_distinct_unheld_boss_relics | — | — | — | §273/§274/the_pickup_picks_do_not_take_over_the_screen |
 | bag_of_marbles | yes | the_two_combat_start_carriers_land_on_the_right_side | — | — | — | §221/§224/the_two_combat_start_carriers_land_on_the_right_side |
 | bag_of_preparation | yes | the_five_combat_start_relics_wire_their_own_carrier | — | — | — | §261/the_five_combat_start_relics_wire_their_own_carrier |
 | bird_faced_urn | yes | the_zero_infrastructure_tail_wires_its_carriers | — | — | — | §267/§268/the_zero_infrastructure_tail_wires_its_carriers |
 | black_blood | yes | the_zero_infrastructure_tail_wires_its_carriers | — | — | — | §267/§268/the_zero_infrastructure_tail_wires_its_carriers |
-| black_star | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+6) | — | — | §269 |
-| blood_vial | yes | the_relic_pool_fires_at_the_three_hooks_it_has, restocked_relics_are_priced_by_their_own_rarity …(+1) | — | — | — | §320/the_relic_pool_fires_at_the_three_hooks_it_has |
+| black_star | yes | boss_relic_offer_is_three_distinct_unheld_boss_relics, boss_relic_offer_refuses_bad_slots_and_empty_pools …(+1) | — | — | — | §269/boss_relic_offer_is_three_distinct_unheld_boss_relics |
+| blood_vial | yes | the_relic_pool_fires_at_the_three_hooks_it_has, boss_relic_offer_is_three_distinct_unheld_boss_relics …(+2) | — | — | — | §320/the_relic_pool_fires_at_the_three_hooks_it_has |
 | bloody_idol | yes | every_kind_answers_both_sides, the_gold_and_shop_relics_change_only_their_own_number …(+1) | — | — | — | §270/every_kind_answers_both_sides |
 | blue_candle | yes | restocked_relics_are_priced_by_their_own_rarity | — | — | — | §297/§298/restocked_relics_are_priced_by_their_own_rarity |
 | brimstone | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
@@ -969,7 +969,7 @@
 | ring_of_the_snake | yes | the_zero_infrastructure_batch_wires_the_right_carrier, nloth_stays_out_of_the_pool_below_two_relics | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | runic_cube | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | runic_dome | yes | runic_dome_blinds_the_intent_observation | — | — | — | §296/§297/runic_dome_blinds_the_intent_observation |
-| runic_pyramid | yes | the_zero_infrastructure_tail_wires_its_carriers, a_shop_stocks_all_four_shelves_with_the_wikis_composition | — | — | — | §267/§268/the_zero_infrastructure_tail_wires_its_carriers |
+| runic_pyramid | yes | boss_relic_offer_is_three_distinct_unheld_boss_relics, boss_relic_offer_survives_an_archive_round_trip …(+2) | — | — | — | §267/§268/boss_relic_offer_is_three_distinct_unheld_boss_relics |
 | sacred_bark | yes | sacred_bark_doubles_potion_effectiveness, sacred_bark_doubles_the_potion_amount_the_abi_reads | — | — | — | §292/sacred_bark_doubles_potion_effectiveness |
 | self_forming_clay | yes | the_zero_infrastructure_tail_wires_its_carriers | — | — | — | §267/§268/the_zero_infrastructure_tail_wires_its_carriers |
 | shovel | yes | campfire_options_follow_the_relics_the_wiki_names, dig_only_rolls_common_uncommon_or_rare | — | — | — | §259/campfire_options_follow_the_relics_the_wiki_names |
@@ -980,7 +980,7 @@
 | smiling_mask | yes | the_gold_and_shop_relics_change_only_their_own_number, smiling_mask_locks_removal_at_fifty_whatever_the_discounts | — | — | — | §270/the_gold_and_shop_relics_change_only_their_own_number |
 | snecko_eye | yes | snecko_eye_draws_two_more_and_confuses_at_the_start | — | — | — | §157/§283/snecko_eye_draws_two_more_and_confuses_at_the_start |
 | snecko_skull | yes | the_status_application_relics_wire_their_own_carrier | — | — | — | §264/§265/the_status_application_relics_wire_their_own_carrier |
-| sozu | yes | sozu_refuses_potions_at_both_doors | — | — | — | §271/sozu_refuses_potions_at_both_doors |
+| sozu | yes | boss_relic_offer_is_three_distinct_unheld_boss_relics, boss_relic_offer_refuses_bad_slots_and_empty_pools …(+2) | — | — | — | §271/boss_relic_offer_is_three_distinct_unheld_boss_relics |
 | spirit_poop | yes | the_flavor_only_relics_are_known_and_change_nothing | — | — | — | §283/§292/the_flavor_only_relics_are_known_and_change_nothing |
 | ssserpent_head | yes | the_node_relics_pay_on_the_right_kind_of_room | — | — | — | §271/the_node_relics_pay_on_the_right_kind_of_room |
 | stone_calendar | yes | the_eight_turn_shaped_relics_wire_their_own_status | — | — | — | §260/the_eight_turn_shaped_relics_wire_their_own_status |

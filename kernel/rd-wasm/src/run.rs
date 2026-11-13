@@ -121,7 +121,12 @@ const K_FIGHT_END: u8 = 19;
 const K_FIGHT_BEGIN: u8 = 20;
 /// §344：`end_act`（幕尽）。它改变 `run_end()`，所以必须进脚本 —— 否则回放会在最后一步分叉。
 const K_END_ACT: u8 = 21;
-const K_GRANT_POTION: u8 = 21;
+/// ⚠️ 以前这里是 **21**，与 `K_END_ACT` 撞车：`match` 里先出现的那个胜出，于是
+/// `end_act` 的回放实际调用的是 `grant_potion("")`（幕尽那一位永远不生效）⇒ 回放分叉。
+/// 调试钩子挪到 0x5f（与 `K_GRANT_RELIC` 同一段），真实动作保住 21。
+const K_GRANT_POTION: u8 = 0x5f;
+/// §370：取走幕间的 Boss 遗物（三选一）。它改运行层（腰带），所以必须进回放脚本。
+const K_BOSS_RELIC: u8 = 29;
 /// §293：加牌问句的四个动作（见 `LOG_KINDS`）。
 const K_PICKUP_ADD_CARD: u8 = 0x5a;
 const K_PICKUP_ADD_SKIP: u8 = 0x5b;
@@ -172,12 +177,11 @@ const fn rec_kind_name(kind: u8) -> &'static str {
     K_PICKUP_ADD_MAX_HP => "pickup_add_max_hp",
     K_TAKE_MAX_HP => "take_max_hp_instead",
     K_GRANT_RELIC => "grant_relic",
-    // §293：加牌问句的四个动作。它们都改运行层（牌组/上限），所以必须进脚本 ——
-    // 否则"调用之后的哈希"会把它们的效果算进去，而回放里没人做这件事。
-    K_PICKUP_ADD_CARD => "pickup_add_card",
-    K_PICKUP_ADD_SKIP => "pickup_add_skip",
-    K_PICKUP_ADD_MAX_HP => "pickup_add_max_hp",
-    K_TAKE_MAX_HP => "take_max_hp_instead",
+    // §332：这两个以前**没有名字**（落进 `_ => "?"`）⇒ 脚本里写 `?`，回放读不回来。
+    K_BUY_COLORLESS => "buy_colorless",
+    K_BUY_POTION => "buy_potion",
+    // §370：幕间三选一。
+    K_BOSS_RELIC => "boss_relic",
         K_LIFT => "lift",
         K_TOKE => "toke",
         K_DIG => "dig",
@@ -197,6 +201,9 @@ fn rec_kind_from_name(name: &str) -> Option<u8> {
         "leave" => K_LEAVE,
         "buy_card" => K_BUY_CARD,
         "buy_relic" => K_BUY_RELIC,
+        "buy_colorless" => K_BUY_COLORLESS,
+        "buy_potion" => K_BUY_POTION,
+        "boss_relic" => K_BOSS_RELIC,
         "remove" => K_REMOVE,
         "take_card" => K_TAKE_CARD,
         "skip" => K_SKIP,
@@ -1265,6 +1272,101 @@ pub unsafe extern "C" fn rd_run_relic_name_into(index: i32, ptr: *mut u8) -> i32
         }
         _ => 0,
     }
+}
+
+/// §370：幕间待选的 Boss 遗物有几件（`0` = 没有待选；`-1` = 没有局）。
+#[no_mangle]
+pub extern "C" fn rd_run_boss_relic_count() -> i32 {
+    run_slot()
+        .as_ref()
+        .map_or(-1, |s| s.state.boss_relic_offer().len() as i32)
+}
+
+/// 第 `slot` 件待选 Boss 遗物的 **id** 长度；`-1` = 没有这个槽。
+#[no_mangle]
+pub extern "C" fn rd_run_boss_relic_id_len(slot: i32) -> i32 {
+    match boss_relic_slot(slot) {
+        Some(id) => id.as_str().len() as i32,
+        None => -1,
+    }
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_run_boss_relic_id_len(slot)` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_boss_relic_id_into(slot: i32, ptr: *mut u8) -> i32 {
+    match boss_relic_slot(slot) {
+        Some(id) => write_out(id.as_str(), ptr),
+        None => 0,
+    }
+}
+
+/// 取走第 `slot` 件（`0` = 拿到；`-1` 没有这个槽/没有待选；`-2` 被拒绝，原因在 error 缓冲）。
+#[no_mangle]
+pub extern "C" fn rd_run_take_boss_relic(slot: i32) -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    if slot < 0 {
+        return -1;
+    }
+    let pool = match full_pool(content(), true) {
+        Ok(pool) => pool,
+        Err(message) => {
+            session.error.clear();
+            session.error.push_str(&message);
+            return -2;
+        }
+    };
+    session.log(K_BOSS_RELIC, slot, -1, "");
+    match session.state.take_boss_relic(slot as u8, &pool) {
+        Ok(_) => {
+            session.error.clear();
+            0
+        }
+        Err(error) => {
+            let message = describe(&error);
+            session.error.clear();
+            session.error.push_str(&message);
+            -2
+        }
+    }
+}
+
+/// 夹具专用（`?debug`）：**强制**生成一次 Boss 遗物三选一。
+///
+/// 为什么需要它：闸门要验证"三选一的界面与取走路径"，而打赢一场 Boss 战没法按需制造
+/// （自动出牌策略打不过第 16 层）。纪律与 `rd_run_grant_potion` 一致：只给测试用，
+/// 正式路径不调；它做的事与换幕时**完全一样**（同一个 `offer_boss_relics`）。
+#[no_mangle]
+pub extern "C" fn rd_run_offer_boss_relics() -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    let image = content();
+    let pool = relic_pool(image);
+    match session.state.offer_boss_relics(&pool) {
+        Ok(()) => {
+            session.error.clear();
+            0
+        }
+        Err(error) => {
+            let message = describe(&error);
+            session.error.clear();
+            session.error.push_str(&message);
+            -2
+        }
+    }
+}
+
+fn boss_relic_slot(slot: i32) -> Option<rd_run::state::RunId> {
+    if slot < 0 {
+        return None;
+    }
+    run_slot()
+        .as_ref()
+        .and_then(|s| s.state.boss_relic_offer().get(slot as usize).copied())
 }
 
 /// The **id** of relic `index` — what the effect rules are keyed on, useful for diagnostics.
@@ -5896,7 +5998,21 @@ fn apply_fight_outcome(
     session.state.mark_resolved();
     // `inv:§7.2`: killing the boss **clears the act**. This is the only way a run can be won.
     if result == 1 && boss_fight {
+        let act_before = session.state.act();
         session.state.mark_boss_beaten();
+        // §370：**换幕之后**给三选一 Boss 遗物（StS 的节奏）。判据是"幕号变了"：
+        // 最终幕的 Boss 倒了是通关（幕号不变），A20 的第一个 Boss 也不换幕 —— 两者都不该给。
+        // ⚠️ 失败要**响亮**（写进 error 缓冲），不能安静地少一个三选一。
+        if session.state.act() != act_before {
+            let pool = relic_pool(content());
+            if let Err(error) = session.state.offer_boss_relics(&pool) {
+                session.error.clear();
+                std::string::String::push_str(
+                    &mut session.error,
+                    &std::format!("Boss 遗物三选一没能生成：{}", describe(&error)),
+                );
+            }
+        }
     }
     0.max(result)
 }
@@ -6226,6 +6342,10 @@ pub unsafe extern "C" fn rd_run_replay_from(ptr: *const u8, len: i32) -> i32 {
             }
             K_END_ACT => {
                 let _ = rd_run_end_act();
+            }
+            // §370：幕间三选一。走**同一个**导出（拒绝与接受都由它自己决定）。
+            K_BOSS_RELIC => {
+                let _ = rd_run_take_boss_relic(a);
             }
             _ => {}
         }

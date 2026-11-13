@@ -229,6 +229,13 @@ pub fn write_run_input(writer: &mut TextWriter<'_>, state: &RunState) {
     for relic in state.relics() {
         writer.str("r=").str(relic.as_str()).str("\n");
     }
+    writer
+        .str("boss_relic_offer_len=")
+        .u32(state.boss_relic_offer().len() as u32)
+        .str("\n");
+    for relic in state.boss_relic_offer() {
+        writer.str("bo=").str(relic.as_str()).str("\n");
+    }
     writer.str("potions=").u32(state.potions().len() as u32).str("\n");
     for potion in state.potions() {
         writer.str("p=").str(potion.as_str()).str("\n");

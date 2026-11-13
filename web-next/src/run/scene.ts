@@ -31,6 +31,8 @@ export const SCENE = {
   preCombat: "SC-03",
   combat: "SC-03b",
   reward: "SC-04",
+  /** §370：幕间 Boss 遗物三选一（也是"这一幕通关"那一屏）。 */
+  bossRelic: "SC-13",
   shop: "SC-05",
   rest: "SC-06",
   chest: "SC-07",
@@ -75,6 +77,8 @@ export interface SceneInput {
   readonly actionCount: number;
   readonly pickupPicks: number;
   readonly pickupAdd: number;
+  /** §370：幕间待选的 Boss 遗物件数（`0` = 没有）。 */
+  readonly bossRelicCount: number;
 }
 
 export interface SceneResolution {
@@ -106,6 +110,9 @@ export const SCENE_ORDER: readonly SceneId[] = [
   SCENE.eventCard,
   SCENE.eventOffer,
   SCENE.reward,
+  // §370：三选一排在奖励屏**之后** —— 打赢 Boss 那一步会先掷奖励屏（`Pending::Reward`），
+  // 三选一是奖励屏关掉之后才该出现的。反过来会把奖励顶掉。
+  SCENE.bossRelic,
   SCENE.event,
   SCENE.chest,
   SCENE.shop,
@@ -171,6 +178,9 @@ function firstMatch(input: SceneInput): SceneId {
     // 未知相位：**兜底到地图**，但 `unknownPending` 会让界面显示诊断（不静默）。
     return mapped ?? SCENE.map;
   }
+
+  // 13b. 幕间三选一（§370）。排在 `pending == 0` 之后：奖励屏关掉才轮到它。
+  if (input.bossRelicCount > 0) return SCENE.bossRelic;
 
   // 14. 站在战斗节点上但还没开打（`?` 房只有掷出"怪物"才算）。
   //     ⚠️ `nodeResolved === false` 是判据的一半：打完的格子 `kind` 仍然是 `Combat`，
@@ -243,6 +253,7 @@ export function isImplemented(scene: SceneId): boolean {
     case SCENE.preCombat:
     case SCENE.combat:
     case SCENE.reward:
+    case SCENE.bossRelic:
     case SCENE.shop:
     case SCENE.rest:
     case SCENE.chest:
@@ -279,6 +290,8 @@ export function sceneLabel(scene: SceneId): string {
       return "战斗中";
     case SCENE.reward:
       return "战斗奖励";
+    case SCENE.bossRelic:
+      return "幕间 · Boss 遗物";
     case SCENE.shop:
       return "商店";
     case SCENE.rest:

@@ -26,6 +26,8 @@ NOT_HASHED = {
     'potions_len': '由 `potions()` 的行数隐含',
     # 同一个理由的第四个：`pickup_offer()` 就是 `pickup_offer` 的活动前缀。
     'pickup_offer_len': '由 `pickup_offer()` 的切片长度隐含',
+    # §370 幕间三选一：同一个理由（指纹写 `boss_relic_offer_len=` + 每件一行）。
+    'boss_relic_offer_len': '由 `boss_relic_offer()` 的切片长度隐含',
 }
 NOT_ARCHIVED = {
     'pickup_offer_len': '存档写的是 `pickup_offer()` 的切片（长度紧跟在前面的字节里）',

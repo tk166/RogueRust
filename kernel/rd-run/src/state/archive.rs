@@ -34,7 +34,8 @@ use crate::map::{MapNode, MapRow, NodeKind, RunMap, MAX_OUT_EDGES, NODES_PER_ROW
 use super::RunId;
 use crate::state::{
     BlessingFollowUp, DeckChange, Offer, Pending, Reward, RunMark, RunState, ShopStock,
-    MAX_EVENT_OFFER, MAX_EVENT_RELIC_OFFER, MAX_REWARD_CARDS, MAX_RUN_DECK, MAX_RUN_POTIONS,
+    BOSS_RELIC_OFFER, MAX_EVENT_OFFER, MAX_EVENT_RELIC_OFFER, MAX_REWARD_CARDS, MAX_RUN_DECK,
+    MAX_RUN_POTIONS,
     MAX_RUN_RELICS, MAX_SHOP_COLORLESS, MAX_SHOP_POTIONS,
     MAX_SHOP_CARDS, MAX_SHOP_RELICS,
 };
@@ -58,7 +59,7 @@ pub const MAGIC: &str = "RDA1";
 ///
 /// 为什么**必须**抬版本而不是"在末尾多写两个字节就行"：旧存档读到末尾会缺字段，
 /// 而"缺字段"与"字段是 0"在字节上无法区分 —— 那正是版本号要回答的问题。
-const VERSION: u8 = 13;  // §344：`ended_out_of_map`。§343：`removed_this_shop`。§308：事件链 + 宝箱计数器 + 每副本 mark。
+const VERSION: u8 = 14;  // §370：Boss 遗物三选一（`boss_relic_offer`）。§344：`ended_out_of_map`。
 /// payload 缓冲。实测一局约 300–900 B；§308 之后**最坏情况**（60 张牌各带一条 mark）
 /// 是 **5653 B 文本**（`a_deck_where_every_copy_carries_a_mark_still_fits` 打出来的），
 /// 折成 payload 约 4.5 KB —— 8 KB 是它上面一层。这个数不是拍的：那条判据就是拿它压的。
@@ -626,6 +627,12 @@ fn write_payload(state: &RunState, content: i32, payload: &mut [u8]) -> Result<u
     for potion in state.potions.iter().take(state.potions_len as usize) {
         writer.id(*potion)?;
     }
+    // §370：幕间待选的三件 Boss 遗物。**必须进档案** —— 否则"回档之后我还欠你一个三选一"
+    // 会凭空消失，而那一手正是这一幕的唯一出路。
+    writer.byte(state.boss_relic_offer_len)?;
+    for relic in state.boss_relic_offer.iter().take(state.boss_relic_offer_len as usize) {
+        writer.id(*relic)?;
+    }
     writer.id(state.event)?;
     writer.id(state.last_encounter)?;
     for counter in state.unknown {
@@ -825,6 +832,14 @@ fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, Archi
     for slot in 0..potions_len {
         potions[slot] = reader.id()?;
     }
+    let mut boss_relic_offer = [RunId::EMPTY; BOSS_RELIC_OFFER];
+    let boss_relic_offer_len = reader.byte()? as usize;
+    if boss_relic_offer_len > BOSS_RELIC_OFFER {
+        return Err(ArchiveError::BadField("boss_relic_offer"));
+    }
+    for slot in 0..boss_relic_offer_len {
+        boss_relic_offer[slot] = reader.id()?;
+    }
     let event = reader.id()?;
     let last_encounter = reader.id()?;
     let mut unknown = [0i32; 3];
@@ -1020,6 +1035,9 @@ fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, Archi
     restored.relics_len = relics_len as u8;
     restored.potions = potions;
     restored.potions_len = potions_len as u8;
+    // §370：幕间三选一。
+    restored.boss_relic_offer = boss_relic_offer;
+    restored.boss_relic_offer_len = boss_relic_offer_len as u8;
     restored.potion_chance = potion_chance;
     restored.map = RunMap::from_rows(rows);
     restored.map_generation_failed = flags & 1 != 0;

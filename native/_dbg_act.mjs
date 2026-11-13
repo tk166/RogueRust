@@ -1,0 +1,20 @@
+import { openPage } from "../web/cdp.mjs";
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const page = await openPage({ page: "web-next/dist/run.html", query: "debug&motion=off", gate: "DBG",
+  viewport: { width: 1280, height: 800 }, waitFor: "Boolean(window.__run && window.__run.ready)" });
+const ev = (e) => page.evaluate(e);
+console.log("fresh act:", await ev("window.__run.act()"), "scene:", (await ev("window.__run.scene()")).base);
+console.log("topbar act text:", await ev(`(document.querySelector("[data-run-act]")||{}).textContent`));
+await ev("window.__run.start(1,0)");
+const b = await ev("window.__run.blessings()");
+await ev(`window.__run.choose(${b.find(x=>!/card/.test(x.id)).slot})`);
+console.log("after start act:", await ev("window.__run.act()"), "scene:", (await ev("window.__run.scene()")).base);
+console.log("offer:", JSON.stringify(await ev("window.__run.offerBossRelics()")));
+await sleep(200);
+console.log("scene now:", (await ev("window.__run.scene()")).base, "dom:", await ev("window.__run.domScene()"));
+console.log("relics:", JSON.stringify(await ev("window.__run.bossRelics()")));
+console.log("dom options:", await ev(`document.querySelectorAll("[data-boss-relic]").length`));
+console.log("take 0:", JSON.stringify(await ev("window.__run.takeBossRelic(0)")));
+console.log("after take scene:", (await ev("window.__run.scene()")).base, "relics:", JSON.stringify(await ev("window.__run.bossRelics()")));
+console.log("belt:", JSON.stringify((await ev("window.__run.inventory()")).relics));
+await page.close();
