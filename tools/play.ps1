@@ -35,6 +35,9 @@ param(
 $ErrorActionPreference = 'Stop'
 # 本机 shell 的 PATHEXT 是坏的（只有 .CPL）⇒ 调外部 exe 前必须修好，否则什么都不打印。
 $env:PATHEXT = '.COM;.EXE;.BAT;.CMD'
+# 输出编码：PowerShell 5.1 默认按控制台代码页（中文机器上是 GBK）写，而 node 写 UTF-8
+# ⇒ 两边的中文会一半乱码。统一成 UTF-8（失败也不影响运行，只是显示）。
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
@@ -100,6 +103,9 @@ if ($Rebuild) {
 }
 
 Write-Host ''
-Write-Host "▶ http://127.0.0.1:$Port/  （入口：$Entry）" -ForegroundColor Green
+Write-Host "▶ 启动静态服务器（入口：$Entry，端口：$Port —— 被占用时会自动换）" -ForegroundColor Green
+Write-Host '  ⚠️ Windows 上 8080/8081 常被 Steam 的 CEF 调试端口占着；真端口以服务器打印的那行为准。' -ForegroundColor DarkGray
 Write-Host '  Ctrl+C 退出' -ForegroundColor DarkGray
+# ⚠️ 不要在这里预打印 URL：端口可能被占用而自动换掉，预打印的地址会指向别人的服务
+# （实测过：8080 上答的是 Steam）。真地址由 serve.mjs 在**自检通过之后**打印。
 & $node 'web-next\scripts\serve.mjs' --port $Port --entry $Entry
