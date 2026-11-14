@@ -54,7 +54,7 @@ export interface BadgeAsset {
   readonly palette: number;
 }
 
-export const ASSET_COUNTS = {"cards": 295, "enemies": 61, "potions": 33, "relics": 152, "statuses": 150};
+export const ASSET_COUNTS = {"cards": 295, "enemies": 61, "potions": 33, "relics": 152, "statuses": 149};
 
 export const PALETTES = [
  {
@@ -2529,10 +2529,6 @@ export const BADGE_ASSETS: Record<"cards" | "relics" | "potions" | "statuses", R
   },
   "standard.split": {
    "letters": "SS",
-   "palette": 6
-  },
-  "standard.phase_split": {
-   "letters": "SP",
    "palette": 6
   },
   "standard.time_warp": {

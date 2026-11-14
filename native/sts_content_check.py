@@ -137,7 +137,7 @@ INV_COUNTS = {
     # §299: +3 (C 类三件 —— 行为全在内容程序里)。
     # §300: +3 (三个新原子各自解锁的那一件).
     # §312: +1 (`standard.malleable`).
-    "statuses": 150,
+    "statuses": 149,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -997,6 +997,7 @@ INV_MONSTERS = [
     ("sentry_3", 38, 42, ["sentry.bolt", "sentry.beam"]),
     # inv:§4.3 -- the act-1 boss. **Downgraded in writing**: no Split (the kernel cannot add
     # combatants mid-fight), which is the fight's identity; the three-move cycle is faithful.
+    # ⚠️ 循环动作只有三条 —— `split` 由 `IntentRules` 在半血时选中，**不在**循环里。
     ("slime_boss", 140, 140, ["slime_boss.goop_spray", "slime_boss.preparing", "slime_boss.slam"]),
 
     # ================= §194: the wiki's boss pools, three per act =================
@@ -1226,6 +1227,11 @@ INV_ACTIONS = {
     "slime_boss.goop_spray": ("Special", [("card", "slimed", 3, "DiscardPile", "event")]),
     "slime_boss.preparing": ("Special", []),
     "slime_boss.slam": ("Attack", [("damage", 35, "event")]),
+    # §400：半血时**意图**变 Split，分裂在它的回合发生（wiki：current Intent is immediately
+    # changed to Split）。程序是"先造两只 L、再销毁自己"—— 顺序反了 `currentHealth` 会读到 0。
+    "slime_boss.split": ("Special", [("spawn", "acid_slime_l", ("expr", "currentHealth")),
+                                     ("spawn", "spike_slime_l", ("expr", "currentHealth")),
+                                     ("destroy", "sourceDowned")]),
     "sentry.bolt": ("Attack", [("card", "dazed", 2, "DiscardPile", "event")]),
     "sentry.beam": ("Attack", [("damage", 9, "event")]),
     "gremlin_wizard.ultimate_blast": ("Attack", [
@@ -1806,8 +1812,8 @@ INV_STATUSES = {
     "standard.combust": [],
     # Boss split: a Downed trigger that spawns two (port-plan.md §121).
     "standard.split": [],
-    # Boss phase: at <=10 HP it splits once (port-plan.md §122).
-    "standard.phase_split": [],
+    # §400：`standard.phase_split` 删了 —— 分裂改由**意图**驱动（`slime_boss.split`），
+    # 不再是"掉血到 50% 立刻分裂"的 DamageTaken 触发器（wiki：意图立刻变 Split，分裂在它的回合）。
     # Time Eater's mechanic, prepared on an unused monster (port-plan.md §125).
     "standard.time_warp": [],
     # §149: the three damage-pipeline statuses -- no triggers at all, the kernel owns the rule.
@@ -3591,6 +3597,9 @@ def check_ascension_variants(doc):
 # "the wiki has no A-row here" is a decision, and a decision has to be written down or the next
 # reader cannot tell it from "nobody looked".
 INV_NO_ASC = {
+    # §400：`slime_boss.split` 是**分裂**这个动作本身，wiki 只给一行（"spawns 1 Acid Slime (L)
+    # and 1 Spike Slime (L) with its current HP"），没有 A 档数值。
+    'slime_boss.split': 'wiki Slime Boss: Split has no A-row', 
     # §323：Romeo 的 Mock 是 "Does nothing."，wiki 没有 A 档。
     'romeo.mock': 'wiki Masked Bandits: Mock does nothing, no A-row',
     # §316：Daze 只有 "Adds 2 Dazed"，Explode 只有 "Deals 30 damage. Dies." —— 都没有 A 档。
@@ -3729,6 +3738,52 @@ def check_ascension_coverage(actions):
     if len(unreviewed) > ASC_UNREVIEWED_CEILING:
         fail("asc.unreviewed", "%d actions have no ascension decision (ceiling %d): %s"
              % (len(unreviewed), ASC_UNREVIEWED_CEILING, ", ".join(unreviewed[:12])))
+
+
+def check_turn_end_zone(doc):
+    """§407：**回合结束时留在手里的牌必须有 retain**（玩家报的"粘液/伤口堆积不消失"）。
+
+    `CARD.TurnEndHandDestinationZone = "Hand"` 在内核里就是"这张牌**留在手里**"
+    （`host::turn_end_hand_destination`）。第一版内容有 **49 张**卡写成了 `Hand`，
+    其中 `slimed` / `wound` / `burn` / `injury` / `doubt` / `writhe` 是垃圾牌 ——
+    没打出去就永远留在手里，手牌越堆越满、抽牌被卡住（玩家看到的是"一轮 turn 没结束"）。
+
+    StS 里这些牌**没有一张**是 retain 的；retain 由 `RetainInHandOnTurnEnd` 这个**独立字段**
+    表达。所以判据是：`Hand` 只允许出现在 `RetainInHandOnTurnEnd = true` 的牌上。
+    """
+    print("[7d] turn-end hand destination (port-plan.md §400)")
+    staying = [c for c in doc.get("Cards") or []
+               if c.get("TurnEndHandDestinationZone") == "Hand"]
+    offenders = [c.get("Id") for c in staying if not c.get("RetainInHandOnTurnEnd")]
+    ok("turn-end zone", "%d card(s) stay in hand at turn end (all retained)" % len(staying))
+    if offenders:
+        fail("turn_end.zone", "%d card(s) would never leave the hand: %s"
+             % (len(offenders), ", ".join(str(i) for i in offenders[:8])))
+
+
+#: §402：**"这一回合"的状态必须有 `UsesDuration`**，否则内核的时长衰减整段跳过它。
+#: 玩家报的"狂怒持续到下一回合"就是这一格：`DurationTurns` 写了也没用，判据在状态定义上。
+TIMED_STATUSES = (
+    "standard.rage",
+    "standard.lose_strength",
+    "standard.no_draw",
+    "standard.flame_barrier",
+    "standard.double_tap",
+    "standard.cap_cost_at",
+    "standard.regain_strength",
+)
+
+
+def check_timed_statuses(doc):
+    """§402：上表每一条都必须 `UsesDuration = true`。"""
+    print("[7e] timed statuses (port-plan.md §402)")
+    by_id = {s.get("Id"): s for s in doc.get("Statuses") or []}
+    missing = [sid for sid in TIMED_STATUSES
+               if not (by_id.get(sid) or {}).get("UsesDuration")]
+    ok("timed statuses",
+       "%d one-turn status(es) declared as timed" % (len(TIMED_STATUSES) - len(missing)))
+    if missing:
+        fail("status.timed", "these never expire (UsesDuration is false): %s" % ", ".join(missing))
 
 
 def encounter_enemy_records(encounter):
@@ -4075,7 +4130,7 @@ def check_statuses(doc):
                          % (facts, expected))
         elif sid in ("standard.thorns", "standard.spore_cloud", "standard.enrage",
                      "standard.regen", "standard.rage", "standard.flame_barrier",
-                     "standard.combust", "standard.split", "standard.phase_split",
+                     "standard.combust", "standard.split",
                      "standard.time_warp", "standard.constricted",
                      "standard.phantom_veil",
                      "standard.sharp_hide", "standard.curiosity", "standard.mode_shift",
@@ -4170,7 +4225,6 @@ def check_statuses(doc):
                         "standard.flame_barrier": ["DamageTaken"],
                         "standard.combust": ["TurnEnded"],
                         "standard.split": ["Downed"],
-                        "standard.phase_split": ["DamageTaken"],
                         "standard.time_warp": ["CardPlayed"],
                         # §147: "lose HP at the end of your turn" is a TurnEnded trigger.
                         "standard.constricted": ["TurnEnded"],
@@ -6179,6 +6233,9 @@ def main():
     # The core image's expectation comes from the compiler's own strip rule --
     # a copy of it here would be a second truth that rots (contentc-audit §7).
     check_roundtrip(doc, core, "core", contentc_compile.strip_presentation(doc))
+    check_turn_end_zone(doc)
+    check_timed_statuses(doc)
+
     check_idx(full, "full")
     check_idx(core, "core")
 

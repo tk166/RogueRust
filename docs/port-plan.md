@@ -26856,3 +26856,122 @@ Cue{eventId, origin, actorSlot, targetSlot, value,
 * 配方表还是 TS 常量，不是内容侧数据文件（R4）；
 * 审阅提到的"每个修复附复现材料"（commit/wasm sha/content fingerprint/save/seed/视口/截图/闸门）
   只在 `port-plan` 里手工写，没有模板化。
+
+---
+
+## §400–§407 玩家第五轮：狂怒不过期、垃圾牌不消失、分裂时机、铃铛不给遗物
+
+八条报障。三条是**真 bug 且影响很大**（狂怒永不过期、垃圾牌永不离手、铃铛白拿），
+两条是**数据缺口**（药水没中文、`+` 卡说明沿用基础数值），三条是**表现/时机**。
+
+### 400 ①"这一回合"的状态**永远不会到期**（#2，同类共 7 个）
+
+玩家："狂怒的效果似乎会持续到下一个回合。"
+
+根因不在 `DurationTurns`，而在**状态定义上的 `UsesDuration`**：内核的时长衰减
+（`host::try_decrease_timed_statuses`）先问 `status_bind::uses_duration(content, id)`，
+false 就整段跳过。而内容里 **150 条状态只有 1 条**是 true（`no_block_from_cards`）
+⇒ 所有"这一回合"的状态都**永远不过期**。
+
+同类审计（英文 `DescriptionKey` 带 "this turn"/"end of your turn" 且施加状态的卡）：
+
+| 卡 | 状态 | 不清会怎样 |
+|---|---|---|
+| Rage | `standard.rage` | 每回合的攻击都给格挡，永久 |
+| Flex | `standard.lose_strength` | **每回合永久掉力量**（最严重） |
+| Battle Trance | `standard.no_draw` | 之后再也抽不了牌 |
+| Flame Barrier | `standard.flame_barrier` | 永久反伤 |
+| Double Tap | `standard.double_tap` | 没用掉的也一直挂着 |
+| Enlightenment | `standard.cap_cost_at` | 手牌费用永久为 1 |
+| Dark Shackles | `standard.regain_strength` | 力量永久还回去 |
+
+修法：这 7 条 `UsesDuration = true` + 施加点 `DurationTurns = 1`。
+时序是安全的：turn-end 处理器 #3（触发器）**先于** #4（时长衰减），所以
+`lose_strength` / `regain_strength` 会先触发自己的效果再被删掉。
+**不是** bug 的：`metallicize` / `combust` / `omega` 这类**永久能力**（靠 TurnEnded 触发器
+每回合生效），`DurationTurns` 保持 0。
+
+判据：`one_turn_statuses_expire_when_the_turn_ends`（两侧：定义必须是 timed；
+打一张 Rage 之后结束回合，它必须消失）+ 内容闸门 `[7e] timed statuses`。
+
+### 401 ②垃圾牌**永远留在手里**（#6）
+
+玩家："粘液/伤口等卡牌堆积不消失，或者一轮 turn 没有正常结束。"
+
+`CARD.TurnEndHandDestinationZone` 在内核里就是"这张牌回合结束时去哪"
+（`host::turn_end_hand_destination`），而内容里 **49 张卡**写成了 `"Hand"` ——
+内核照做 ⇒ **回合结束时那张牌留在手里**。里面有 `slimed` / `wound` / `burn` / `injury` /
+`doubt` / `writhe`（垃圾牌），也有 `cleave` / `bludgeon` / `twin_strike` 这种普通牌。
+
+StS 里这些牌**没有一张**是 retain 的；retain 由 `RetainInHandOnTurnEnd` 这个**独立字段**
+表达（内容里只有 12 张观者牌是 true）。⇒ 49 张全部改成 `"DiscardPile"`。
+
+症状正好是玩家描述的两件事：手牌越堆越满（抽牌被卡住 ⇒ "回合没正常结束"）、
+垃圾牌永远不消失。判据：内容闸门 `[7d] turn-end zone`（`Hand` 只允许出现在 retain 牌上）。
+
+### 402 ③史莱姆老大：分裂应当发生在**它的回合**（#5）
+
+wiki.gg：*"Once its HP reaches 50% or lower, its current Intent will be **immediately changed to
+Split**"* —— 变的是**意图**；分裂由它在自己回合打出 `slime_boss.split` 完成。
+之前用 `standard.phase_split` 的 `DamageTaken` 触发器（掉血即分裂），玩家看到"血条刚过
+一半就凭空变成两只"。
+
+修法（回到意图驱动）：新增敌人动作 `slime_boss.split`（`Special`，程序：先造 1 只
+`acid_slime_l` + 1 只 `spike_slime_l`（各带**当前**血量），再销毁自己 —— **先造后毁**，
+顺序反了 `currentHealth` 会读到 0）；加一条 `IntentRules`：`healthPercent <= 50` ⇒ Split；
+删掉 `phase_split` 与那条"半血改打 slam"的规则。
+
+判据：`the_slime_boss_splits_on_its_own_turn_not_the_moment_it_is_hurt`（掉血后**还没**分裂
+→ 它的回合意图是 Split → 打出后两只 L 各带当前血量）、
+`the_slime_boss_split_happens_once`、
+`the_slime_boss_splits_on_its_turn_through_the_play_path`（真实出牌路径 + `step_end_turn`）。
+
+### 403 ④召唤铃铛不给三件遗物（#8）
+
+`calling_bell` 是 **Boss 遗物**，它的"再给 3 件遗物"是**欠账**（`pickup_relics`），
+而 `settle_pickup_debts()` 只挂在 `open_chest` / `buy_relic` / `take_relic` / `grant_relic` 上
+—— **Boss 遗物那条漏了**（它走内核的 `take_boss_relic`，内部 `push_relic`）。
+`settle_pickup_debts` 的注释早就写着"兑现点必须是**所有**会 push_relic 的入口"。
+
+修法：`rd_run_take_boss_relic` / `rd_run_dig`（Shovel 挖遗物）/ `rd_run_choose`（事件给遗物）
+三条路径都补上兑现。判据：`a_boss_relic_that_owes_relics_pays_them`（**先找**一个三选一里
+真有铃铛的种子，再断言拿到之后欠账清零、遗物 +4 —— 写死种子会"有时跑到、有时早退"）。
+
+### 404 ⑤`flex_potion` 没有中文（#3）
+
+归档（spire-archive）里只有 42 瓶药水，**没有 Flex Potion**；另有两瓶只是**命名不同**
+（`elixir` ↔ `ELIXIRPOTION`、`fairy_in_a_bottle` ↔ `FAIRYPOTION`）。
+修法：生成器加 id 别名表 + 一张手写的 `POTION_ZH`（只作显示）。现在 **33/33** 有中文。
+
+### 405 ⑥`+` 卡的说明沿用基础数值（#4）
+
+玩家："旋风斩和旋风斩+ 的说明都是伤害 5。"
+
+归档只给中文的**基础**行，`+` 行只有英文（`upgrade.description`）与结构化增量。
+修法：按**数字位置**对齐 —— 中文基础行、英文基础行、英文升级行的数字序列长度相同 ⇒
+逐个位置把变化的数字搬过来（旋风斩 5 → 8、打击 6 → 9、痛击 8/2 → 10/3）。
+对不齐的（18 条）退回基础行并**计数**（`upgradedWithBaseText` 从 126 降到 42）。
+
+### 406 ⑦战斗页的横向滚动条（#1）
+
+`.beat-layer` 是 `absolute; inset: 0`，飘字 `left: Npx` + `nowrap` 贴右边界时会伸出容器 ⇒
+`.run-main`（`overflow: auto`）长出横向滚动条 ⇒ **画布高度少 15px** ⇒ 3D 视角跟着跳。
+修法两层：`.run-main { overflow-x: hidden }`（结构上关掉）+ `.beat-layer { overflow: hidden }`
+（装饰越界就裁掉）。判据：闸门 56 新增两条（源码 + 运行时 `scrollWidth <= clientWidth`）。
+
+### 407 ⑧Boss 奖励屏的遗物没有悬浮窗（#7）
+
+`BossRelicScene` 没接 `tipHandlers`。补上（面板仍是 §389 那**唯一一个**宿主）。
+
+### 407.1 一个自己踩的坑（值得记）
+
+定位 `neows_lament` 失败时，我用 `sed -i "s/test_run([0-9]*, 80, 80, &deck)/test_run($s, ...)/"`
+批量试种子 —— 那条正则把 **12 个测试**的种子全改成了 23（不是只改我新写的那条），
+于是 walk 撞上"`?` 房变战斗"这条测试没处理的分支。**教训：批量替换必须带"只改这一处"的守卫**
+（按函数名定位，而不是按行文本）。恢复时也是按函数名从 HEAD 逐条比对种子。
+
+### 407.2 数字
+
+闸门 **57**（`ui-layout-words` 29 → 31 条断言）；内核测试 819 + 233 + 194；
+内容闸门新增 `[7d] turn-end zone` / `[7e] timed statuses`；
+wasm 1,375,998 B；状态 150 → 149（删掉不再使用的 `phase_split`）；敌人动作 166 → 167。

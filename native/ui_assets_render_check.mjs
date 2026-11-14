@@ -12,6 +12,7 @@
 // 而"画出来了 / 数量对 / 字母对"是能断言的。
 
 import { execFileSync } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { openPage } from "../web/cdp.mjs";
 
@@ -47,8 +48,18 @@ try {
   const counts = await ev("window.__assets.counts");
   summary.enemies = counts.enemies;
   summary.cards = counts.cards;
+  // ⚠️ 状态数会随内容变（§400 删掉了不再使用的 `standard.phase_split`：150 → 149）。
+  // 这里断言的是"与**内容包**一致"，所以从内容读，而不是写死一个数。
+  const contentCounts = JSON.parse(
+    await readFile("tools/contentc/packages/sts/sts.roguedeck.json", "utf8")
+  );
+  const wantStatuses = (contentCounts.Statuses ?? []).length;
   check(
-    counts.enemies === 61 && counts.cards === 295 && counts.relics === 152 && counts.potions === 33 && counts.statuses === 150,
+    counts.enemies === (contentCounts.Monsters ?? []).length &&
+      counts.cards === (contentCounts.Cards ?? []).length &&
+      counts.relics === (contentCounts.Relics ?? []).length &&
+      counts.potions === (contentCounts.Potions ?? []).length &&
+      counts.statuses === wantStatuses,
     "清单规模与内容一致",
     JSON.stringify(counts)
   );

@@ -282,6 +282,17 @@ try {
     JSON.stringify(spotNames.map((row) => `${row.id}→${row.name}`))
   );
   // ── 接线：组件必须**用**这个纯函数（纯函数测了但没人调，等于没修）──────────
+  // §406：**战斗页不许出横向滚动条**（玩家报的"画面来回跳"）。
+  // 判据两侧：① 源码里 `.run-main` 必须 `overflow-x: hidden`（结构上关掉）；
+  // ② 运行时不变量 —— 出牌之后 `.run-main` 的 `scrollWidth <= clientWidth`。
+  const runCss = await readFile(join(REPO, "web-next/src/run/run.css"), "utf8");
+  const mainRule = /\.run-main \{[^}]*\}/.exec(runCss);
+  check(
+    mainRule !== null && /overflow-x:\s*hidden/.test(mainRule[0]),
+    "`.run-main` 结构上关掉横向滚动（飘字贴边也不会撑出滚动条）",
+    mainRule ? mainRule[0].replace(/\s+/g, " ").slice(0, 80) : "找不到 .run-main"
+  );
+
   // §392：商店**一行一件**（玩家报的"商店还不是一行只有一张牌"）。
   // 判据看源码：`.shop-rows` 必须是单列（`grid-template-columns: 1fr`），不是 `auto-fit`。
   const shopCss = await readFile(join(REPO, "web-next/src/run/run.css"), "utf8");
@@ -466,6 +477,23 @@ await sleep(250);
 if ((await ev("window.__run.scene()")).base === "SC-03") {
   await ev('window.__run.click("[data-fight-begin]")');
   await sleep(400);
+  // §406：出牌之后量一次横向溢出（飘字是那一刻出现的）。
+  for (const action of (await ev("window.__run.hand()"))?.actions ?? []) {
+    if (action.kind !== "play") continue;
+    await ev(`window.__run.play(${action.handSlot}, ${action.targetSlot})`);
+    await sleep(90);
+    const box = await ev(`(() => {
+      const main = document.querySelector(".run-main");
+      return main ? { scrollW: main.scrollWidth, clientW: main.clientWidth } : null;
+    })()`);
+    check(
+      box !== null && box.scrollW <= box.clientW,
+      "出牌之后 `.run-main` **没有**横向溢出（画面不跳）",
+      JSON.stringify(box)
+    );
+    break;
+  }
+
   // §391：战斗里顶栏 HP 必须跟**战斗快照**（不是运行层那份陈旧值）。
   // 玩家被史莱姆老大砸了 35 点、血条纹丝不动，就是因为读了运行层。
   const pair = await ev(`(() => {

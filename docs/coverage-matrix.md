@@ -37,16 +37,16 @@
 | 类别 | 行数 | TestNamed | HarnessOnly | 两层都没有 | SourceTie:wiki | SourceTie:spec | 有偏差声明 | orphan |
 |---|---|---|---|---|---|---|---|---|
 | 怪物 | 61 | 56 | 0 | 5 | 52 | 9 | 7 | 0 |
-| 敌人动作 | 166 | 92 | 74 | 0 | 143 | 23 | 59 | 0 |
+| 敌人动作 | 167 | 93 | 74 | 0 | 144 | 23 | 60 | 0 |
 | 卡牌 | 295 | 169 | 126 | 0 | 281 | 14 | 18 | 0 |
-| 状态 | 150 | 139 | 6 | 5 | 0 | 150 | 1 | 0 |
+| 状态 | 149 | 139 | 5 | 5 | 0 | 149 | 1 | 0 |
 | 遭遇 | 64 | 46 | 18 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 36 | 36 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 152 | 138 | 14 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 957 | 709 | 238 | 10 | 476 | 196 | 85 | 0 |
+| **合计** | 957 | 710 | 237 | 10 | 477 | 195 | 86 | 0 |
 
-扫描到的具名测试：**1247** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
+扫描到的具名测试：**1248** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
 
 事件：池里有 **39** 个位次、**36** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -56,7 +56,7 @@
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
-| acid_slime_l | yes | the_slime_boss_splits_when_damaged_through_the_play_path, the_slime_boss_splits_into_two_large_slimes_at_half_health | — | wiki:wiki_asc/acid_slime.txt | — | §312/§313/INV_ASC_HP+INV_MONSTERS/the_slime_boss_splits_when_damaged_through_the_play_path |
+| acid_slime_l | yes | the_slime_boss_splits_on_its_own_turn_not_the_moment_it_is_hurt, the_slime_boss_splits_on_its_turn_through_the_play_path | — | wiki:wiki_asc/acid_slime.txt | — | §313/§400/INV_ASC_HP+INV_MONSTERS/the_slime_boss_splits_on_its_own_turn_not_the_moment_it_is_hurt |
 | acid_slime_m | yes | a_large_slime_splits_at_half_health_with_its_current_hp, a_split_spawns_two_combatants_when_the_boss_dies …(+2) | — | wiki:wiki_asc/acid_slime.txt | — | §276/§323/INV_ASC_HP+INV_MONSTERS/a_large_slime_splits_at_half_health_with_its_current_hp |
 | acid_slime_s | yes | — | — | wiki:wiki_asc/acid_slime.txt | — | §276/§323/INV_ASC_HP+INV_MONSTERS |
 | awakened_one | yes | the_awakened_one_survives_its_first_death_and_then_really_dies, the_awakened_one_draws_phase_one_by_weight_and_flips_on_the_guard …(+5) | — | wiki:wiki_asc/awakened_one.txt | gap §H: ⚠️ `Curiosity` 的触发器（`card.hasTag.power`）在本内容里永不触发 —— 因为卡池 0 张 `power` 牌（§A.1 的观者缺口） | §195.8/§282/INV_ASC_HP+INV_MONSTERS/the_awakened_one_survives_its_first_death_and_then_really_dies |
@@ -100,12 +100,12 @@
 | sentry_3 | yes | a_long_fight_never_reports_a_step_problem | — | wiki:wiki_asc/sentry.txt | — | §134/§323/INV_ASC_HP+INV_MONSTERS/a_long_fight_never_reports_a_step_problem |
 | shelled_parasite | yes | act_two_fights_act_two_enemies | — | wiki:wiki_asc/shelled_parasite.txt | — | §312/§313/INV_ASC_HP+INV_MONSTERS/act_two_fights_act_two_enemies |
 | slaver_red | yes | the_five_elite_encounters_match_the_wiki_numbers, the_composed_encounters_pick_from_their_candidates …(+1) | — | wiki:wiki_asc/slavers.txt | — | §258/INV_ASC_HP+INV_MONSTERS/the_five_elite_encounters_match_the_wiki_numbers |
-| slime_boss | yes | a_phase_split_happens_once_even_under_three_hits, the_slime_boss_splits_when_damaged_through_the_play_path …(+3) | — | wiki:wiki_asc/slime_boss.txt | — | §312/§313/INV_ASC_HP+INV_MONSTERS/a_phase_split_happens_once_even_under_three_hits |
+| slime_boss | yes | the_slime_boss_splits_on_its_own_turn_not_the_moment_it_is_hurt, the_slime_boss_splits_on_its_turn_through_the_play_path …(+2) | — | wiki:wiki_asc/slime_boss.txt | — | §312/§313/INV_ASC_HP+INV_MONSTERS/the_slime_boss_splits_on_its_own_turn_not_the_moment_it_is_hurt |
 | snake_plant | yes | malleable_grows_by_one_per_hit_and_resets_when_the_turn_starts | — | spec:INV_ASC_HP+INV_MONSTERS | — | §312/§313/INV_ASC_HP+INV_MONSTERS/malleable_grows_by_one_per_hit_and_resets_when_the_turn_starts |
 | sneaky_gremlin | yes | — | — | wiki:wiki_asc/sneaky_gremlin.txt | — | §138/§323/INV_ASC_HP+INV_MONSTERS |
 | snecko | yes | act_two_fights_act_two_enemies | — | spec:INV_ASC_HP+INV_MONSTERS | — | §147/§282/INV_ASC_HP+INV_MONSTERS/act_two_fights_act_two_enemies |
 | spheric_guardian | yes | the_sentry_keeps_one_hp_table_across_two_tiers, the_spheric_guardian_starts_with_block_artifact_and_barricade | — | spec:INV_MONSTERS+INV_NO_ASC_HP | 无 AscHP：wiki Spheric Guardian: HP 20, no AscHP column | §313/§315/INV_MONSTERS+INV_NO_ASC_HP/the_sentry_keeps_one_hp_table_across_two_tiers |
-| spike_slime_l | yes | the_slime_boss_splits_when_damaged_through_the_play_path, the_slime_boss_splits_into_two_large_slimes_at_half_health | — | wiki:wiki_asc/spike_slime.txt | — | §312/§313/INV_ASC_HP+INV_MONSTERS/the_slime_boss_splits_when_damaged_through_the_play_path |
+| spike_slime_l | yes | the_slime_boss_splits_on_its_own_turn_not_the_moment_it_is_hurt, the_slime_boss_splits_on_its_turn_through_the_play_path | — | wiki:wiki_asc/spike_slime.txt | — | §313/§400/INV_ASC_HP+INV_MONSTERS/the_slime_boss_splits_on_its_own_turn_not_the_moment_it_is_hurt |
 | spike_slime_m | yes | a_large_slime_splits_at_half_health_with_its_current_hp, the_composed_encounters_pick_from_their_candidates | — | wiki:wiki_asc/spike_slime.txt | — | §323/INV_ASC_HP+INV_MONSTERS/a_large_slime_splits_at_half_health_with_its_current_hp |
 | spike_slime_s | yes | a_minion_flees_when_its_master_falls, the_summon_cap_is_a_loud_failure | — | wiki:wiki_asc/spike_slime.txt | — | §282/§323/INV_ASC_HP+INV_MONSTERS/a_minion_flees_when_its_master_falls |
 | spiker | yes | spiker_never_repeats_its_attack_and_buffs_thorns_at_most_six_times, starting_statuses_follow_their_ascension_rows | — | wiki:wiki_asc/shapes.txt | — | §214/§312/INV_ASC_HP+INV_MONSTERS/spiker_never_repeats_its_attack_and_buffs_thorns_at_most_six_times |
@@ -118,7 +118,7 @@
 | torch_head | yes | a_minion_is_not_on_the_field_until_its_summon_lands, the_collector_summons_only_up_to_two_torch_heads | — | wiki:wiki_asc/torch_head.txt | — | §282/§329/INV_ASC_HP+INV_MONSTERS/a_minion_is_not_on_the_field_until_its_summon_lands |
 | transient | yes | the_transient_scales_its_attack_and_fades_away | — | spec:INV_MONSTERS+INV_NO_ASC_HP | 无 AscHP：wiki Transient: HP 999 always | §316/§317/INV_MONSTERS+INV_NO_ASC_HP/the_transient_scales_its_attack_and_fades_away |
 
-## 敌人动作（166）
+## 敌人动作（167）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -232,7 +232,7 @@
 | repulsor.daze | yes | the_repulsor_puts_two_dazed_into_the_draw_pile | — | wiki:wiki_asc/shapes.txt (via repulsor) · 仅基础值 | 无升档：wiki Shapes: Daze has no A-row | §317/§323/INV_ACTIONS+INV_NO_ASC/the_repulsor_puts_two_dazed_into_the_draw_pile |
 | romeo.agonizing_slash | yes | — | ENEMY_DIFF | spec:INV_ACTIONS+INV_ASC_VARIANTS | — | §323/INV_ACTIONS+INV_ASC_VARIANTS |
 | romeo.cross_slash | yes | — | ENEMY_DIFF | spec:INV_ACTIONS+INV_ASC_VARIANTS | — | §323/INV_ACTIONS+INV_ASC_VARIANTS |
-| romeo.mock | yes | — | ENEMY_DIFF | spec:INV_ACTIONS+INV_NO_ASC | 无升档：wiki Masked Bandits: Mock does nothing, no A-row | §323/INV_ACTIONS+INV_NO_ASC |
+| romeo.mock | yes | — | ENEMY_DIFF | spec:INV_ACTIONS+INV_NO_ASC | 无升档：wiki Masked Bandits: Mock does nothing, no A-row | §323/§400/INV_ACTIONS+INV_NO_ASC |
 | sentry.beam | yes | the_three_sentries_start_out_of_phase | — | wiki:wiki_asc/sentry.txt (via sentry_1) | — | §4.2/§385/INV_ACTIONS+INV_ASC_VARIANTS/the_three_sentries_start_out_of_phase |
 | sentry.bolt | yes | the_three_sentries_start_out_of_phase | — | wiki:wiki_asc/sentry.txt (via sentry_1) | — | §4.2/§385/INV_ACTIONS+INV_ASC_VARIANTS/the_three_sentries_start_out_of_phase |
 | shelled_parasite.double_strike | yes | — | ENEMY_DIFF | wiki:wiki_asc/shelled_parasite.txt (via shelled_parasite) | — | §130/INV_ACTIONS+INV_ASC_VARIANTS |
@@ -243,6 +243,7 @@
 | slime_boss.goop_spray | yes | a_combinator_rule_switches_the_move | — | wiki:wiki_asc/slime_boss.txt (via slime_boss) | — | §4.3/INV_ACTIONS+INV_ASC_VARIANTS/a_combinator_rule_switches_the_move |
 | slime_boss.preparing | yes | a_combinator_rule_switches_the_move | — | wiki:wiki_asc/slime_boss.txt (via slime_boss) · 仅基础值 | 无升档：wiki Slime Boss: Preparing has no numbers | §4.3/INV_ACTIONS+INV_NO_ASC/a_combinator_rule_switches_the_move |
 | slime_boss.slam | yes | a_combinator_rule_switches_the_move | — | wiki:wiki_asc/slime_boss.txt (via slime_boss) | — | §4.3/INV_ACTIONS+INV_ASC_VARIANTS/a_combinator_rule_switches_the_move |
+| slime_boss.split | yes | a_combinator_rule_switches_the_move, the_slime_boss_splits_on_its_own_turn_not_the_moment_it_is_hurt | — | wiki:wiki_asc/slime_boss.txt (via slime_boss) · 仅基础值 | 无升档：wiki Slime Boss: Split has no A-row | §400/INV_ACTIONS+INV_NO_ASC/a_combinator_rule_switches_the_move |
 | snake_plant.chomp_chomp | yes | — | ENEMY_DIFF | spec:INV_ACTIONS+INV_ASC_VARIANTS | — | §312/INV_ACTIONS+INV_ASC_VARIANTS |
 | snake_plant.enfeebling_spores | yes | — | ENEMY_DIFF | spec:INV_ACTIONS+INV_NO_ASC | 无升档：wiki Snake Plant: Spores have no A-row | §312/§316/INV_ACTIONS+INV_NO_ASC |
 | sneaky_gremlin.puncture | yes | — | ENEMY_DIFF | wiki:wiki_asc/sneaky_gremlin.txt (via sneaky_gremlin) | — | INV_ACTIONS+INV_ASC_VARIANTS |
@@ -305,7 +306,7 @@
 | bandage_up | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable, a_shop_stocks_all_four_shelves_with_the_wikis_composition …(+2) | — | wiki:wiki_cards/bandage_up.txt | wiki 偏差：wiki 升级版治疗 6；内容没有 `bandage_up+` 这一行。（`Exhaust` 本身不是偏差：§219 起它由落区 `PlayedCardDestinationZone` 表达。） | §191/CARD_WIKI+INV_CARDS/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
 | barricade | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt | — | CARD_WIKI+INV_CARDS |
 | barricade+ | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt (via barricade) | — | INV_CARDS |
-| bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, warcry_draws_one_then_puts_the_chosen_card_on_top …(+45) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
+| bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, warcry_draws_one_then_puts_the_chosen_card_on_top …(+46) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
 | bash+ | yes | the_unknown_room_events_are_readable, the_upgrade_eggs_upgrade_two_of_their_own_kind …(+3) | — | wiki:wiki_cards/bash.txt (via bash) | — | INV_CARDS/the_unknown_room_events_are_readable |
 | battle_trance | yes | battle_trance_blocks_further_draws_only_this_turn, the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/battle_trance.txt | — | CARD_WIKI+INV_CARDS/battle_trance_blocks_further_draws_only_this_turn |
 | battle_trance+ | yes | — | CARD_DIFF | wiki:wiki_cards/battle_trance.txt (via battle_trance) | — | INV_CARDS |
@@ -361,7 +362,7 @@
 | decay | yes | the_turn_end_curses_do_their_own_thing | — | wiki:wiki_cards/decay.txt | — | CARD_WIKI+INV_CARDS/the_turn_end_curses_do_their_own_thing |
 | deep_breath | yes | deep_breath_shuffles_the_discard_pile_back_first | — | wiki:wiki_cards/deep_breath.txt | — | CARD_WIKI+INV_CARDS/deep_breath_shuffles_the_discard_pile_back_first |
 | deep_breath+ | yes | — | CARD_DIFF | wiki:wiki_cards/deep_breath.txt (via deep_breath) | — | INV_CARDS |
-| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+94) | — | wiki:wiki_cards/defend.txt | — | §2.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
+| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+96) | — | wiki:wiki_cards/defend.txt | — | §2.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
 | defend+ | yes | armaments_gains_block_then_upgrades_the_chosen_card, the_upgrade_eggs_upgrade_two_of_their_own_kind …(+2) | — | wiki:wiki_cards/defend.txt (via defend) | — | INV_CARDS/armaments_gains_block_then_upgrades_the_chosen_card |
 | demon_form | yes | demon_form_grows_strength_at_every_turn_start, a_shop_stocks_all_four_shelves_with_the_wikis_composition | — | wiki:wiki_cards/demon_form.txt | — | CARD_WIKI+INV_CARDS/demon_form_grows_strength_at_every_turn_start |
 | demon_form+ | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt (via demon_form) | — | INV_CARDS/demon_form_grows_strength_at_every_turn_start |
@@ -498,7 +499,7 @@
 | pummel+ | yes | — | CARD_DIFF | wiki:wiki_cards/pummel.txt (via pummel) | — | INV_CARDS |
 | purity | yes | — | CARD_DIFF | wiki:wiki_cards/purity.txt | — | CARD_WIKI+INV_CARDS |
 | purity+ | yes | — | CARD_DIFF | wiki:wiki_cards/purity.txt (via purity) | — | INV_CARDS |
-| rage | yes | the_new_red_skills_do_what_their_pages_say | — | wiki:wiki_cards/rage.txt | — | CARD_WIKI+INV_CARDS/the_new_red_skills_do_what_their_pages_say |
+| rage | yes | the_new_red_skills_do_what_their_pages_say, one_turn_statuses_expire_when_the_turn_ends | — | wiki:wiki_cards/rage.txt | — | CARD_WIKI+INV_CARDS/the_new_red_skills_do_what_their_pages_say |
 | rage+ | yes | — | CARD_DIFF | wiki:wiki_cards/rage.txt (via rage) | — | INV_CARDS |
 | rampage | yes | rampage_grows_this_copy_and_only_this_copy | — | wiki:wiki_cards/rampage.txt | — | CARD_WIKI+INV_CARDS/rampage_grows_this_copy_and_only_this_copy |
 | rampage+ | yes | rampage_grows_this_copy_and_only_this_copy | — | wiki:wiki_cards/rampage.txt (via rampage) | — | INV_CARDS/rampage_grows_this_copy_and_only_this_copy |
@@ -551,7 +552,7 @@
 | smite+ | yes | — | CARD_DIFF | wiki:wiki_cards/smite.txt (via smite) | — | INV_CARDS |
 | spot_weakness | yes | spot_weakness_follows_the_enemy_intent | — | wiki:wiki_cards/spot_weakness.txt | — | §242/CARD_WIKI+INV_CARDS/spot_weakness_follows_the_enemy_intent |
 | spot_weakness+ | yes | — | CARD_DIFF | wiki:wiki_cards/spot_weakness.txt (via spot_weakness) | — | INV_CARDS |
-| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+203) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+204) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+14) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
@@ -589,7 +590,7 @@
 | wound | yes | the_new_red_skills_do_what_their_pages_say, painful_stabs_shuffles_a_wound_only_on_unblocked_damage …(+4) | — | wiki:wiki_cards/wound.txt | — | §173/§327/CARD_WIKI+INV_CARDS/the_new_red_skills_do_what_their_pages_say |
 | writhe | yes | the_two_event_curses_behave_as_their_pages_say | — | wiki:wiki_cards/writhe.txt | — | §220/§221/CARD_WIKI+INV_CARDS/the_two_event_curses_behave_as_their_pages_say |
 
-## 状态（150）
+## 状态（149）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -609,7 +610,7 @@
 | standard.buffer | yes | the_damage_pipeline_honours_intangible_buffer_and_plated_armor, the_zero_infrastructure_batch_wires_the_right_carrier …(+1) | — | spec:INV_STATUSES | — | §149/§223/INV_STATUSES/the_damage_pipeline_honours_intangible_buffer_and_plated_armor |
 | standard.busted_crown | yes | the_reward_layer_relics_change_the_payout | — | spec:INV_STATUSES | — | §268/§269/INV_STATUSES/the_reward_layer_relics_change_the_payout |
 | standard.calipers | yes | the_five_combat_start_relics_wire_their_own_carrier, the_combat_start_relics_change_the_right_step_of_the_turn | — | spec:INV_STATUSES | — | §261/INV_STATUSES/the_five_combat_start_relics_wire_their_own_carrier |
-| standard.cap_cost_at | yes | — | CARD_DIFF | spec:INV_STATUSES | — | §245/§248/INV_STATUSES |
+| standard.cap_cost_at | yes | one_turn_statuses_expire_when_the_turn_ends | — | spec:INV_STATUSES | — | §245/§248/INV_STATUSES/one_turn_statuses_expire_when_the_turn_ends |
 | standard.captains_wheel | yes | the_eight_turn_shaped_relics_wire_their_own_status, the_turn_shaped_relic_statuses_fire_on_the_turn_the_wiki_names | — | spec:INV_STATUSES | — | §260/INV_STATUSES/the_eight_turn_shaped_relics_wire_their_own_status |
 | standard.centennial_puzzle | yes | the_zero_infrastructure_batch_wires_the_right_carrier, the_reaction_relics_fire_the_right_number_of_times | — | spec:INV_STATUSES | — | §267/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
 | standard.champion_belt | yes | the_status_parameter_relics_wire_their_own_carrier, the_status_parameter_infrastructure_changes_the_right_number | — | spec:INV_STATUSES | — | §264/§271/INV_STATUSES/the_status_parameter_relics_wire_their_own_carrier |
@@ -628,7 +629,7 @@
 | standard.demon_form | yes | — | CARD_DIFF | spec:INV_STATUSES | — | §231/§235/INV_STATUSES |
 | standard.dexterity | yes | dexterity_from_the_content_scales_a_real_defend, orange_pellets_removes_every_debuff_and_keeps_the_buffs …(+10) | — | spec:INV_STATUSES | — | §174/§204/INV_STATUSES/dexterity_from_the_content_scales_a_real_defend |
 | standard.double_damage | yes (test-only) | the_status_parameter_infrastructure_changes_the_right_number, the_every_nth_card_relics_count_the_right_kind_of_card | — | spec:INV_STATUSES | — | §264/§267/INV_STATUSES/the_status_parameter_infrastructure_changes_the_right_number |
-| standard.double_tap | yes | double_tap_only_covers_the_next_attack | — | spec:INV_STATUSES | — | §231/§238/INV_STATUSES/double_tap_only_covers_the_next_attack |
+| standard.double_tap | yes | double_tap_only_covers_the_next_attack, one_turn_statuses_expire_when_the_turn_ends | — | spec:INV_STATUSES | — | §231/§238/INV_STATUSES/double_tap_only_covers_the_next_attack |
 | standard.draw_card_next_turn | yes (test-only) | the_one_shot_turn_start_statuses_apply_once_and_then_go_away | — | spec:INV_STATUSES | — | §333/INV_STATUSES/the_one_shot_turn_start_statuses_apply_once_and_then_go_away |
 | standard.draw_reduction | yes | draw_reduction_costs_exactly_one_turns_draw_and_then_expires | — | spec:INV_STATUSES | — | §10/§195.7/INV_STATUSES/draw_reduction_costs_exactly_one_turns_draw_and_then_expires |
 | standard.duality | yes | the_zero_infrastructure_batch_wires_the_right_carrier, the_reaction_relics_fire_the_right_number_of_times | — | spec:INV_STATUSES | — | §267/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
@@ -644,7 +645,7 @@
 | standard.fairy_in_a_bottle | yes | the_charm_catches_one_killing_blow_and_is_spent | — | spec:INV_STATUSES | — | §180/INV_STATUSES/the_charm_catches_one_killing_blow_and_is_spent |
 | standard.feel_no_pain | yes | exhausting_a_card_feeds_feel_no_pain_and_dark_embrace | — | spec:INV_STATUSES | — | §237/§276/INV_STATUSES/exhausting_a_card_feeds_feel_no_pain_and_dark_embrace |
 | standard.fire_breathing | yes | evolve_and_fire_breathing_only_answer_to_the_right_tags | — | spec:INV_STATUSES | — | §237/§276/INV_STATUSES/evolve_and_fire_breathing_only_answer_to_the_right_tags |
-| standard.flame_barrier | yes | flame_barrier_hits_back_and_combust_burns_everyone, the_new_red_skills_do_what_their_pages_say | — | spec:INV_STATUSES | — | §119/INV_STATUSES/flame_barrier_hits_back_and_combust_burns_everyone |
+| standard.flame_barrier | yes | flame_barrier_hits_back_and_combust_burns_everyone, the_new_red_skills_do_what_their_pages_say …(+1) | — | spec:INV_STATUSES | — | §119/INV_STATUSES/flame_barrier_hits_back_and_combust_burns_everyone |
 | standard.flying | yes | three_byrds_each_start_with_their_own_flying, flying_halves_attack_damage_and_loses_a_stack_per_hit | — | spec:INV_STATUSES | — | §208/§216/INV_STATUSES/three_byrds_each_start_with_their_own_flying |
 | standard.frail | yes | entrench_doubles_the_block_it_already_has, the_turn_end_curses_do_their_own_thing …(+10) | — | spec:INV_STATUSES | — | §313/§328/INV_STATUSES/entrench_doubles_the_block_it_already_has |
 | standard.ginger | yes | the_status_application_relics_wire_their_own_carrier, the_status_application_relics_change_what_lands_on_the_target | — | spec:INV_STATUSES | — | §265/INV_STATUSES/the_status_application_relics_wire_their_own_carrier |
@@ -664,7 +665,7 @@
 | standard.letter_opener | yes | the_every_nth_card_relics_wire_their_own_carrier, the_every_nth_card_relics_count_the_right_kind_of_card | — | spec:INV_STATUSES | — | §262/INV_STATUSES/the_every_nth_card_relics_wire_their_own_carrier |
 | standard.lizard_tail | yes | the_zero_infrastructure_tail_wires_its_carriers, the_zero_infrastructure_tail_lights_up_the_existing_channels | — | spec:INV_STATUSES | — | §268/INV_STATUSES/the_zero_infrastructure_tail_wires_its_carriers |
 | standard.lose_dexterity | yes | the_reaction_relics_fire_the_right_number_of_times | — | spec:INV_STATUSES | — | §158/INV_STATUSES/the_reaction_relics_fire_the_right_number_of_times |
-| standard.lose_strength | yes | flex_potion_gives_strength_and_takes_it_back | — | spec:INV_STATUSES | — | §158/§230/INV_STATUSES/flex_potion_gives_strength_and_takes_it_back |
+| standard.lose_strength | yes | one_turn_statuses_expire_when_the_turn_ends, flex_potion_gives_strength_and_takes_it_back | — | spec:INV_STATUSES | — | §158/§230/INV_STATUSES/one_turn_statuses_expire_when_the_turn_ends |
 | standard.magic_flower | yes | magic_flower_multiplies_healing_by_one_and_a_half | — | spec:INV_STATUSES | — | §298/INV_STATUSES/magic_flower_multiplies_healing_by_one_and_a_half |
 | standard.magnetism | yes | — | CARD_DIFF | spec:INV_STATUSES | — | §242/§244/INV_STATUSES |
 | standard.malleable | yes | — | — | spec:INV_STATUSES | — | §312/§317/INV_STATUSES |
@@ -679,7 +680,7 @@
 | standard.nightmare_pending | yes | nightmare_copies_into_the_aside_pile_and_next_turn_they_arrive | — | spec:INV_STATUSES | — | §283/§333/INV_STATUSES/nightmare_copies_into_the_aside_pile_and_next_turn_they_arrive |
 | standard.nilrys_codex | yes | nilrys_codex_asks_at_turn_end_and_sends_the_pick_to_the_draw_pile | — | spec:INV_STATUSES | — | §300/INV_STATUSES/nilrys_codex_asks_at_turn_end_and_sends_the_pick_to_the_draw_pile |
 | standard.no_block_from_cards | yes | — | CARD_DIFF | spec:INV_STATUSES | — | §244/§245/INV_STATUSES |
-| standard.no_draw | yes | battle_trance_blocks_further_draws_only_this_turn, the_ten_cards_added_in_221_do_what_the_wiki_says | — | spec:INV_STATUSES | — | §227/§231/INV_STATUSES/battle_trance_blocks_further_draws_only_this_turn |
+| standard.no_draw | yes | battle_trance_blocks_further_draws_only_this_turn, the_ten_cards_added_in_221_do_what_the_wiki_says …(+1) | — | spec:INV_STATUSES | — | §227/§231/INV_STATUSES/battle_trance_blocks_further_draws_only_this_turn |
 | standard.nunchaku | yes | the_every_nth_card_relics_wire_their_own_carrier, the_every_nth_card_relics_count_the_right_kind_of_card | — | spec:INV_STATUSES | — | §262/INV_STATUSES/the_every_nth_card_relics_wire_their_own_carrier |
 | standard.odd_mushroom | yes | the_conditional_modifier_relics_wire_their_own_carrier, the_conditional_and_self_scoped_modifiers_change_the_right_number | — | spec:INV_STATUSES | — | §266/INV_STATUSES/the_conditional_modifier_relics_wire_their_own_carrier |
 | standard.omega | yes | omega_hits_every_enemy_at_the_end_of_the_turn | — | spec:INV_STATUSES | — | §244/§249/INV_STATUSES/omega_hits_every_enemy_at_the_end_of_the_turn |
@@ -692,14 +693,13 @@
 | standard.paper_phrog | yes | the_status_parameter_relics_wire_their_own_carrier, the_status_parameter_infrastructure_changes_the_right_number | — | spec:INV_STATUSES | — | §264/INV_STATUSES/the_status_parameter_relics_wire_their_own_carrier |
 | standard.pen_nib | yes | the_every_nth_card_relics_wire_their_own_carrier, the_every_nth_card_relics_count_the_right_kind_of_card | — | spec:INV_STATUSES | — | §262/INV_STATUSES/the_every_nth_card_relics_wire_their_own_carrier |
 | standard.phantom_veil | yes | — | — | spec:INV_STATUSES | — | §175/§181/INV_STATUSES |
-| standard.phase_split | yes | the_boss_phase_splits_once_at_low_health, a_phase_split_happens_once_even_under_three_hits | — | spec:INV_STATUSES | — | §121/§122/INV_STATUSES/the_boss_phase_splits_once_at_low_health |
 | standard.philosophers_stone | yes | the_zero_infrastructure_batch_wires_the_right_carrier, the_turn_axis_relics_move_draw_energy_and_periods | — | spec:INV_STATUSES | — | §267/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
 | standard.plated_armor | yes | a_long_fight_never_reports_a_step_problem, plated_armor_wears_down_to_nothing_without_an_error …(+7) | — | spec:INV_STATUSES | — | §209/§210/INV_STATUSES/a_long_fight_never_reports_a_step_problem |
 | standard.pocketwatch | yes | the_eight_turn_shaped_relics_wire_their_own_status, the_turn_shaped_relic_statuses_fire_on_the_turn_the_wiki_names | — | spec:INV_STATUSES | — | §260/INV_STATUSES/the_eight_turn_shaped_relics_wire_their_own_status |
 | standard.poison | yes | modifier_rows_match_exactly_and_through_the_documented_namespace_bridge, a_status_source_moves_the_full_hash_but_not_the_golden_one …(+17) | — | spec:INV_STATUSES | — | §263/§265/INV_STATUSES/modifier_rows_match_exactly_and_through_the_documented_namespace_bridge |
-| standard.rage | yes | rage_gives_block_only_for_an_attack, the_new_red_skills_do_what_their_pages_say …(+3) | — | spec:INV_STATUSES | — | §119/INV_STATUSES/rage_gives_block_only_for_an_attack |
+| standard.rage | yes | rage_gives_block_only_for_an_attack, the_new_red_skills_do_what_their_pages_say …(+4) | — | spec:INV_STATUSES | — | §119/INV_STATUSES/rage_gives_block_only_for_an_attack |
 | standard.red_skull | yes | the_conditional_modifier_relics_wire_their_own_carrier, the_conditional_and_self_scoped_modifiers_change_the_right_number | — | spec:INV_STATUSES | — | §266/INV_STATUSES/the_conditional_modifier_relics_wire_their_own_carrier |
-| standard.regain_strength | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable | — | spec:INV_STATUSES | — | §219/INV_STATUSES/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
+| standard.regain_strength | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable, one_turn_statuses_expire_when_the_turn_ends | — | spec:INV_STATUSES | — | §219/INV_STATUSES/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
 | standard.regen | yes | the_awakened_one_survives_its_first_death_and_then_really_dies, regen_heals_at_the_end_of_the_turn …(+1) | — | spec:INV_STATUSES | — | §119/§312/INV_STATUSES/the_awakened_one_survives_its_first_death_and_then_really_dies |
 | standard.ring_of_the_serpent | yes | the_zero_infrastructure_batch_wires_the_right_carrier, the_turn_axis_relics_move_draw_energy_and_periods | — | spec:INV_STATUSES | — | §264/§267/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
 | standard.ring_of_the_snake | yes | the_zero_infrastructure_batch_wires_the_right_carrier, the_turn_axis_relics_move_draw_energy_and_periods | — | spec:INV_STATUSES | — | §264/§267/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
@@ -716,7 +716,7 @@
 | standard.snecko_eye | yes | — | — | spec:INV_STATUSES | — | §294/§333/INV_STATUSES |
 | standard.snecko_skull | yes | the_status_application_relics_wire_their_own_carrier, the_status_application_relics_change_what_lands_on_the_target | — | spec:INV_STATUSES | — | §265/INV_STATUSES/the_status_application_relics_wire_their_own_carrier |
 | standard.sozu | yes | sozu_refuses_potions_at_both_doors | — | spec:INV_STATUSES | — | §270/§271/INV_STATUSES/sozu_refuses_potions_at_both_doors |
-| standard.split | yes (test-only) | a_spawned_enemy_joins_the_turn_order_after_the_current_actor, a_phase_split_happens_once_even_under_three_hits …(+1) | — | spec:INV_STATUSES | — | §121/INV_STATUSES/a_spawned_enemy_joins_the_turn_order_after_the_current_actor |
+| standard.split | yes (test-only) | a_spawned_enemy_joins_the_turn_order_after_the_current_actor, a_split_spawns_two_combatants_when_the_boss_dies | — | spec:INV_STATUSES | — | §121/INV_STATUSES/a_spawned_enemy_joins_the_turn_order_after_the_current_actor |
 | standard.split_acid_l | yes | a_large_slime_splits_at_half_health_with_its_current_hp | — | spec:INV_STATUSES | — | §269/§276/INV_STATUSES/a_large_slime_splits_at_half_health_with_its_current_hp |
 | standard.split_spike_l | yes | a_large_slime_splits_at_half_health_with_its_current_hp, a_large_slime_above_half_health_does_not_split | — | spec:INV_STATUSES | — | §269/§276/INV_STATUSES/a_large_slime_splits_at_half_health_with_its_current_hp |
 | standard.spore_cloud | yes | spore_cloud_weakens_the_killer_on_death | — | spec:INV_STATUSES | — | §312/§317/INV_STATUSES/spore_cloud_weakens_the_killer_on_death |
@@ -733,7 +733,7 @@
 | standard.the_boot | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier, the_enemy_death_and_damage_rewrite_relics_change_the_right_number | — | spec:INV_STATUSES | — | §263/INV_STATUSES/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
 | standard.the_specimen | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier, the_enemy_death_and_damage_rewrite_relics_change_the_right_number | — | spec:INV_STATUSES | — | §263/INV_STATUSES/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
 | standard.thorns | yes | thorns_hurts_whoever_hits_its_owner, orange_pellets_removes_every_debuff_and_keeps_the_buffs …(+6) | — | spec:INV_STATUSES | — | §312/§317/INV_STATUSES/thorns_hurts_whoever_hits_its_owner |
-| standard.time_warp | yes | the_twelfth_card_asks_for_the_turn_to_end | — | spec:INV_STATUSES | — | §122/§125/INV_STATUSES/the_twelfth_card_asks_for_the_turn_to_end |
+| standard.time_warp | yes | the_twelfth_card_asks_for_the_turn_to_end | — | spec:INV_STATUSES | — | §125/§400/INV_STATUSES/the_twelfth_card_asks_for_the_turn_to_end |
 | standard.torii | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier, the_enemy_death_and_damage_rewrite_relics_change_the_right_number | — | spec:INV_STATUSES | — | §263/INV_STATUSES/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
 | standard.tungsten_rod | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier, the_enemy_death_and_damage_rewrite_relics_change_the_right_number | — | spec:INV_STATUSES | — | §263/INV_STATUSES/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
 | standard.turnip | yes | the_status_application_relics_wire_their_own_carrier, the_status_application_relics_change_what_lands_on_the_target | — | spec:INV_STATUSES | — | §265/INV_STATUSES/the_status_application_relics_wire_their_own_carrier |
@@ -759,7 +759,7 @@
 | enc_city_byrds | yes | three_byrds_each_start_with_their_own_flying, flying_halves_attack_damage_and_loses_a_stack_per_hit | — | — | — | §277/§311/three_byrds_each_start_with_their_own_flying |
 | enc_colosseum_champions | yes | enc_colosseum_slavers_and_champions_are_the_event_fights | — | — | — | enc_colosseum_slavers_and_champions_are_the_event_fights |
 | enc_colosseum_slavers | yes | enc_colosseum_slavers_and_champions_are_the_event_fights | — | — | — | enc_colosseum_slavers_and_champions_are_the_event_fights |
-| enc_cultist | yes | an_encounter_without_rolls_draws_nothing, the_three_a17_move_rows_take_effect_in_the_fight …(+14) | — | — | — | §5.2/§130/an_encounter_without_rolls_draws_nothing |
+| enc_cultist | yes | an_encounter_without_rolls_draws_nothing, one_turn_statuses_expire_when_the_turn_ends …(+15) | — | — | — | §5.2/§130/an_encounter_without_rolls_draws_nothing |
 | enc_cultist_and_chosen | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §311 |
 | enc_darklings | yes | an_encounter_with_two_records_of_the_same_id_builds | — | — | — | §316/an_encounter_with_two_records_of_the_same_id_builds |
 | enc_darklings_hard | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §316/§317 |
@@ -789,7 +789,7 @@
 | enc_shelled_parasite | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §277/§311 |
 | enc_slaver_red | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §130/§258 |
 | enc_slavers | yes | the_five_elite_encounters_match_the_wiki_numbers, blue_slaver_never_rakes_twice_in_a_row_at_a17 …(+2) | — | — | — | the_five_elite_encounters_match_the_wiki_numbers |
-| enc_slime_boss | yes | every_act_has_three_bosses_and_each_one_is_a_buildable_encounter, a_combinator_rule_switches_the_move …(+4) | — | — | — | §194/every_act_has_three_bosses_and_each_one_is_a_buildable_encounter |
+| enc_slime_boss | yes | every_act_has_three_bosses_and_each_one_is_a_buildable_encounter, a_combinator_rule_switches_the_move …(+5) | — | — | — | §194/every_act_has_three_bosses_and_each_one_is_a_buildable_encounter |
 | enc_small_slimes | yes | a_spawned_combatant_still_resolves_to_its_enemy_record | — | — | — | §130/a_spawned_combatant_still_resolves_to_its_enemy_record |
 | enc_snake_plant | yes | malleable_grows_by_one_per_hit_and_resets_when_the_turn_starts | — | — | — | §311/§312/malleable_grows_by_one_per_hit_and_resets_when_the_turn_starts |
 | enc_snecko | yes | snecko_never_bites_three_times_in_a_row | — | — | — | §147/§282/snecko_never_bites_three_times_in_a_row |
@@ -876,7 +876,7 @@
 | burning_blood | yes | capacity_is_an_error_not_a_truncation, burning_blood_heals_six_at_the_end_of_a_fight …(+9) | — | — | — | §320/capacity_is_an_error_not_a_truncation |
 | busted_crown | yes | the_reward_layer_relics_change_the_payout | — | — | — | §269/the_reward_layer_relics_change_the_payout |
 | calipers | yes | restocked_relics_are_priced_by_their_own_rarity, the_five_combat_start_relics_wire_their_own_carrier | — | — | — | §261/restocked_relics_are_priced_by_their_own_rarity |
-| calling_bell | yes | calling_bell_pays_a_curse_and_owes_three_relics, the_pickup_debts_are_paid_and_cleared | — | — | — | §292/calling_bell_pays_a_curse_and_owes_three_relics |
+| calling_bell | yes | calling_bell_pays_a_curse_and_owes_three_relics, a_boss_relic_that_owes_relics_pays_them …(+1) | — | — | — | §292/calling_bell_pays_a_curse_and_owes_three_relics |
 | captains_wheel | yes | the_eight_turn_shaped_relics_wire_their_own_status | — | — | — | §260/the_eight_turn_shaped_relics_wire_their_own_status |
 | cauldron | yes | a_shop_stocks_all_four_shelves_with_the_wikis_composition, cauldron_owes_five_potions_and_the_belt_caps_it …(+2) | — | — | — | §292/a_shop_stocks_all_four_shelves_with_the_wikis_composition |
 | centennial_puzzle | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |

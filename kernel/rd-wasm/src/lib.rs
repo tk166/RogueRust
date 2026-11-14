@@ -3951,53 +3951,135 @@ mod tests {
     /// combatant, so a "rolled but not stored" build fails here rather than showing up as 0 damage
     /// in a fight nobody is staring at.
     #[test]
-    /// §395：**真实出牌路径**下，史莱姆老大也要在 50% 时分裂。
+    /// §402：**"这一回合"的状态真的会在回合结束时消失**（玩家报的"狂怒持续到下一回合"）。
     ///
-    /// 上面那条 `the_slime_boss_splits_into_two_large_slimes_at_half_health` 是**手搓**的
-    /// （`exec::resolve_damage` + `host.try_resolve_pending_queues`）。真实路径多一层：
-    /// `rd_env_step` → `step_play` → `run_fight` → `play::try_play_card` →
-    /// `host.resolve_pending_queues`。玩家是在**后者**里遇到"不分裂"的（存档回放：他死在 Boss
-    /// 手里，Boss 一次都没分裂），所以判据必须走后者 —— 否则"手搓能过、真打不能"永远测不出来。
+    /// 根因不是 `DurationTurns` 没写，而是**状态定义上的 `UsesDuration`** 是 false ——
+    /// 内核的时长衰减（`host::try_decrease_timed_statuses`）先问它，false 就整段跳过。
+    /// 内容里 150 条状态原来只有 1 条是 true，于是 `rage` / `lose_strength`（Flex）/
+    /// `no_draw` / `flame_barrier` / `double_tap` / `cap_cost_at` / `regain_strength`
+    /// 全都**永远不过期**。
+    ///
+    /// 判据两侧都写：① 这 7 条状态的定义 `UsesDuration` 必须是 true；
+    /// ② 打出一张 Rage，结束回合之后它必须**不在**身上了。
     #[test]
-    fn the_slime_boss_splits_when_damaged_through_the_play_path() {
-        // 一副只有打击的牌组：一次 6 点，够我们把血量一格一格推下去。
-        static DECK: [DeckEntry<'static>; 1] = [DeckEntry { card: "strike", count: 10 }];
-        let mut session = build_session_at(7, "enc_slime_boss", 80, Some(&DECK), 0, 0)
-            .expect("the slime boss builds");
-        let boss = rd_core::state::CombatantId::new("slime_boss").expect("id");
-        // 直接把它压到 50% 之上一点点（80/140），剩下的用**真牌**打过去。
-        {
-            let combatant = session.state.combatant_mut(&boss).expect("the boss");
-            combatant.health_current = 76;
+    fn one_turn_statuses_expire_when_the_turn_ends() {
+        static DECK: [DeckEntry<'static>; 2] = [
+            DeckEntry { card: "rage", count: 5 },
+            DeckEntry { card: "defend", count: 5 },
+        ];
+        let mut session = build_session_at(7, "enc_cultist", 80, Some(&DECK), 0, 0)
+            .expect("the fight builds");
+        // ① 定义上必须是"按时长"的（这就是这次漏掉的那一格）。
+        let image = rd_core::content::Content::parse(crate::IMAGE).expect("the image parses");
+        for status in [
+            "standard.rage",
+            "standard.lose_strength",
+            "standard.no_draw",
+            "standard.flame_barrier",
+            "standard.double_tap",
+            "standard.cap_cost_at",
+            "standard.regain_strength",
+        ] {
+            assert!(
+                rd_core::status_bind::uses_duration(&image, status).unwrap_or(false),
+                "{status} must be declared as timed (UsesDuration), or it never expires"
+            );
         }
-        session.reobserve_after_external_change();
 
-        let mut split = false;
-        for step in 0..80 {
-            if session.state.combatant(&boss).is_none() {
-                split = true;
+        // ② 真打一张 Rage，再结束回合。
+        // 手牌里找到 rage（起手抽到的那几张里一定有 —— 牌组只有 rage 与 defend）。
+        let hand_len = session.hand_len();
+        let mut played = false;
+        for index in 0..hand_len {
+            let id = session.hand_defs.get(index).map(|id| id.as_str()).unwrap_or("");
+            if id == "rage" {
+                let _ = session.step_play(index, -1);
+                played = true;
                 break;
             }
+        }
+        assert!(played, "the opening hand must contain a Rage");
+        let has_rage = |session: &Session| -> bool {
+            session
+                .state
+                .combatant(&rd_core::state::CombatantId::new("hero").expect("hero"))
+                .map(|hero| {
+                    hero.statuses()
+                        .iter()
+                        .any(|s| s.definition_id.as_str() == "standard.rage")
+                })
+                .unwrap_or(false)
+        };
+        assert!(has_rage(&session), "Rage must be on the hero right after playing it");
+        session.step_end_turn().expect("the turn ends");
+        assert!(
+            !has_rage(&session),
+            "Rage must be gone after the turn ends (it is a one-turn buff)"
+        );
+    }
+
+    /// §400：**真实出牌路径**下，史莱姆老大在 50% 之后**它的回合**才分裂。
+    ///
+    /// 旧语义（§395）是"掉血到 50% 立刻分裂"，那是 `standard.phase_split` 的 DamageTaken
+    /// 触发器。wiki 的说法是 *"its current Intent will be immediately changed to Split"* ——
+    /// 变的是意图，分裂由它在自己回合打出 `slime_boss.split` 完成。所以这条测试判两半：
+    /// ① 把血打到 50% 以下，场上**仍然**只有 Boss（没分裂）；
+    /// ② 让敌人回合跑起来（`step_end_turn`），它打出 Split 之后才变成两只 L。
+    #[test]
+    fn the_slime_boss_splits_on_its_turn_through_the_play_path() {
+        static DECK: [DeckEntry<'static>; 1] = [DeckEntry { card: "strike", count: 10 }];
+        let mut session = build_session_at(7, "enc_slime_boss", 200, Some(&DECK), 0, 0)
+            .expect("the slime boss builds");
+        let boss = rd_core::state::CombatantId::new("slime_boss").expect("id");
+        // 压到 50% 之上一点点，剩下的用**真牌**打过去。
+        session.state.combatant_mut(&boss).expect("the boss").health_current = 76;
+        session.reobserve_after_external_change();
+
+        // ① 打牌把它打到 50% 以下 —— **不该**分裂。
+        let mut hit = false;
+        for _ in 0..20 {
             let actions = session.actions.clone();
-            let Some(play) = actions.iter().find(|action| action.kind == ACTION_PLAY).copied() else {
-                // 没牌可出就过一轮。
+            let Some(play) = actions.iter().find(|a| a.kind == ACTION_PLAY).copied() else {
                 if session.step_end_turn().is_err() {
                     break;
                 }
                 continue;
             };
-            if session.step_play(play.arg0.max(0) as usize, play.arg1).is_err() {
+            let _ = session.step_play(play.arg0.max(0) as usize, play.arg1);
+            let hp = session
+                .state
+                .combatant(&boss)
+                .map(|c| c.health_current)
+                .unwrap_or(0);
+            if hp > 0 && hp * 100 <= 140 * 50 {
+                hit = true;
                 break;
             }
-            let _ = step;
+            if hp <= 0 {
+                break;
+            }
         }
-        assert!(
-            split,
-            "the boss must split once its HP crosses 50% — even through the real play path"
+        assert!(hit, "the deck must be able to push the boss below 50%");
+        let enemies_after_damage = session
+            .state
+            .combatants()
+            .iter()
+            .filter(|c| c.team_id.as_str() == "enemy"
+                && c.lifecycle_state == rd_core::state::CombatantLifecycleState::Alive)
+            .count();
+        assert_eq!(
+            enemies_after_damage, 1,
+            "damage alone must not split it (the split is an intent)"
         );
+
+        // ② 结束回合 → 它打出 Split。
+        session.step_end_turn().expect("the enemy turn runs");
         let mut acid = false;
         let mut spike = false;
         for combatant in session.state.combatants() {
+            if combatant.lifecycle_state != rd_core::state::CombatantLifecycleState::Alive {
+                continue;
+            }
             let raw = combatant.id.as_str();
             let definition = raw.split('#').next().unwrap_or(raw);
             if definition == "acid_slime_l" {
@@ -4007,8 +4089,8 @@ mod tests {
                 spike = true;
             }
         }
-        assert!(acid, "1 Acid Slime (L) must be on the field");
-        assert!(spike, "1 Spike Slime (L) must be on the field");
+        assert!(acid, "1 Acid Slime (L) must be on the field after its turn");
+        assert!(spike, "1 Spike Slime (L) must be on the field after its turn");
     }
 
     /// §385：三哨兵的相位是 **1+2**（中间的从 Beam 起手）。
@@ -4091,64 +4173,6 @@ mod tests {
     /// 外加一条"半血改打 slam"的规则把分裂挡掉了。
     ///
     /// 判据：把 Boss 打到 50% 以下 ⇒ 它**消失**，场上出现 `acid_slime_l` 与 `spike_slime_l`，
-    /// 两者的当前血量**都等于**分裂前那一刻 Boss 的血量。
-    #[test]
-    fn the_slime_boss_splits_into_two_large_slimes_at_half_health() {
-        let mut session = build_session_at(7, "enc_slime_boss", 80, None, 0, 0)
-            .expect("the slime boss builds");
-        let boss = rd_core::state::CombatantId::new("slime_boss").expect("id");
-        let max = session
-            .state
-            .combatant(&boss)
-            .expect("the boss is in the fight")
-            .health_max;
-        // 打到 50% 以下（`phase_split` 是 `DamageTaken` 触发器）。
-        let target = max / 2 - 1;
-        session
-            .state
-            .combatant_mut(&boss)
-            .expect("mutable boss")
-            .health_current = target;
-        // 触发一次伤害：走**真实**的伤害管线 + 宿主的触发器相位
-        // （`phase_split` 是 `DamageTaken` 触发器；`exec::drain` 只排效果队列，不跑状态触发器）。
-        let mut host = rd_core::host::Host::new(session.content);
-        {
-            let mut ctx = rd_core::exec::ExecContext::new(
-                &mut session.state,
-                Some(rd_core::state::CombatantId::new("hero").expect("hero")),
-                None,
-                None,
-                64,
-            )
-            .with_content(session.content);
-            rd_core::exec::resolve_damage(&mut ctx, &boss, 1, true).expect("the hit lands");
-        }
-        host.try_resolve_pending_queues(&mut session.state)
-            .expect("the split trigger runs");
-        let mut acid = None;
-        let mut spike = None;
-        for combatant in session.state.combatants() {
-            let raw = combatant.id.as_str();
-            let definition = raw.split('#').next().unwrap_or(raw);
-            if definition == "acid_slime_l" {
-                acid = Some(combatant.health_current);
-            }
-            if definition == "spike_slime_l" {
-                spike = Some(combatant.health_current);
-            }
-        }
-        let expected = target - 1; // 扣掉那 1 点伤害
-        assert_eq!(
-            acid,
-            Some(expected),
-            "1 Acid Slime (L) with the boss's current HP ({expected})"
-        );
-        assert_eq!(
-            spike,
-            Some(expected),
-            "1 Spike Slime (L) with the boss's current HP ({expected})"
-        );
-    }
 
     fn building_a_louse_fight_draws_its_bite_and_a_cultist_fight_does_not() {
         let louse = build_session_at(11, "enc_louse", 70, None, 0, 0).expect("the louse fight builds");

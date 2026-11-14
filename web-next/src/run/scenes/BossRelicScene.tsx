@@ -15,6 +15,7 @@
 import { Badge } from "../../assets/Badge.js";
 import { badgeLook } from "../../assets/registry.js";
 import { displayName } from "../../i18n/index.js";
+import { tipHandlers } from "../overlays/tipStore.js";
 
 export interface BossRelicSceneProps {
   /** 刚刚通关的幕数（1 起）。 */
@@ -45,6 +46,9 @@ export function BossRelicScene({ clearedAct, nextAct, relics, onTake, busy = fal
             data-boss-relic={slot}
             data-boss-relic-id={id}
             disabled={busy}
+            // §404：Boss 遗物也要有悬浮详情（玩家报的"boss 奖励界面遗物没有悬浮窗"）。
+            // 面板由外壳统一画（§389 的唯一宿主），这里只说"指的是哪一件"。
+            {...tipHandlers({ kind: "relic", id })}
             onClick={() => onTake(slot)}
           >
             <Badge look={badgeLook("relics", id)} size="md" title={id} />

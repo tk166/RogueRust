@@ -32,6 +32,7 @@
 import io
 import json
 import os
+import re
 import sys
 import urllib.request
 
@@ -104,6 +105,12 @@ STATUS_ZH = {
     'standard.energized': ('充能', '获得 N 点额外能量。'),
     'standard.draw_card_next_turn': ('下回合抽牌', '下回合多抽 N 张牌。'),
 }
+#: §403：归档里没有对应条目的药水 → `(中文名, 中文说明)`。
+#: ⚠️ 只作显示；效果一律由内容的 `Potions[].Effect` 原子驱动。
+POTION_ZH = {
+    'flex_potion': ('灵活药水', '获得 5 点力量。回合结束时失去 5 点力量。'),
+}
+
 API = 'https://spire-archive.com/api/sts1/%s?lang=%s&limit=500'
 TABLES = ('cards', 'relics', 'potions', 'monsters')
 
@@ -129,6 +136,43 @@ def fetch(table, lang):
 def normalise(id_text):
     """内容 id 与 API id 的桥：`attack_potion` ↔ `ATTACKPOTION`。"""
     return id_text.replace('_', '').upper()
+
+
+def upgraded_text(zh_item, en_item):
+    """`+` 行的中文说明：按**数字位置**把英文升级行的变化搬到中文基础行（§405）。
+
+    为什么需要它：归档只给中文的**基础**行，`+` 行只有英文（`upgrade.description`）。
+    直接沿用基础行 ⇒ 玩家看到的说明是错的（旋风斩写"5 点伤害"，实际打 8）。
+
+    做法（可判定，不猜）：
+    1. 取出中文基础行、英文基础行、英文升级行里的**数字序列**；
+    2. 三者长度相同才动手（否则对齐不成立 ⇒ 返回 `None`，退回基础行并**计数**）；
+    3. 逐个位置：英文基础与升级不同 ⇒ 把中文那一位替换成升级后的数。
+
+    ⚠️ 长度不同的一律不动（比如"复制一张"里的 1 在中文里没写出来）。这些条数会被
+    `upgradedWithBaseText` 统计出来，闸门盯着它不涨。
+    """
+    if en_item is None:
+        return None
+    en_up = (en_item.get('upgrade') or {}).get('description') or ''
+    if not en_up:
+        return None
+    zh_text = (zh_item.get('description') or '').strip()
+    zh_nums = [m for m in re.finditer(r'\d+', zh_text)]
+    en_base_nums = re.findall(r'\d+', en_item.get('description') or '')
+    en_up_nums = re.findall(r'\d+', en_up)
+    if not (len(zh_nums) == len(en_base_nums) == len(en_up_nums)):
+        return None
+    if en_base_nums == en_up_nums:
+        return None  # 升级不改数值：沿用基础行是对的
+    out = []
+    cursor = 0
+    for match, base_num, up_num in zip(zh_nums, en_base_nums, en_up_nums):
+        out.append(zh_text[cursor:match.start()])
+        out.append(up_num if base_num != up_num else match.group(0))
+        cursor = match.end()
+    out.append(zh_text[cursor:])
+    return ''.join(out)
 
 
 def write_module(path, header_lines, body_lines, tail_lines):
@@ -197,21 +241,42 @@ def main():
         if item is None:
             problems.append('card %s (NameKey=%r) 没有中文条目' % (card_id, name_key))
             continue
+        text = (item.get('description') or '').strip()
         if plus_count > 0:
-            upgraded_with_base_text += 1
+            # §405：`+` 行的文案**不能**直接沿用基础行 —— 升级改了数值时（旋风斩 5 → 8）
+            # 玩家看到的说明就是错的。归档给了英文的 `upgrade.description` 与结构化增量，
+            # 于是按**数字位置**对齐：英文基础行与升级行的数字序列长度相同 ⇒ 逐个位置替换
+            # 中文基础行里的对应数字。
+            patched = upgraded_text(item, tables['cards'][1].get(item['id']))
+            if patched is None:
+                upgraded_with_base_text += 1
+            else:
+                text = patched
         out['cards'][card_id] = {
             'name': item['name'] + ('+' * plus_count),
-            'text': (item.get('description') or '').strip(),
+            'text': text,
         }
 
     # ── 遗物 / 药水 / 怪物：按 id join ─────────────────────────────────────────
+    # §403：内容 id ↔ 归档 id 的**别名**（对不上的那三个）。
+    # 归档里没有 `flex_potion`（它只有 42 瓶，StS 的 Flex Potion 不在其中），所以那一瓶
+    # 走下面的 `POTION_ZH` 手写条目；另外两瓶只是**命名不同**（归档叫 `ELIXIRPOTION` /
+    # `FAIRYPOTION`）。
+    ALIASES = {
+        'elixir': 'ELIXIRPOTION',
+        'fairy_in_a_bottle': 'FAIRYPOTION',
+    }
+
     def fill(section, items, label):
         zh_by_id = tables[section][0]
         by_norm = {normalise(item_id): item for item_id, item in zh_by_id.items()}
         missing = 0
         for entity in items:
             entity_id = entity['Id']
-            item = zh_by_id.get(entity_id.upper()) or by_norm.get(normalise(entity_id))
+            alias = ALIASES.get(entity_id, '').upper()
+            item = (zh_by_id.get(entity_id.upper())
+                    or by_norm.get(normalise(entity_id))
+                    or (zh_by_id.get(alias) if alias else None))
             if item is None:
                 missing += 1
                 continue
@@ -224,6 +289,13 @@ def main():
     fill('relics', content['Relics'], '遗物')
     fill('potions', content['Potions'], '药水')
     fill('monsters', content['Monsters'], '怪物')
+
+    # §403：归档里**没有**的那几瓶，手写中文（只作显示名/说明；效果仍由内容的 `Effect` 驱动）。
+    for potion_id, (name, text) in POTION_ZH.items():
+        out['potions'].setdefault(potion_id, {'name': name, 'text': text})
+    missing_potions = [p['Id'] for p in content['Potions'] if p['Id'] not in out['potions']]
+    if missing_potions:
+        print('  ⚠️ 药水仍缺中文：', ', '.join(missing_potions))
 
     # ── 状态：三条来源，按顺序（§388）────────────────────────────────────────
     statuses = json.load(io.open(os.path.join(LEGACY, 'statuses.json'), encoding='utf-8'))

@@ -2315,9 +2315,9 @@ mod tests {
         ))
         .expect("the sts image");
         let content = parse(&blob);
-        // §387：Slime Boss 的"半血改招"规则**已经删掉**了 —— 它的相位是**分裂**
-        // （`standard.phase_split` 的 `DamageTaken` 触发器），不是"换一招"。
-        // 所以这里断言的是**新事实**：半血也不改招，招还是那条 `(round-1) % 3` 的循环。
+        // §400：半血**确实**改招 —— 改成 `slime_boss.split`（分裂是它的"相位"）。
+        // 这条测试守的正是"组合条件（`intent.allOf` + `intent.healthPercent`）能改变招式"：
+        // 满血走 `(round-1) % 3` 的循环，半血每一轮都是 Split。
         let boss_at = slot(&content, "enc_slime_boss", 0);
         let boss = cid(record_id(&content, boss_at));
         let mut state = arena(boss.as_str());
@@ -2337,15 +2337,25 @@ mod tests {
             .collect();
         assert_eq!(
             half_health_moves,
-            vec![
-                "slime_boss.goop_spray",
-                "slime_boss.preparing",
-                "slime_boss.slam",
-                "slime_boss.goop_spray",
-                "slime_boss.preparing",
-                "slime_boss.slam",
-            ],
-            "half health must NOT change the rotation (the split is a status trigger)"
+            vec!["slime_boss.split"; 6],
+            "at <= 50% HP every round is Split (the combinator rule wins over the cycle)"
+        );
+
+        // 反证：满血时那条规则**不**匹配 ⇒ 回到循环（goop → preparing → slam）。
+        state.combatant_mut(&boss).expect("the boss").health_current = 140;
+        let healthy_moves: Vec<String> = (1..=3)
+            .map(|round| {
+                select_action(&state, &content, boss_at, &boss, round)
+                    .expect("select")
+                    .expect("an action")
+                    .action_id
+                    .to_string()
+            })
+            .collect();
+        assert_eq!(
+            healthy_moves,
+            vec!["slime_boss.goop_spray", "slime_boss.preparing", "slime_boss.slam"],
+            "a healthy boss cycles"
         );
 
         // 组合条件（`intent.allOf`）的覆盖转到真正还在用它的怪身上：
@@ -2376,6 +2386,134 @@ mod tests {
     }
 
     // ---------------------------------------------------------------- B0
+
+    /// §400：史莱姆老大的分裂**发生在它的回合**，不是掉血那一刻。
+    ///
+    /// wiki.gg `Slime Boss`：*"Once its HP reaches 50% or lower, its current Intent will be
+    /// **immediately changed to Split**"* —— 变的是**意图**；分裂由它在自己的回合打出
+    /// `slime_boss.split` 完成。
+    ///
+    /// 旧实现是 `standard.phase_split` 的 `DamageTaken` 触发器（掉到 50% 立刻分裂），
+    /// 玩家看到"血条刚过一半就凭空变成两只"。这条测试把两半都钉住：
+    /// ① 掉到 50% 以下之后**还没**分裂；② 它的回合打出 Split 之后才分裂成两只 L。
+    #[test]
+    fn the_slime_boss_splits_on_its_own_turn_not_the_moment_it_is_hurt() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let at = slot(&content, "enc_slime_boss", 0);
+        let boss = cid(record_id(&content, at));
+        let mut state = arena(boss.as_str());
+        {
+            let combatant = state.combatant_mut(&boss).expect("the boss");
+            combatant.health_max = 140;
+            combatant.health_current = 76; // 50% 之上
+        }
+        // 打到 50% 以下（就地扣血：这条测试只关心"意图/分裂的时机"，伤害管线另有测试）。
+        state.combatant_mut(&boss).expect("boss").health_current = 66;
+
+        // ① 掉血之后**还没**分裂（旧实现会在这里分裂）。
+        let enemies_after_hit = state
+            .combatants()
+            .iter()
+            .filter(|c| c.team_id.as_str() == "enemy")
+            .count();
+        assert_eq!(
+            enemies_after_hit, 1,
+            "damage alone must NOT split it (the split is an intent, resolved on its turn)"
+        );
+        assert!(
+            state.combatant(&boss).is_some(),
+            "the boss is still there right after the hit"
+        );
+
+        // ② 它的回合：意图必须是 Split（`intent.healthPercent <= 50` 那条规则）。
+        state.current_round = 2;
+        let choice = select_action(&state, &content, at, &boss, 2)
+            .expect("select")
+            .expect("an action");
+        assert_eq!(
+            choice.action_id.to_string(),
+            "slime_boss.split",
+            "at <= 50% HP the intent must be Split"
+        );
+
+        // ③ 打出 Split：本体消失、两只 L 各带**当前**血量。
+        let hp_before = state.combatant(&boss).expect("boss").health_current;
+        // `createCombatant` / `destroyCombatant` 都是**立即生效**（不走效果队列，§178），
+        // 所以这里不需要 Host 排空。
+        execute_action(&mut state, &content, &boss, choice.action_row, None)
+            .expect("the split resolves");
+
+        let ids: Vec<&str> = state.combatants().iter().map(|c| c.id.as_str()).collect();
+        assert!(!ids.contains(&"slime_boss"), "the boss is gone: {ids:?}");
+        let mut acid = None;
+        let mut spike = None;
+        for combatant in state.combatants() {
+            let raw = combatant.id.as_str();
+            let definition = raw.split('#').next().unwrap_or(raw);
+            if definition == "acid_slime_l" {
+                acid = Some(combatant.health_current);
+            }
+            if definition == "spike_slime_l" {
+                spike = Some(combatant.health_current);
+            }
+        }
+        assert_eq!(acid, Some(hp_before), "Acid Slime (L) inherits the current HP");
+        assert_eq!(spike, Some(hp_before), "Spike Slime (L) inherits the current HP");
+    }
+
+    /// §400：分裂**只发生一次** —— 本体消失之后没有第二次（原来那条"三连击只分裂一次"的
+    /// 语义仍然成立，只是判据从"触发器只 fire 一次"变成"本体已经不在场"）。
+    #[test]
+    fn the_slime_boss_split_happens_once() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let at = slot(&content, "enc_slime_boss", 0);
+        let boss = cid(record_id(&content, at));
+        let mut state = arena(boss.as_str());
+        {
+            let combatant = state.combatant_mut(&boss).expect("the boss");
+            combatant.health_max = 140;
+            combatant.health_current = 60;
+        }
+        state.current_round = 2;
+        let choice = select_action(&state, &content, at, &boss, 2)
+            .expect("select")
+            .expect("an action");
+        execute_action(&mut state, &content, &boss, choice.action_row, None).expect("split");
+        let after_first = state
+            .combatants()
+            .iter()
+            .filter(|c| c.team_id.as_str() == "enemy")
+            .count();
+        assert_eq!(after_first, 2, "one split = exactly two enemies");
+
+        // ⚠️ 两条**不是**判据的东西，写在这里免得下次又踩：
+        // * 参考仍然会给死掉的敌人算意图（`§2.4 fork 3`：`EnemyIntentRules` 的 lambda 不检查
+        //   IsAlive）⇒ "再问一次得到 None" 不成立（实测返回 `slime_boss.slam`）；
+        // * `execute_action` 是**裸原语**，也不查 liveness ⇒ 手动重放它仍会再造两只。
+        // 真正保证"只分裂一次"的是**回合机**：本体 `lifecycle_state != Alive` 之后不会被轮到。
+        // 所以判据是"场上是两只、且本体不在"，而不是"再执行一次会报错"。
+        assert!(
+            state.combatant(&boss).map_or(true, |c| c.lifecycle_state != crate::state::CombatantLifecycleState::Alive),
+            "the boss is not alive after the split"
+        );
+        let after_second = state
+            .combatants()
+            .iter()
+            .filter(|c| c.team_id.as_str() == "enemy"
+                && c.lifecycle_state == crate::state::CombatantLifecycleState::Alive)
+            .count();
+        assert_eq!(after_second, after_first, "the split is a one-shot");
+    }
 
     #[test]
     fn b0_actor_not_in_this_encounter_has_no_action() {

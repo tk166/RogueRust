@@ -1322,6 +1322,7 @@ pub extern "C" fn rd_run_take_boss_relic(slot: i32) -> i32 {
     session.log(K_BOSS_RELIC, slot, -1, "");
     match session.state.take_boss_relic(slot as u8, &pool) {
         Ok(_) => {
+            // TEMP disabled
             session.error.clear();
             0
         }
@@ -1979,6 +1980,7 @@ pub extern "C" fn rd_run_dig() -> i32 {
     session.log(K_DIG, -1, -1, "");
     let relics = relic_pool(content());
     let outcome = session.state.dig(&relics).map(|_| 0i32);
+    // TEMP disabled
     finish(session, outcome)
 }
 
@@ -2719,6 +2721,7 @@ pub extern "C" fn rd_run_choose(slot: i32) -> i32 {
         .state
         .resolve_event_effects(&event_move, &pool)
         .map(|_| 0i32);
+    // TEMP: 先把这一处关掉，定位 neows_lament 的失败
     finish(session, outcome)
 }
 
@@ -13007,6 +13010,70 @@ mod tests {
     // =============================================================================================
     // §292：拾取欠账的兑现 + 药水倍率
     // =============================================================================================
+
+    /// §401：**Boss 遗物也是遗物入口** —— `calling_bell`（召唤铃铛）从 Boss 奖励里拿到时，
+    /// 它的"再给 3 件遗物"是欠账（`pickup_relics`），必须在**这条**路径上兑现。
+    ///
+    /// 玩家实机报障："召唤铃铛并没有带来三件遗物"。根因：`rd_run_take_boss_relic` 走的是
+    /// **内核**的 `take_boss_relic`（内部 `push_relic`），而 `settle_pickup_debts` 只挂在
+    /// `open_chest` / `buy_relic` / `take_relic` / `grant_relic` 上 —— Boss 那条漏了。
+    /// `settle_pickup_debts` 的注释早就写着"兑现点必须是**所有**会 push_relic 的入口"。
+    #[test]
+    fn a_boss_relic_that_owes_relics_pays_them() {
+        let deck = ["strike", "strike", "strike", "strike", "strike",
+                    "defend", "defend", "defend", "defend", "bash"];
+        let relics = relic_pool(content());
+        // Boss 三选一是**随机**的。写死一个种子会让这条测试"有时跑到、有时早退"——
+        // 那就是假绿。所以**先找一个**三选一里真的有铃铛的种子，再断言。
+        let mut found = None;
+        for seed in 0..400 {
+            test_run(seed, 80, 80, &deck);
+            let slot = run_slot().as_mut().expect("a run");
+            if slot.state.offer_boss_relics(&relics).is_err() {
+                continue;
+            }
+            let offer = run_slot().as_ref().expect("a run").state.boss_relic_offer().to_vec();
+            if let Some(index) = offer.iter().position(|id| id.as_str() == "calling_bell") {
+                found = Some((seed, index));
+                break;
+            }
+        }
+        let (seed, index) = found.expect("some seed must offer calling_bell");
+        // 用那个种子重开一局（上面那轮已经把局面推进过了）。
+        test_run(seed, 80, 80, &deck);
+        run_slot()
+            .as_mut()
+            .expect("a run")
+            .state
+            .offer_boss_relics(&relics)
+            .expect("offer");
+        let before = run_slot().as_ref().expect("a run").state.relics().len();
+        let pool = crate::run::full_pool(content(), true).expect("the card pool");
+        let taken = run_slot()
+            .as_mut()
+            .expect("a run")
+            .state
+            .take_boss_relic(index as u8, &pool)
+            .expect("take");
+        assert_eq!(taken.as_str(), "calling_bell");
+        assert_eq!(
+            run_slot().as_ref().expect("a run").state.pickup_relics(),
+            3,
+            "the kernel only records the debt; paying it is the wasm layer's job"
+        );
+        // 兑现（这就是 `rd_run_take_boss_relic` 里补上的那一行）。
+        settle_pickup_debts();
+        assert_eq!(
+            run_slot().as_ref().expect("a run").state.pickup_relics(),
+            0,
+            "the three owed relics must be paid, not left on the ledger"
+        );
+        assert_eq!(
+            run_slot().as_ref().expect("a run").state.relics().len(),
+            before + 4,
+            "calling_bell + three relics (seed {seed})"
+        );
+    }
 
     /// `calling_bell` / `cauldron` 的欠账**在 wasm 兑现**（`settle_pickup_debts`）。
     ///

@@ -737,7 +737,7 @@
       "DescriptionKey": "Whenever you play an Attack, gain Block equal to its stacks.",
       "Polarity": "Buff",
       "UsesStacks": true,
-      "UsesDuration": false,
+      "UsesDuration": true,
       "UsesCharges": false,
       "StackingBehavior": "MergeWithExistingInstance",
       "Tags": [
@@ -804,7 +804,7 @@
       "DescriptionKey": "Whenever you are attacked, deal damage back equal to its stacks.",
       "Polarity": "Buff",
       "UsesStacks": true,
-      "UsesDuration": false,
+      "UsesDuration": true,
       "UsesCharges": false,
       "StackingBehavior": "MergeWithExistingInstance",
       "Tags": [
@@ -1003,148 +1003,6 @@
                     }
                   }
                 ]
-              }
-            },
-            "MaxNodeDepth": 64,
-            "MaxProgramSteps": 1024
-          }
-        }
-      ]
-    },
-    {
-      "Id": "standard.phase_split",
-      "PackageId": "sts",
-      "NameKey": "Split (phase)",
-      "DescriptionKey": "At 50% HP or less, splits into 1 Acid Slime (L) and 1 Spike Slime (L), each with its current HP. Fires once.",
-      "Polarity": "Buff",
-      "UsesStacks": true,
-      "UsesDuration": false,
-      "UsesCharges": false,
-      "StackingBehavior": "MergeWithExistingInstance",
-      "Tags": [
-        "buff",
-        "phase"
-      ],
-      "PassiveModifiers": [],
-      "Triggers": [
-        {
-          "Event": "DamageTaken",
-          "Program": {
-            "Id": {
-              "Value": "(unnamed)"
-            },
-            "Root": {
-              "kind": "node.conditional",
-              "value": {
-                "Condition": {
-                  "kind": "compare",
-                  "value": {
-                    "Op": "LessOrEqual",
-                    "Left": {
-                      "kind": "multiply",
-                      "value": {
-                        "Left": {
-                          "kind": "currentHealth",
-                          "value": {
-                            "Selector": {
-                              "kind": "sel.source",
-                              "value": {
-                                "Cardinality": "ZeroOrOne",
-                                "RequiredContextCapabilities": "Source"
-                              }
-                            }
-                          }
-                        },
-                        "Right": {
-                          "kind": "const",
-                          "value": {
-                            "Value": 100
-                          }
-                        }
-                      }
-                    },
-                    "Right": {
-                      "kind": "multiply",
-                      "value": {
-                        "Left": {
-                          "kind": "maxHealth",
-                          "value": {
-                            "Selector": {
-                              "kind": "sel.source",
-                              "value": {
-                                "Cardinality": "ZeroOrOne",
-                                "RequiredContextCapabilities": "Source"
-                              }
-                            }
-                          }
-                        },
-                        "Right": {
-                          "kind": "const",
-                          "value": {
-                            "Value": 50
-                          }
-                        }
-                      }
-                    }
-                  }
-                },
-                "Then": {
-                  "kind": "node.sequence",
-                  "value": {
-                    "Children": [
-                      {
-                        "kind": "node.createCombatant",
-                        "value": {
-                          "DefinitionId": "acid_slime_l",
-                          "TeamId": "enemy",
-                          "Health": {
-                            "kind": "currentHealth",
-                            "value": {
-                              "Selector": {
-                                "kind": "sel.sourceIncludingDowned",
-                                "value": {
-                                  "Cardinality": "ZeroOrOne",
-                                  "RequiredContextCapabilities": "Source"
-                                }
-                              }
-                            }
-                          }
-                        }
-                      },
-                      {
-                        "kind": "node.createCombatant",
-                        "value": {
-                          "DefinitionId": "spike_slime_l",
-                          "TeamId": "enemy",
-                          "Health": {
-                            "kind": "currentHealth",
-                            "value": {
-                              "Selector": {
-                                "kind": "sel.sourceIncludingDowned",
-                                "value": {
-                                  "Cardinality": "ZeroOrOne",
-                                  "RequiredContextCapabilities": "Source"
-                                }
-                              }
-                            }
-                          }
-                        }
-                      },
-                      {
-                        "kind": "node.destroyCombatant",
-                        "value": {
-                          "TargetSelector": {
-                            "kind": "sel.sourceIncludingDowned",
-                            "value": {
-                              "Cardinality": "ZeroOrOne",
-                              "RequiredContextCapabilities": "Source"
-                            }
-                          }
-                        }
-                      }
-                    ]
-                  }
-                }
               }
             },
             "MaxNodeDepth": 64,
@@ -1524,7 +1382,7 @@
       "DescriptionKey": "At the end of the turn, lose Strength equal to this status's stacks, then remove it.",
       "Polarity": "Debuff",
       "UsesStacks": true,
-      "UsesDuration": false,
+      "UsesDuration": true,
       "UsesCharges": false,
       "StackingBehavior": "MergeWithExistingInstance",
       "Tags": [
@@ -1768,7 +1626,7 @@
       "DescriptionKey": "At the end of the turn, regain Strength equal to this status's stacks, then remove it.",
       "Polarity": "Buff",
       "UsesStacks": true,
-      "UsesDuration": false,
+      "UsesDuration": true,
       "UsesCharges": false,
       "StackingBehavior": "MergeWithExistingInstance",
       "Tags": [
@@ -2792,7 +2650,7 @@
       "DescriptionKey": "You cannot draw additional cards this turn.",
       "Polarity": "Debuff",
       "UsesStacks": true,
-      "UsesDuration": false,
+      "UsesDuration": true,
       "UsesCharges": false,
       "StackingBehavior": "MergeWithExistingInstance",
       "Tags": [
@@ -3363,7 +3221,7 @@
       "DescriptionKey": "Your next Attack this turn is played twice.",
       "Polarity": "Buff",
       "UsesStacks": true,
-      "UsesDuration": false,
+      "UsesDuration": true,
       "UsesCharges": true,
       "StackingBehavior": "MergeWithExistingInstance",
       "Tags": [
@@ -3486,7 +3344,7 @@
       "DescriptionKey": "Cards cost at most N (N = stacks).",
       "Polarity": "Buff",
       "UsesStacks": true,
-      "UsesDuration": false,
+      "UsesDuration": true,
       "UsesCharges": false,
       "StackingBehavior": "MergeWithExistingInstance",
       "Tags": [
@@ -10816,7 +10674,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "ExhaustPile",
       "Rarity": "Status"
     },
@@ -11099,7 +10957,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Common"
     },
@@ -11180,7 +11038,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Common"
     },
@@ -11263,7 +11121,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Common"
     },
@@ -11345,7 +11203,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Common"
     },
@@ -11452,7 +11310,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Uncommon"
     },
@@ -11495,7 +11353,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Curse"
     },
@@ -12022,7 +11880,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Common"
     },
@@ -12105,7 +11963,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Common"
     },
@@ -12186,7 +12044,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Common"
     },
@@ -12269,7 +12127,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Common"
     },
@@ -12376,7 +12234,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Uncommon"
     },
@@ -12632,7 +12490,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "ExhaustPile",
       "Rarity": "Special"
     },
@@ -13063,7 +12921,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Status"
     },
@@ -13135,7 +12993,7 @@
         }
       },
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Status"
     },
@@ -13186,7 +13044,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "ExhaustPile",
       "Rarity": "Uncommon"
     },
@@ -13239,7 +13097,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Uncommon"
     },
@@ -13313,7 +13171,7 @@
                       "Value": 9
                     }
                   },
-                  "DurationTurns": 0,
+                  "DurationTurns": 1,
                   "Charges": 0,
                   "ResultKey": null
                 }
@@ -13324,7 +13182,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "ExhaustPile",
       "Rarity": "Uncommon"
     },
@@ -13485,7 +13343,7 @@
         }
       },
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Status"
     },
@@ -13614,7 +13472,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Rare"
     },
@@ -13698,7 +13556,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Uncommon"
     },
@@ -13753,7 +13611,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Rare"
     },
@@ -13837,7 +13695,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Uncommon"
     },
@@ -13923,7 +13781,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Rare"
     },
@@ -14009,7 +13867,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Rare"
     },
@@ -14061,7 +13919,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "DiscardPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
     },
@@ -14113,7 +13971,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "DiscardPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
     },
@@ -14194,7 +14052,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "DiscardPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
     },
@@ -14275,7 +14133,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "DiscardPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
     },
@@ -14357,7 +14215,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "DiscardPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
     },
@@ -14439,7 +14297,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "DiscardPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
     },
@@ -14522,7 +14380,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "DiscardPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
     },
@@ -14605,7 +14463,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "DiscardPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
     },
@@ -14657,7 +14515,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "DiscardPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
     },
@@ -14709,7 +14567,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "DiscardPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
     },
@@ -14765,7 +14623,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "ExhaustPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
     },
@@ -14821,7 +14679,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "ExhaustPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
     },
@@ -14884,7 +14742,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "ExhaustPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
     },
@@ -14947,7 +14805,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "ExhaustPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
     },
@@ -15032,7 +14890,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "DiscardPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
     },
@@ -15117,7 +14975,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "DiscardPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
     },
@@ -15304,7 +15162,7 @@
                       "Value": 1
                     }
                   },
-                  "DurationTurns": 0,
+                  "DurationTurns": 1,
                   "Charges": 0,
                   "ResultKey": null
                 }
@@ -15316,7 +15174,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "DiscardPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
     },
@@ -15385,7 +15243,7 @@
                       "Value": 1
                     }
                   },
-                  "DurationTurns": 0,
+                  "DurationTurns": 1,
                   "Charges": 0,
                   "ResultKey": null
                 }
@@ -15397,7 +15255,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "DiscardPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
     },
@@ -15437,7 +15295,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "DiscardPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {
         "TurnEndInHand": {
@@ -15512,7 +15370,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "DiscardPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
     },
@@ -15638,7 +15496,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "ExhaustPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
     },
@@ -15764,7 +15622,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "ExhaustPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
     },
@@ -15873,7 +15731,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "ExhaustPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
     },
@@ -15982,7 +15840,7 @@
         "MaxProgramSteps": 1024
       },
       "PlayedCardDestinationZone": "ExhaustPile",
-      "TurnEndHandDestinationZone": "Hand",
+      "TurnEndHandDestinationZone": "DiscardPile",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
     },
@@ -17525,7 +17383,7 @@
                       "Value": 2
                     }
                   },
-                  "DurationTurns": 0,
+                  "DurationTurns": 1,
                   "Charges": 0,
                   "ResultKey": null
                 }
@@ -17612,7 +17470,7 @@
                       "Value": 4
                     }
                   },
-                  "DurationTurns": 0,
+                  "DurationTurns": 1,
                   "Charges": 0,
                   "ResultKey": null
                 }
@@ -19467,7 +19325,7 @@
                       "Value": 4
                     }
                   },
-                  "DurationTurns": 0,
+                  "DurationTurns": 1,
                   "Charges": 0,
                   "ResultKey": null
                 }
@@ -19555,7 +19413,7 @@
                       "Value": 6
                     }
                   },
-                  "DurationTurns": 0,
+                  "DurationTurns": 1,
                   "Charges": 0,
                   "ResultKey": null
                 }
@@ -19614,7 +19472,7 @@
                 "Value": 3
               }
             },
-            "DurationTurns": 0,
+            "DurationTurns": 1,
             "Charges": 0,
             "ResultKey": null
           }
@@ -19669,7 +19527,7 @@
                 "Value": 5
               }
             },
-            "DurationTurns": 0,
+            "DurationTurns": 1,
             "Charges": 0,
             "ResultKey": null
           }
@@ -22289,7 +22147,7 @@
                 "Value": 1
               }
             },
-            "DurationTurns": 0,
+            "DurationTurns": 1,
             "Charges": 0,
             "ResultKey": null
           }
@@ -22344,7 +22202,7 @@
                 "Value": 2
               }
             },
-            "DurationTurns": 0,
+            "DurationTurns": 1,
             "Charges": 0,
             "ResultKey": null
           }
@@ -26344,7 +26202,7 @@
                 "Value": 1
               }
             },
-            "DurationTurns": 0,
+            "DurationTurns": 1,
             "Charges": 0,
             "ResultKey": null
           }
@@ -26402,7 +26260,7 @@
                 "Value": 1
               }
             },
-            "DurationTurns": 0,
+            "DurationTurns": 1,
             "Charges": 0,
             "ResultKey": null
           }
@@ -57687,6 +57545,80 @@
           }
         }
       ]
+    },
+    {
+      "Id": "slime_boss.split",
+      "PackageId": "sts",
+      "NameKey": "Split",
+      "DescriptionKey": "Split — disappears and spawns 1 Acid Slime (L) and 1 Spike Slime (L) with its current HP",
+      "Intent": {
+        "Kind": "Special",
+        "Label": "Split"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.createCombatant",
+                "value": {
+                  "DefinitionId": "acid_slime_l",
+                  "TeamId": "enemy",
+                  "Health": {
+                    "kind": "currentHealth",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.sourceIncludingDowned",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "node.createCombatant",
+                "value": {
+                  "DefinitionId": "spike_slime_l",
+                  "TeamId": "enemy",
+                  "Health": {
+                    "kind": "currentHealth",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.sourceIncludingDowned",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "node.destroyCombatant",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.sourceIncludingDowned",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
     }
   ],
   "Encounters": [
@@ -58026,16 +57958,30 @@
               "value": "slime_boss.slam"
             }
           ],
-          "StartingStatuses": [
+          "StartingStatuses": [],
+          "Position": null,
+          "IntentRules": [
             {
-              "StatusDefinitionId": {
-                "value": "standard.phase_split"
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.healthPercent",
+                      "value": {
+                        "Op": "LessOrEqual",
+                        "Percent": 50
+                      }
+                    }
+                  ]
+                }
               },
-              "Stacks": 1
+              "Action": {
+                "value": "slime_boss.split"
+              },
+              "Priority": 90
             }
           ],
-          "Position": null,
-          "IntentRules": [],
           "DisplayName": "Slime Boss",
           "Rolls": [],
           "Counters": [],
@@ -72997,15 +72943,29 @@
           "value": "slime_boss.slam"
         }
       ],
-      "StartingStatuses": [
+      "StartingStatuses": [],
+      "IntentRules": [
         {
-          "StatusDefinitionId": {
-            "value": "standard.phase_split"
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.healthPercent",
+                  "value": {
+                    "Op": "LessOrEqual",
+                    "Percent": 50
+                  }
+                }
+              ]
+            }
           },
-          "Stacks": 1
+          "Action": {
+            "value": "slime_boss.split"
+          },
+          "Priority": 90
         }
       ],
-      "IntentRules": [],
       "Tier": "Boss",
       "InvRef": "inv:§4.3",
       "AiNote": " ⚠️ 相位写明：半血**且**从第 2 轮起才换招（`intent.allOf` + `healthPercent` + `round`，port-plan.md §124）。",
