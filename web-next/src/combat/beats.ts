@@ -15,6 +15,18 @@
 // 动画最容易写成一团 `setTimeout` + 全局状态，然后"关掉动画"就变成另一条代码路径。
 // 这里把"什么时候播到第几条"做成 `(state, dtMs) -> state` 的纯函数：闸门 37 不需要浏览器
 // 就能把 skip / 快进 / 降级 / 上限全部测掉。
+//
+// ## §399：因果信息不再丢
+//
+// 内核的 Beat 带 `def`（卡/状态**定义 id**）、`actor`、`target`、`flags`、`a/b/c`。
+// 第一版只留下了 `{kind, at, text, tone, duration}`，于是"Strike 的斩击"与"Bash 的重击"
+// 在数据上一模一样（审阅 §6）。现在 `BeatEffect` 原样带 `def` / `actor` / `target` / `flags`，
+// 外加 `presentation/cues.ts` 翻出来的 `origin` / `effectKey` / `phase` / 冻结锚点。
+//
+// 文案仍是 `describe()` 的中文；`effectKey` 只决定**视觉配方**（颜色/形状/时长/震屏）。
+
+import { translateAll, type CueContext, type PresentationCue } from "../presentation/cues.js";
+import { recipeFor } from "../presentation/registry.js";
 
 /** 演出基调（决定颜色与动画方向）。 */
 export type BeatTone =
@@ -39,6 +51,26 @@ export interface BeatEffect {
   readonly tone: BeatTone;
   /** 播多久（毫秒）。`0` = 立即结束（只留一行日志式提示）。 */
   readonly duration: number;
+  /**
+   * §399：内核给的**定义 id**（`strike` / `standard.poison` / 空串）。
+   *
+   * ⚠️ 以前这里没有它 —— 于是"哪张卡打的""哪个状态变的"在演出层不可知。
+   */
+  readonly def: string;
+  /** §399：来源（卡 / 状态 / 敌人招式 / 系统）。无法证明时是 `system`，**不猜**。 */
+  readonly origin: PresentationCue["origin"];
+  /** §399：稳定 key（`damage.dot` / `card.strike`），`presentation/registry.ts` 用它查配方。 */
+  readonly effectKey: string;
+  /** §399：演出阶段（`cast` / `hit` / `resolve`）。将来给 3D 分轨用。 */
+  readonly phase: PresentationCue["phase"];
+  /**
+   * §399：**冻结的锚点**（Cue 创建那一刻的槽位与外观 id）。
+   *
+   * 播放时若该槽位的外观已经变了（Boss 分裂 / 召唤 / 死亡后槽位重用），就退回这里，
+   * 而不是把旧事件的飘字画在**新**对象头顶（审阅 §6 的陷阱 1）。
+   */
+  readonly anchorSlot: number;
+  readonly appearanceId: string;
 }
 
 export interface DirectorOptions {
@@ -129,6 +161,8 @@ export function planBeats(
   }[],
   dropped: number,
   options: DirectorOptions,
+  /** §399：槽位 → 当前外观 id（冻结锚点用）。缺省时退化成"没有身份"。 */
+  context: CueContext = { appearanceOf: () => "" },
   startId = 0
 ): { effects: BeatEffect[]; unknownKinds: number[]; dropped: number } {
   const effects: BeatEffect[] = [];
@@ -136,29 +170,48 @@ export function planBeats(
   const cap = Math.min(options.maxDuration ?? MAX_DURATION, MAX_DURATION);
   let id = startId;
 
-  for (const beat of beats) {
+  // §399：先翻成语义 Cue（`def`/`actor`/`flags` 都在里面），再查视觉配方。
+  // ⚠️ `appearanceOf` 只有 `planBeats` 的调用方能给（它知道槽位当前是谁）。
+  const cues = translateAll(beats, context, id);
+
+  for (let index = 0; index < beats.length; index += 1) {
+    const beat = beats[index];
+    const cue = cues[index];
     const shape = describe(beat.kind, beat.a, beat.b, beat.def, beat.flags);
+    const { recipe } = recipeFor(cue.effectKey);
     if (shape === null) {
       unknownKinds.push(beat.kind);
       effects.push({
         id: id++,
         kind: beat.kind,
-        at: beat.target,
+        at: cue.anchorSlot,
         text: `?${beat.kind}`,
         tone: "neutral",
         duration: 360,
+        def: beat.def,
+        origin: cue.origin,
+        effectKey: cue.effectKey,
+        phase: cue.phase,
+        anchorSlot: cue.anchorSlot,
+        appearanceId: cue.appearanceId,
       });
       continue;
     }
-    // 谁"动"：伤害/治疗/格挡飘在被作用的人头上（`target`），出牌/回合飘在行动者身上（`actor`）。
-    const anchoredOnActor = beat.kind === 9 || beat.kind === 10 || beat.kind === 11;
     effects.push({
       id: id++,
       kind: beat.kind,
-      at: anchoredOnActor ? beat.actor : beat.target,
+      // 锚点由 Cue 决定（出牌/回合挂行动者，其余挂被作用的人）—— 与 `planBeats` 原来的规则一致。
+      at: cue.anchorSlot,
       text: shape.text,
       tone: shape.tone,
-      duration: Math.min(shape.duration, cap),
+      // 配方给时长，`describe` 也有一份：**取小的那个**（两者都是"至少播多久"的估计）。
+      duration: Math.min(recipe.duration, shape.duration, cap),
+      def: beat.def,
+      origin: cue.origin,
+      effectKey: cue.effectKey,
+      phase: cue.phase,
+      anchorSlot: cue.anchorSlot,
+      appearanceId: cue.appearanceId,
     });
   }
 

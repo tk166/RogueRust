@@ -464,6 +464,51 @@ body,
 .beat-float.is-down { color: #ff5f56; font-size: 24px; letter-spacing: 0.08em; }
 .beat-float.is-card { color: #e8f0ff; font-size: 16px; opacity: 0.92; }
 .beat-float.is-turn { color: #9fb3c8; font-size: 15px; letter-spacing: 0.14em; }
+
+/* ── §399：表现配方（形状 / 震屏）────────────────────────────────────────────
+ *
+ * 颜色由 `presentation/registry.ts` 的配方**内联**给（`style.color`）—— 这样"同一份配方"
+ * 同时服务 DOM 与将来的 3D 材质，不需要两处调色。这里只补**形状**与**震屏**这类 CSS 才有的东西。
+ */
+.beat-float.is-shape-spark { animation: beat-spark 420ms ease-out forwards; }
+.beat-float.is-shape-shield { animation: beat-rise 380ms ease-out forwards; letter-spacing: 0.02em; }
+.beat-float.is-shape-cross { animation: beat-rise 420ms ease-out forwards; }
+.beat-float.is-shape-burst { animation: beat-burst 640ms ease-out forwards; }
+.beat-float.is-shape-banner { animation: beat-banner 380ms ease-out forwards; }
+
+@keyframes beat-spark {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
+  30% { opacity: 1; transform: translate(-46%, -62%) scale(1.15); }
+  to { opacity: 0; transform: translate(-40%, -80%) scale(1); }
+}
+
+@keyframes beat-burst {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+  25% { opacity: 1; transform: translate(-50%, -50%) scale(1.35); }
+  to { opacity: 0; transform: translate(-50%, -50%) scale(1.1); }
+}
+
+@keyframes beat-banner {
+  from { opacity: 0; transform: translate(-50%, -50%) scaleX(0.8); }
+  40% { opacity: 1; transform: translate(-50%, -50%) scaleX(1); }
+  to { opacity: 0; transform: translate(-50%, -50%) scaleX(1); }
+}
+
+/*
+ * 震屏：只有"重击/倒下"这类配方会给 `shake`（持续伤害**不给** —— 它没有"被打"的动作，
+ * 震屏会让玩家以为是敌人出手了）。幅度很小：这是反馈，不是眩晕源。
+ */
+.beat-layer.is-shake { animation: beat-shake 220ms ease-in-out; }
+
+@keyframes beat-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-3px); }
+  75% { transform: translateX(3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .beat-layer.is-shake { animation: none; }
+}
 .beat-float.is-summon { color: #a3f0ff; font-size: 18px; }
 .beat-float.is-neutral { color: #c8d2dc; font-size: 16px; }
 

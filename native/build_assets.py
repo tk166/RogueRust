@@ -23,6 +23,7 @@
     python native/build_assets.py --check    # 只校验清单是否与内容一致（闸门 45 用）
 """
 
+import hashlib
 import io
 import json
 import os
@@ -128,6 +129,25 @@ def stable_hash(text):
     return value
 
 
+#: §398：闸门 45 用 Node 重算这个文件的 sha256 并与清单里的 `GENERATOR_SHA` 比对。
+def generator_sha():
+    """这个 .py 文件自己的 sha256（"生成器变了却没重跑"的直接判据）。"""
+    with open(os.path.abspath(__file__), 'rb') as handle:
+        return hashlib.sha256(handle.read()).hexdigest()
+
+
+#: §398：哈希对拍表 —— 覆盖 ASCII / 多字节 / 空串 / 下划线。
+#: 闸门 45 拿它逐条验证 `registry.ts` 的 JS 实现（`Math.imul` + UTF-8）与这里逐字节一致。
+HASH_FIXTURES = [
+    {'text': '', 'hash': 2166136261},
+    {'text': 'strike', 'hash': 632598351},
+    {'text': 'not_a_real_enemy', 'hash': 2453344752},
+    {'text': 'new_monster_id', 'hash': 2615040844},
+    {'text': '中文', 'hash': 3297308741},
+    {'text': 'standard.vulnerable|p', 'hash': stable_hash('standard.vulnerable|p')},
+]
+
+
 def letters_for(asset_id):
     """内容 id → **两位大写字母**。
 
@@ -160,19 +180,39 @@ def enemy_asset(monster_id, tier):
         # 没有覆盖：按稳定哈希挑原型/调色板。**没有洞** —— 新怪物自动有素材。
         archetype = ARCHETYPES[stable_hash(monster_id) % len(ARCHETYPES)]
         palette = stable_hash(monster_id + '|p') % len(PALETTES)
-    boss = ('boss' in monster_id) or (tier or '').lower() in ('boss',) or monster_id in (
-        'the_guardian', 'hexaghost', 'slime_boss', 'gremlin_nob', 'the_champ',
+    # §398：**玩法身份**（boss/elite/normal）与**视觉体型**（scale）分开。
+    #
+    # ⚠️ `gremlin_nob` 以前在这张 boss 名单里 —— 它是**精英**，于是拿了 Boss 的
+    # `scale=1.55` 与光环（审阅 §5）。这类"按名字猜身份"的名单天生会漂，所以：
+    #   * `boss` 只由"id 里真有 boss"或内容的 tier 决定；
+    #   * 精英单独一档（放大一点，但**不**加光环）；
+    #   * 想给某只怪特殊体型，写进 ENEMY_OVERRIDES，不要改身份。
+    is_boss = ('boss' in monster_id) or (tier or '').lower() in ('boss',) or monster_id in (
+        'the_guardian', 'hexaghost', 'the_champ',
         'bronze_automaton', 'awakened_one', 'time_eater', 'donu', 'deca', 'the_snecko',
     )
-    # 体型：Boss 更大；slime 系小一号（它们是"小怪"）。
+    is_elite = (tier or '').lower() in ('elite',) or monster_id in (
+        'gremlin_nob', 'lagavulin', 'sentry_1', 'sentry_2', 'sentry_3',
+        'book_of_stabbing', 'slavers', 'nemesis', 'reptomancer',
+    )
+    tier_name = 'boss' if is_boss else ('elite' if is_elite else 'normal')
+    # 体型：Boss 最大、精英次之；slime 系小一号（它们是"小怪"）。
     scale = 1.0
-    if boss:
+    if is_boss:
         scale = 1.55
+    elif is_elite:
+        scale = 1.3
     elif monster_id.endswith('_s') or monster_id.endswith('_small'):
         scale = 0.78
     elif monster_id.endswith('_l'):
         scale = 1.2
-    return {'archetype': archetype, 'palette': palette, 'scale': round(scale, 2), 'boss': boss}
+    return {
+        'archetype': archetype,
+        'palette': palette,
+        'scale': round(scale, 2),
+        'boss': is_boss,
+        'tier': tier_name,
+    }
 
 
 def badge_asset(kind, asset_id):
@@ -213,11 +253,23 @@ def render(enemies, badges):
         '// 三维敌人：16 种「立体几何排列组合」原型（原型本体是 `geometry.ts` 里的纯数据）。',
         '// 二维元素：两位大写字母 + 调色板（`letters_for` 的规则见生成器文件头）。',
         '',
+        '// §398：生成器**自己的** sha256（这个 .py 文件的）—— 闸门 45 用 Node 重算并与它比对。',
+        '// 改了生成器（palette/scale/boss 规则…）却没重跑 ⇒ 指纹对不上 ⇒ 闸门红。',
+        '// 这条是审阅 §4 指出的盲点：验收链的 PATH 是剥空的，跑不了 python，但**能**算 sha256。',
+        'export const GENERATOR_SHA = ' + json.dumps(generator_sha(), ensure_ascii=False) + ';',
+        '',
+        '// §398：哈希对拍表（Python 侧算好的真值）。闸门 45 用它逐条验证 `registry.ts` 的 JS 实现',
+        '// 与生成器**逐字节**一致 —— 否则"清单里有的 id"与"降级时的 id"会落到不同原型/调色板。',
+        'export const HASH_FIXTURES: readonly { text: string; hash: number }[] = '
+        + json.dumps(HASH_FIXTURES, ensure_ascii=False, indent=1) + ';',
+        '',
         'export interface EnemyAsset {',
         '  readonly archetype: string;',
         '  readonly palette: number;',
         '  readonly scale: number;',
         '  readonly boss: boolean;',
+        '  /** §398：玩法身份（`boss` / `elite` / `normal`）。`boss` 只留给真 Boss，精英不再冒充。 */',
+        '  readonly tier: "boss" | "elite" | "normal";',
         '}',
         '',
         'export interface BadgeAsset {',

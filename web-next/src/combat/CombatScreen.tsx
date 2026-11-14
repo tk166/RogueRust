@@ -182,6 +182,9 @@ export function CombatScreen(props: CombatScreenProps) {
   const [choiceRefusal, setChoiceRefusal] = useState<string | null>(null);
   /** wasm 侧的视图；Mock 侧由 `scene` 派生。 */
   const [wasmView, setWasmView] = useState<CombatView | null>(null);
+  /** §399：最新视图的 ref —— 演出 effect 的闭包要读"槽位当前是谁"，不能依赖 state 时序。 */
+  const wasmViewRef = useRef<CombatView | null>(null);
+  wasmViewRef.current = wasmView;
   const [modalOpen, setModalOpen] = useState(false);
   /**
    * 关掉动画的两个来源：`?motion=off`（闸门/玩家显式）与系统 `prefers-reduced-motion`。
@@ -570,7 +573,18 @@ export function CombatScreen(props: CombatScreenProps) {
       if (latest.seq === beatId.current) return;
       beatId.current = latest.seq;
       // 演出只读 beat：**不改变任何状态**（局面仍然来自内核快照）。
-      const planned = planBeats(latest.beats, latest.dropped, { reducedMotion: motionOff });
+      //
+      // §399：把"槽位当前是谁"一起交进去 —— Cue 会**冻结**这个身份，
+      // 于是 Boss 分裂/召唤之后槽位被重用时，旧事件的飘字不会画在新对象头上。
+      // ⚠️ 外观从**视图**里取（`wasmView` 是 React state，这个 effect 的闭包可能拿到旧的；
+      // 拿不到就返回空串 —— 冻结锚点退化成"只有槽位"，不会画错人）。
+      const appearanceOf = (slot: number): string => {
+        if (slot < 0) return "hero";
+        return wasmViewRef.current?.enemies.find((enemy) => enemy.slot === slot)?.defId ?? "";
+      };
+      const planned = planBeats(latest.beats, latest.dropped, { reducedMotion: motionOff }, {
+        appearanceOf,
+      });
       setDirector((current) => enqueueBeats(current, planned));
     };
     consume();
@@ -817,6 +831,10 @@ export function CombatScreen(props: CombatScreenProps) {
         layout={layout}
         hero={layout.hero}
         onSkip={() => setDirector((current) => skipBeats(current))}
+        // §399：让演出层能校验"冻结锚点还指向同一个对象"。
+        appearanceOf={(slot) =>
+          slot < 0 ? "hero" : (wasmView?.enemies.find((enemy) => enemy.slot === slot)?.defId ?? "")
+        }
       />
 
       {/*

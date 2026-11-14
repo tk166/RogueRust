@@ -50,7 +50,9 @@ const unknown = new Set<string>();
 /** 清单 → 素材；缺失时降级（确定性：同一个 id 每次降级到同一个原型）。 */
 export function enemyLook(id: string): EnemyLook {
   const entry: EnemyAsset | undefined = ENEMY_ASSETS[id];
-  const paletteIndex = entry?.palette ?? stableHash(id) % PALETTES.length;
+  // §398：种子必须与生成器一致 —— 那边是 `stable_hash(id + '|p')`。
+  // 少了这个后缀，同一个 id 在"清单里"与"降级时"会落到**不同调色板**（哈希修好了也没用）。
+  const paletteIndex = entry?.palette ?? stableHash(`${id}|p`) % PALETTES.length;
   const archetype = entry?.archetype ?? ARCHETYPES[stableHash(id) % ARCHETYPES.length];
   const figure = FIGURES[archetype];
   if (!entry) unknown.add(`enemy:${id}`);
@@ -129,12 +131,21 @@ export function archetypeNames(): string[] {
   return [...ARCHETYPES];
 }
 
-/** 与生成器同一条稳定哈希（FNV-1a 32 位）—— 降级时用它挑原型/调色板。 */
-function stableHash(text: string): number {
+/**
+ * 与生成器**逐字节**一致的 FNV-1a 32 位（§398）。
+ *
+ * ⚠️ 两处都必须对，否则"清单里有的 id"与"降级时的 id"会落到不同的原型/调色板：
+ * 1. **遍历 UTF-8 字节**，不是 `charCodeAt`（UTF-16 code unit）—— Python 那边是
+ *    `text.encode('utf-8')`，中文/emoji 的字节数不同；
+ * 2. **`Math.imul`**，不是 `value * prime >>> 0` —— 浮点乘积超过 2^53 之后低位已经不准了
+ *    （审阅给的反例：`strike` 旧 JS 2778783723 / 正确 632598351）。
+ *
+ * 闸门 45 用生成器写进 `manifest.ts` 的**对拍表**（`HASH_FIXTURES`）逐条验证这个函数。
+ */
+export function stableHash(text: string): number {
   let value = 0x811c9dc5;
-  for (let index = 0; index < text.length; index += 1) {
-    value ^= text.charCodeAt(index);
-    value = (value * 0x01000193) >>> 0;
+  for (const byte of new TextEncoder().encode(text)) {
+    value = Math.imul(value ^ byte, 0x01000193) >>> 0;
   }
   return value >>> 0;
 }

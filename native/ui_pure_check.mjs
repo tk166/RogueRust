@@ -76,14 +76,14 @@ try {
     const wide = formation.computeCombatFormation(slots, desktop);
     const upper = wide.enemies.filter((e) => e.row === 0).length;
     const lower = wide.enemies.filter((e) => e.row === 1).length;
-    // 规则：**每排至多 3 名** ⇒ n ≤ 3 单排，n ≥ 4 两排（4 → 2+2）。
-    const wantUpper = n <= 3 ? n : Math.ceil(n / 2);
+    // 规则：**n ≤ 4 单排**（用户明确需求），n ≥ 5 才分两排（5 → 3+2、6 → 3+3）。
+    const wantUpper = n <= 4 ? n : Math.ceil(n / 2);
     const wantLower = n - wantUpper;
     if (upper !== wantUpper || lower !== wantLower) rowOk = false;
   }
   check(formationOk, "队形：0–6 个敌人在横竖屏都生成正确数量");
   check(slotOk, "队形：业务 slot 原样带出（不按数组下标重编号）");
-  check(rowOk, "队形：横屏 n≤3 一排、n≥4 两排（每排 ≤3）");
+  check(rowOk, "队形：横屏 n≤4 一排、n≥5 两排（5 → 3+2、6 → 3+3）");
   check(heroOk, "队形：我方永远在左侧");
 
   const portrait2 = formation.computeCombatFormation([0, 1], portrait);
@@ -108,20 +108,22 @@ try {
     "队形：横屏 2 个敌人的 y 相同（同一排）",
     JSON.stringify(wide2.enemies.map((enemy) => Number(enemy.y.toFixed(2))))
   );
-  // ⚠️ n=4 **不能**一排 4 名：原始约束是"每行 1–3 个"。§360 曾经为了修 n=2 的竖叠而放开到
-  // n≤4 单排，那是把一条更早、更强的约束改掉了（第十四轮 Review P1-C）。
+  // ⚠️ §397：n=4 **必须**一排 4 名（用户原话"n<=4 的时候都只有一排"）。
+  // 这条断言在 §361 被改成"4 = 2+2"，理由是"每排至多 3 名"——而那条约束**不存在**
+  // （只出现在上一轮审阅的措辞里）。审阅不能盖过用户明确说过的需求。
   const wide4 = formation.computeCombatFormation([0, 1, 2, 3], desktop);
   const upper4 = wide4.enemies.filter((enemy) => enemy.row === 0).length;
   const lower4 = wide4.enemies.filter((enemy) => enemy.row === 1).length;
   check(
-    upper4 === 2 && lower4 === 2,
-    "队形：横屏 4 个敌人 = 2+2（每排至多 3 名）",
+    upper4 === 4 && lower4 === 0,
+    "队形：横屏 4 个敌人**一排 4 名**（§397 用户需求）",
     JSON.stringify({ upper: upper4, lower: lower4 })
   );
   check(
-    upper4 <= 3 && lower4 <= 3,
-    "队形：横屏每排人数 ≤ 3（对所有 n）",
-    JSON.stringify({ n: 4, upper: upper4, lower: lower4 })
+    wide4.enemies.every((enemy) => enemy.row === 0) &&
+      new Set(wide4.enemies.map((enemy) => Number(enemy.x.toFixed(2)))).size === 4,
+    "队形：横屏 4 名**同一排且 x 两两不同**（不叠）",
+    JSON.stringify(wide4.enemies.map((enemy) => Number(enemy.x.toFixed(2))))
   );
   const wide5 = formation.computeCombatFormation([0, 1, 2, 3, 4], desktop);
   check(

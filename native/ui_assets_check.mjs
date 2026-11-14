@@ -56,6 +56,61 @@ try {
   const geometry = await import(pathToFileURL(join(out, "assets/geometry.js")).href);
   const manifest = await import(pathToFileURL(join(out, "assets/manifest.js")).href);
 
+  // ── 2z. §398：**生成器变了却没重跑** —— 这条以前是盲点（审阅 §4）────────────
+  //
+  // 验收链的 PATH 是剥空的，跑不了 `python build_assets.py --check`。但 Node **能**算 sha256：
+  // 生成器把自己的源码指纹写进清单，这里重算一遍比对。
+  // ⇒ 改 palette / scale / boss 规则而忘了重跑生成器，闸门立刻红。
+  const { createHash } = await import("node:crypto");
+  const generatorSource = await readFile(join(ROOT, "native", "build_assets.py"));
+  const generatorSha = createHash("sha256").update(generatorSource).digest("hex");
+  check(
+    manifest.GENERATOR_SHA === generatorSha,
+    "清单是**当前生成器**产出的（源码 sha256 一致）",
+    manifest.GENERATOR_SHA === generatorSha
+      ? generatorSha.slice(0, 12)
+      : `清单 ${String(manifest.GENERATOR_SHA).slice(0, 12)} vs 现在 ${generatorSha.slice(0, 12)} —— 跑一遍 python native/build_assets.py`
+  );
+
+  // ── 2y. §398：JS 的 FNV-1a 必须与生成器**逐字节**一致 ─────────────────────
+  //
+  // 反例（审阅 §3，我复算过）：`strike` 旧 JS 2778783723 / 正确 632598351。两者 mod 16 不同
+  // ⇒ 同一个 id 在"清单里"与"降级时"落到不同原型。对拍表由生成器写进清单，这里逐条验。
+  const fixtures = manifest.HASH_FIXTURES ?? [];
+  const hashBad = fixtures.filter((row) => registry.stableHash(row.text) !== row.hash);
+  check(
+    fixtures.length >= 5 && hashBad.length === 0,
+    "JS 哈希 == 生成器哈希（逐条对拍，含中文/空串）",
+    hashBad.length === 0
+      ? `${fixtures.length} 条`
+      : JSON.stringify(hashBad.map((row) => `${row.text}: js ${registry.stableHash(row.text)} vs ${row.hash}`))
+  );
+
+  // ── 2x. §398：**精英不许冒充 Boss**（审阅 §5）──────────────────────────────
+  //
+  // `gremlin_nob` 曾经在 boss 名单里 ⇒ scale 1.55 + 光环。它是精英。
+  // 判据两侧：① 精英的 `boss` 必须是 false；② 真 Boss 的必须是 true。
+  const tierOf = (id) => manifest.ENEMY_ASSETS[id]?.tier;
+  check(
+    tierOf("gremlin_nob") === "elite" && manifest.ENEMY_ASSETS.gremlin_nob.boss === false,
+    "`gremlin_nob` 是**精英**（不是 Boss，不加光环）",
+    JSON.stringify({ tier: tierOf("gremlin_nob"), boss: manifest.ENEMY_ASSETS.gremlin_nob?.boss })
+  );
+  check(
+    tierOf("slime_boss") === "boss" && manifest.ENEMY_ASSETS.slime_boss.boss === true,
+    "`slime_boss` 仍然是 **Boss**",
+    JSON.stringify({ tier: tierOf("slime_boss"), boss: manifest.ENEMY_ASSETS.slime_boss?.boss })
+  );
+  // 穷尽：`boss=true` 的每一条都必须 tier=boss，且 id 里不含 elite 类词。
+  const fakeBosses = Object.entries(manifest.ENEMY_ASSETS)
+    .filter(([, row]) => row.boss === true && row.tier !== "boss")
+    .map(([id]) => id);
+  check(
+    fakeBosses.length === 0,
+    "没有一只怪 `boss=true` 却不是 boss 档（穷尽遍历）",
+    fakeBosses.length === 0 ? "0 处" : JSON.stringify(fakeBosses.slice(0, 5))
+  );
+
   // ── 2a. 清单自洽：`ASSET_COUNTS` 必须等于实际条目数 ────────────────────────
   //
   // ⚠️ 这里**不**调 `python native/build_assets.py --check`：验收链的 PATH 是剥空的，

@@ -6,11 +6,47 @@
 // 三维敌人：16 种「立体几何排列组合」原型（原型本体是 `geometry.ts` 里的纯数据）。
 // 二维元素：两位大写字母 + 调色板（`letters_for` 的规则见生成器文件头）。
 
+// §398：生成器**自己的** sha256（这个 .py 文件的）—— 闸门 45 用 Node 重算并与它比对。
+// 改了生成器（palette/scale/boss 规则…）却没重跑 ⇒ 指纹对不上 ⇒ 闸门红。
+// 这条是审阅 §4 指出的盲点：验收链的 PATH 是剥空的，跑不了 python，但**能**算 sha256。
+export const GENERATOR_SHA = "e49d6270a5804c9304fbd300b8ab73ce15a059f4551c1ebd3b8b5a4751579a4d";
+
+// §398：哈希对拍表（Python 侧算好的真值）。闸门 45 用它逐条验证 `registry.ts` 的 JS 实现
+// 与生成器**逐字节**一致 —— 否则"清单里有的 id"与"降级时的 id"会落到不同原型/调色板。
+export const HASH_FIXTURES: readonly { text: string; hash: number }[] = [
+ {
+  "text": "",
+  "hash": 2166136261
+ },
+ {
+  "text": "strike",
+  "hash": 632598351
+ },
+ {
+  "text": "not_a_real_enemy",
+  "hash": 2453344752
+ },
+ {
+  "text": "new_monster_id",
+  "hash": 2615040844
+ },
+ {
+  "text": "中文",
+  "hash": 3297308741
+ },
+ {
+  "text": "standard.vulnerable|p",
+  "hash": 3443628802
+ }
+];
+
 export interface EnemyAsset {
   readonly archetype: string;
   readonly palette: number;
   readonly scale: number;
   readonly boss: boolean;
+  /** §398：玩法身份（`boss` / `elite` / `normal`）。`boss` 只留给真 Boss，精英不再冒充。 */
+  readonly tier: "boss" | "elite" | "normal";
 }
 
 export interface BadgeAsset {
@@ -78,367 +114,428 @@ export const ENEMY_ASSETS: Record<string, EnemyAsset> = {
   "archetype": "slime",
   "palette": 1,
   "scale": 0.78,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "fat_gremlin": {
   "archetype": "gremlin",
   "palette": 4,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "sneaky_gremlin": {
   "archetype": "gremlin",
   "palette": 3,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "blue_slaver": {
   "archetype": "slaver",
   "palette": 1,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "acid_slime_s": {
   "archetype": "slime",
   "palette": 2,
   "scale": 0.78,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "acid_slime_m": {
   "archetype": "slime",
   "palette": 2,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "spike_slime_m": {
   "archetype": "slime",
   "palette": 1,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "jaw_worm": {
   "archetype": "worm",
   "palette": 4,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "cultist": {
   "archetype": "humanoid",
   "palette": 3,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "gremlin_wizard": {
   "archetype": "gremlin",
   "palette": 7,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "sentry_1": {
   "archetype": "plant",
   "palette": 6,
-  "scale": 1.0,
-  "boss": false
+  "scale": 1.3,
+  "boss": false,
+  "tier": "elite"
  },
  "sentry_2": {
   "archetype": "sentinel",
   "palette": 3,
-  "scale": 1.0,
-  "boss": false
+  "scale": 1.3,
+  "boss": false,
+  "tier": "elite"
  },
  "sentry_3": {
   "archetype": "gremlin",
   "palette": 0,
-  "scale": 1.0,
-  "boss": false
+  "scale": 1.3,
+  "boss": false,
+  "tier": "elite"
  },
  "slime_boss": {
   "archetype": "boss_blob",
   "palette": 2,
   "scale": 1.55,
-  "boss": true
+  "boss": true,
+  "tier": "boss"
  },
  "time_eater": {
   "archetype": "boss_machine",
   "palette": 3,
   "scale": 1.55,
-  "boss": true
+  "boss": true,
+  "tier": "boss"
  },
  "shelled_parasite": {
   "archetype": "beast",
   "palette": 2,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "chosen": {
   "archetype": "humanoid",
   "palette": 3,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "byrd": {
   "archetype": "ghost",
   "palette": 2,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "spiker": {
   "archetype": "crystal",
   "palette": 5,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "orb_walker": {
   "archetype": "construct",
   "palette": 7,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "the_champ": {
   "archetype": "boss_machine",
   "palette": 6,
   "scale": 1.55,
-  "boss": true
+  "boss": true,
+  "tier": "boss"
  },
  "gremlin_leader": {
   "archetype": "construct",
   "palette": 7,
-  "scale": 1.0,
-  "boss": false
+  "scale": 1.3,
+  "boss": false,
+  "tier": "elite"
  },
  "giant_head": {
   "archetype": "floating_orb",
   "palette": 5,
-  "scale": 1.0,
-  "boss": false
+  "scale": 1.3,
+  "boss": false,
+  "tier": "elite"
  },
  "darkling": {
   "archetype": "ghost",
   "palette": 3,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "maw": {
   "archetype": "gremlin",
   "palette": 0,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "spire_growth": {
   "archetype": "plant",
   "palette": 7,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "louse_red": {
   "archetype": "louse",
   "palette": 6,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "louse_green": {
   "archetype": "crystal",
   "palette": 7,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "fungi_beast": {
   "archetype": "plant",
   "palette": 3,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "slaver_red": {
   "archetype": "plant",
   "palette": 6,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "gremlin_nob": {
   "archetype": "boss_machine",
   "palette": 0,
-  "scale": 1.55,
-  "boss": true
+  "scale": 1.3,
+  "boss": false,
+  "tier": "elite"
  },
  "lagavulin": {
   "archetype": "beast",
   "palette": 6,
-  "scale": 1.0,
-  "boss": false
+  "scale": 1.3,
+  "boss": false,
+  "tier": "elite"
  },
  "book_of_stabbing": {
   "archetype": "sentinel",
   "palette": 3,
-  "scale": 1.0,
-  "boss": false
+  "scale": 1.3,
+  "boss": false,
+  "tier": "elite"
  },
  "taskmaster": {
   "archetype": "slaver",
   "palette": 4,
-  "scale": 1.0,
-  "boss": false
+  "scale": 1.3,
+  "boss": false,
+  "tier": "elite"
  },
  "nemesis": {
   "archetype": "sentinel",
   "palette": 3,
-  "scale": 1.0,
-  "boss": false
+  "scale": 1.3,
+  "boss": false,
+  "tier": "elite"
  },
  "reptomancer": {
   "archetype": "ghost",
   "palette": 3,
-  "scale": 1.0,
-  "boss": false
+  "scale": 1.3,
+  "boss": false,
+  "tier": "elite"
  },
  "dagger": {
   "archetype": "crystal",
   "palette": 5,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "the_guardian": {
   "archetype": "boss_machine",
   "palette": 5,
   "scale": 1.55,
-  "boss": true
+  "boss": true,
+  "tier": "boss"
  },
  "hexaghost": {
   "archetype": "floating_orb",
   "palette": 3,
   "scale": 1.55,
-  "boss": true
+  "boss": true,
+  "tier": "boss"
  },
  "bronze_automaton": {
   "archetype": "boss_machine",
   "palette": 4,
   "scale": 1.55,
-  "boss": true
+  "boss": true,
+  "tier": "boss"
  },
  "bronze_orb": {
   "archetype": "floating_orb",
   "palette": 4,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "the_collector": {
   "archetype": "gremlin",
   "palette": 0,
   "scale": 1.55,
-  "boss": true
+  "boss": true,
+  "tier": "boss"
  },
  "torch_head": {
   "archetype": "crystal",
   "palette": 0,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "awakened_one": {
   "archetype": "boss_blob",
   "palette": 7,
   "scale": 1.55,
-  "boss": true
+  "boss": true,
+  "tier": "boss"
  },
  "donu": {
   "archetype": "construct",
   "palette": 0,
   "scale": 1.55,
-  "boss": true
+  "boss": true,
+  "tier": "boss"
  },
  "deca": {
   "archetype": "construct",
   "palette": 1,
   "scale": 1.55,
-  "boss": true
+  "boss": true,
+  "tier": "boss"
  },
  "looter": {
   "archetype": "humanoid",
   "palette": 5,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "spike_slime_l": {
   "archetype": "slime",
   "palette": 1,
   "scale": 1.2,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "acid_slime_l": {
   "archetype": "slime",
   "palette": 2,
   "scale": 1.2,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "snecko": {
   "archetype": "plant",
   "palette": 6,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "spheric_guardian": {
   "archetype": "floating_orb",
   "palette": 4,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "snake_plant": {
   "archetype": "plant",
   "palette": 7,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "centurion": {
   "archetype": "sentinel",
   "palette": 4,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "mystic": {
   "archetype": "humanoid",
   "palette": 3,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "mugger": {
   "archetype": "louse",
   "palette": 2,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "repulsor": {
   "archetype": "construct",
   "palette": 3,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "exploder": {
   "archetype": "crystal",
   "palette": 0,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "transient": {
   "archetype": "ghost",
   "palette": 5,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "pointy": {
   "archetype": "spire_guard",
   "palette": 4,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "romeo": {
   "archetype": "humanoid",
   "palette": 5,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  },
  "bear": {
   "archetype": "construct",
   "palette": 7,
   "scale": 1.0,
-  "boss": false
+  "boss": false,
+  "tier": "normal"
  }
 };
 
