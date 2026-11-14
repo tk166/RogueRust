@@ -5011,6 +5011,16 @@ impl RunState {
     /// | Lift | `Girya` | 已经用满 3 次 |
     /// | Toke | `Peace Pipe` | 牌组空 |
     /// | Dig | `Shovel` | 从不（总是可用） |
+    /// §383：第四幕（`The Ending`）实现了吗？
+    ///
+    /// 红钥匙（`Recall`）**唯一**的用途是进 Act 4。第四幕没做的时候提供 Recall 就是给玩家
+    /// 一个陷阱：花掉一次篝火机会，换来一个永远用不上的布尔。
+    ///
+    /// ⚠️ wiki 的**位置**规则是对的（fandom `Keys`：*"The key may be obtained at any Rest Site
+    /// along the run"*）—— 所以这不是"改规则"，而是"这个功能现在还不可能有用"。
+    /// 第四幕落地时翻成 `true`，Recall 与红钥匙不需要任何别的改动。
+    pub const ACT4_IMPLEMENTED: bool = false;
+
     #[must_use]
     pub fn campfire_options(&self) -> CampfireOptions {
         let mut options = CampfireOptions {
@@ -5018,7 +5028,11 @@ impl RunState {
             smith: true,
             // §259：红钥匙一局只有一把；拿到之后 Recall 就没了（wiki："if you have not already
             // obtained the Ruby Key this act"）。
-            recall: !self.ruby_key,
+            //
+            // §383：**第四幕没做 ⇒ 不提供**。wiki 的位置规则（任何篝火）没变，变的是
+            // "这个选项现在有没有用处"：钥匙只开 Act 4 的门，而 Act 4 不存在。
+            // 这条与 `Peace Pipe` 的"空牌组不给 Toke"是同一个形状：选项是**算**出来的。
+            recall: Self::ACT4_IMPLEMENTED && !self.ruby_key,
             // `Lift` / `Toke` / `Dig` 默认**都没有**：它们由遗物开出来（下面那趟循环）。
             lift: false,
             toke: false,
@@ -8873,7 +8887,14 @@ mod tests {
     fn campfire_options_follow_the_relics_the_wiki_names() {
         let mut run = campfire_run();
         let base = run.campfire_options();
-        assert!(base.rest && base.smith && base.recall, "defaults: Rest / Smith / Recall");
+        assert!(base.rest && base.smith, "defaults: Rest / Smith");
+        // §383：Recall 跟着 `ACT4_IMPLEMENTED` 走。写成"等于常量的否定"而不是写死 `false`：
+        // 第四幕落地翻常量时，这条断言**自动**继续守"没有钥匙就不能 Recall"那一半。
+        assert_eq!(
+            base.recall,
+            RunState::ACT4_IMPLEMENTED,
+            "Recall is offered exactly when Act 4 can be entered"
+        );
         assert!(!base.lift && !base.toke && !base.dig, "no relic ⇒ no relic option");
 
         // Girya 开 Lift；用过 3 次之后消失（wiki：up to 3 times）。
@@ -9233,13 +9254,22 @@ mod tests {
         assert!(run.node_resolved(), "leaving the reward screen settles the node");
     }
 
-    /// §259：`Recall` 拿红钥匙，然后 Recall 就不再出现（wiki：一局只有一把）。
+    /// §259 / §383：`Recall` 拿红钥匙，然后 Recall 就不再出现（wiki：一局只有一把）。
+    ///
+    /// §383 之后**默认没有 Recall**（第四幕没做 ⇒ 白拿的空门票），所以这条测试要先把
+    /// `ruby_key` 摆到"还没拿"并且**按常量**判断"应该有没有"。两个分支都写出来，
+    /// 第四幕落地翻 `ACT4_IMPLEMENTED` 时这条测试自动继续有效。
     #[test]
     fn recall_grants_the_ruby_key_once() {
         let mut run = campfire_run();
-        assert!(run.campfire_options().recall, "Recall is offered by default");
+        assert_eq!(
+            run.campfire_options().recall,
+            RunState::ACT4_IMPLEMENTED,
+            "§383: without Act 4 the option is a trap and must not be offered"
+        );
+        // 动作本身与选项**分开**：`recall()` 一直是可用的（第四幕落地只是把选项打开）。
         at_campfire(&mut run);
-        assert_eq!(run.recall(), Ok(()));
+        assert_eq!(run.recall(), Ok(()), "the action itself still works");
         assert!(run.ruby_key(), "the key is in the run state");
         assert!(!run.campfire_options().recall, "a second Recall is not offered");
         at_campfire(&mut run);

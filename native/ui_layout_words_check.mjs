@@ -1,0 +1,350 @@
+// 闸门 56 `ui-layout-words`：**布局宽度**与**词表**这两类"看起来没坏、其实在骗人"的错。
+//
+// 玩家第二轮实机报的四条，分两组：
+//
+// ## ① 布局（像素）
+//
+// * 地图宽度塌了（节点互相压住）；
+// * 奖励屏的悬浮窗宽度不固定，卡牌在"一列/两列"之间来回跳。
+//
+// 根因是同一个：`.scene` 的 `margin: 0 auto` 让 flex item 失去 stretch，宽度退回 **fit-content**；
+// 而悬浮面板是 `sticky`（**在流内**）⇒ 它一出现就改变容器宽度 ⇒ 卡牌重排 ⇒ 鼠标下的牌换位置
+// ⇒ hover 换目标 ⇒ 面板换文字 ⇒ 死循环抖动。
+//
+// 判据：**同一屏在"没有面板 / 指着 A / 指着 B"三种状态下，场景宽度、面板宽度、卡牌行数都不许变**。
+// 这条断言正好是"抖动"的定义，而且它是**自比**（不依赖某个具体像素值）。
+//
+// ## ② 词表（语义）
+//
+// * `观察弱点`（`spot_weakness`）不选敌人就结算了；
+// * 事件「翅膀雕像」的 `[祈祷]` 选项显示"未知效果 6（0）"。
+//
+// 判据：
+// * `cardMeta` 里**每一张**提到事件目标（`sel.eventTarget` / `intent.target*`）的牌都必须被标成
+//   `singleEnemy` —— 穷尽遍历 295 张，不是抽查；
+// * `effectLabel` 对内核闭集 1..16 **每一条**都给出人话，且 `-1`（没有效果码）返回**空串**
+//   而不是"未知效果"。同样遍历，不抽查。
+//
+// 两条语义断言都是**纯函数**（编译 `cardMeta.ts` / `models.ts` 直接跑），不需要浏览器。
+
+import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { openPage } from "../web/cdp.mjs";
+
+const GATE = "UI_LAYOUT_WORDS";
+const WEB_NEXT = fileURLToPath(new URL("../web-next/", import.meta.url));
+const REPO = fileURLToPath(new URL("..", import.meta.url));
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+let failures = 0;
+const check = (ok, label, detail = "") => {
+  console.log(`${ok ? "ok  " : "FAIL"} ${label}${detail ? ` -- ${detail}` : ""}`);
+  if (!ok) failures += 1;
+  return ok;
+};
+const summary = { cards: 0, effects: 0, widths: 0, rows: 0 };
+
+// ── ② 词表：纯函数部分 ─────────────────────────────────────────────────────
+const out = await mkdtemp(join(tmpdir(), "rd-words-"));
+try {
+  const tscJs = join(WEB_NEXT, "node_modules", "typescript", "bin", "tsc");
+  if (!existsSync(tscJs)) throw new Error(`找不到 ${tscJs}`);
+  execFileSync(
+    process.execPath,
+    [
+      tscJs,
+      "--target", "es2022",
+      "--module", "es2022",
+      "--moduleResolution", "bundler",
+      "--skipLibCheck",
+      "--rootDir", "src",
+      "--outDir", out,
+      "src/run/models.ts",
+      "src/view/cardMeta.ts",
+      // §381 的落点断言要直接跑 `viewFromWasm`（"定向牌必须给每个敌人一个落点"），
+      // 而不是靠在浏览器里抽到那张牌 —— Uncommon 起手抽不到，靠运气就是在写假闸门。
+      "src/view/combatView.ts",
+    ],
+    { cwd: WEB_NEXT, stdio: "pipe" }
+  );
+
+  const meta = (await import(pathToFileURL(join(out, "view/cardMeta.js")).href)).default;
+  const models = await import(pathToFileURL(join(out, "run/models.js")).href);
+  const view = await import(pathToFileURL(join(out, "view/combatView.js")).href);
+
+  // ── 定向牌：内容里提到事件目标的牌，一张都不许漏 ────────────────────────
+  const content = JSON.parse(
+    await readFile(join(REPO, "tools/contentc/packages/sts/sts.roguedeck.json"), "utf8")
+  );
+  const needsTarget = [];
+  for (const card of content.Cards ?? []) {
+    const program =
+      JSON.stringify(card.Program ?? null) + JSON.stringify(card.LifecyclePrograms ?? null);
+    if (program.includes("sel.eventTarget") || program.includes("intent.target")) {
+      needsTarget.push(card.Id);
+    }
+  }
+  const missed = needsTarget.filter((id) => meta[id]?.targeting !== "singleEnemy");
+  check(
+    missed.length === 0,
+    "每一张**提到事件目标**的牌都被标成定向（穷尽 295 张）",
+    missed.length === 0 ? `${needsTarget.length} 张定向牌` : JSON.stringify(missed)
+  );
+  // 反证：`观察弱点` 必须是定向的（玩家报的那一张，单独钉住它）。
+  check(
+    meta.spot_weakness?.targeting === "singleEnemy" &&
+      meta["spot_weakness+"]?.targeting === "singleEnemy",
+    "`观察弱点`（含 `+`）被标成**定向**（不选敌人不该结算）",
+    JSON.stringify({ base: meta.spot_weakness?.targeting, plus: meta["spot_weakness+"]?.targeting })
+  );
+  summary.cards = needsTarget.length;
+
+  // ── 落点：定向牌必须**每个敌人一个落点**，无目标牌才归并成一个 ──────────
+  //
+  // 玩家报的"没有选择敌人就直接触发了"在视图层长这样：`optionsFor` 把内核给的
+  // "牌 × 每个活敌人"的多条动作**归并成一个** `slot: -1`。归并只对 `targeting === "none"`
+  // 合法 —— 对定向牌归并，玩家就永远没有机会选目标。
+  const snapshot = {
+    round: 1,
+    turn: 1,
+    phase: "waiting",
+    result: "ongoing",
+    hero: { hp: 80, hpMax: 80, block: 0, energy: 3, energyMax: 3, statuses: {} },
+    enemies: [
+      { slot: 0, alive: true, hp: 20, hpMax: 20, block: 0, intentKind: 1, intentDamage: 6, statuses: {} },
+      { slot: 1, alive: true, hp: 20, hpMax: 20, block: 0, intentKind: 1, intentDamage: 6, statuses: {} },
+    ],
+    hand: [{ slot: 0, cost: 1, defSlot: 0, upgraded: false }],
+    handCount: 1,
+    piles: { draw: 0, hand: 1, discard: 0, exhaust: 0, queue: 0 },
+    actions: [
+      { index: 0, kind: "play", handSlot: 0, targetSlot: 0 },
+      { index: 1, kind: "play", handSlot: 0, targetSlot: 1 },
+      { index: 2, kind: "endTurn", handSlot: -1, targetSlot: -1 },
+    ],
+  };
+  const namesFor = (cardId) => ({
+    cardName: () => cardId,
+    cardText: () => "",
+    enemyName: (slot) => (slot === 0 ? "cultist" : "jaw_worm"),
+    statuses: () => [],
+  });
+  const spot = view.viewFromWasm(snapshot, namesFor("spot_weakness"), 1);
+  const spotOptions = spot.optionsFor(0);
+  check(
+    spotOptions.length === 2 && spotOptions.every((option) => option.slot >= 0),
+    "`观察弱点` 的落点是**每个敌人一个**（不是归并成一个无目标出牌）",
+    JSON.stringify(spotOptions.map((option) => option.slot))
+  );
+  // 反证：`防御`（无目标）仍然归并成一个 `slot: -1` —— 否则就是"所有牌都变定向"。
+  const defend = view.viewFromWasm(snapshot, namesFor("defend"), 1);
+  const defendOptions = defend.optionsFor(0);
+  check(
+    defendOptions.length === 1 && defendOptions[0].slot === -1,
+    "`防御`（无目标）仍然归并成一个 `slot: -1` 的落点",
+    JSON.stringify(defendOptions.map((option) => option.slot))
+  );
+
+  // ── 效果词表：内核闭集 1..16 每一条都要有人话 ───────────────────────────
+  const codes = [
+    [1, "heal"], [2, "gold"], [3, "damage"], [4, "max_hp"], [5, "nothing"],
+    [6, "remove_card"], [7, "upgrade_card"], [8, "transform_card"],
+    [9, "curse"], [10, "relic"], [11, "damage_pct"], [12, "max_hp_pct"],
+    [13, "gold_cost"], [14, "heal_pct"], [15, "heal_full"], [16, "gold_random"],
+  ];
+  const unknown = [];
+  for (const [code, atom] of codes) {
+    const label = models.effectLabel(code, 100);
+    if (!label || label.startsWith("未知效果")) unknown.push(`${code}(${atom}) → ${label}`);
+  }
+  check(
+    unknown.length === 0,
+    "内核的效果闭集 1..16 **每一条**都有人话（不是抽查）",
+    unknown.length === 0 ? `${codes.length} 条` : JSON.stringify(unknown)
+  );
+  summary.effects = codes.length;
+
+  // `-1` = "没有效果码"：**空串**，不是"未知效果 -1（0）"。
+  check(
+    models.effectLabel(-1, 0) === "",
+    "`-1`（没有效果码）返回空串 —— 不许画成“未知效果”",
+    JSON.stringify(models.effectLabel(-1, 0))
+  );
+  check(
+    models.effectSummary([{ kind: -1, amount: 0 }]) === "",
+    "全是 `-1` 的选项 ⇒ 摘要为空（调用方不画那一行）",
+    JSON.stringify(models.effectSummary([{ kind: -1, amount: 0 }]))
+  );
+  // 反证：真的未知码仍然要**响亮**（把"未知"和"没有码"混成一件事的另一种错法）。
+  check(
+    models.effectLabel(99, 7).startsWith("未知效果"),
+    "真的未知码仍然响亮（`未知效果 99`）",
+    models.effectLabel(99, 7)
+  );
+  // 事件「翅膀雕像」的 [祈祷] 就是 `remove_card`(6)：它必须有一句人话。
+  check(
+    models.effectLabel(6, 0).includes("移除"),
+    "`remove_card`(6) 有人话（玩家报的「翅膀雕像 · 祈祷」）",
+    models.effectLabel(6, 0)
+  );
+} finally {
+  await rm(out, { recursive: true, force: true });
+}
+
+// ── ① 布局：像素部分 ───────────────────────────────────────────────────────
+try {
+  execFileSync(process.execPath, [join("web-next", "scripts", "sync-wasm.mjs")], { stdio: "pipe" });
+} catch {
+  console.error(`${GATE} FAIL: 同步 wasm 失败`);
+  process.exit(1);
+}
+
+const page = await openPage({
+  page: "web-next/dist/run.html",
+  query: "",
+  gate: GATE,
+  viewport: { width: 1280, height: 900 },
+  waitFor: "Boolean(window.__run && window.__run.ready)",
+});
+const ev = (expression) => page.evaluate(expression);
+
+await ev('window.__run.click("[data-start]")');
+await sleep(250);
+const blessings = await ev("window.__run.blessings()");
+const simple = blessings.find((row) => row.needs === 0) ?? blessings[0];
+await ev(`window.__run.click("[data-blessing='${simple.slot}']")`);
+await sleep(300);
+if ((await ev("window.__run.scene()")).base === "SC-01b") {
+  await ev('(() => { const n = document.querySelector("[data-deck-pick][data-deck-allowed=\'1\']"); if (n) n.click(); })()');
+  await sleep(300);
+}
+
+// 地图：场景宽度必须接近上限（560），节点之间不许互相压住。
+const mapBox = await ev(`(() => {
+  const scene = document.querySelector(".scene-map");
+  const nodes = Array.from(document.querySelectorAll("[data-node]")).map((n) => {
+    const r = n.getBoundingClientRect();
+    return { left: r.left, right: r.right, top: r.top, row: Number(n.closest("[data-row]")?.dataset.row ?? -1) };
+  });
+  return { sceneW: Math.round(scene.getBoundingClientRect().width), nodes };
+})()`);
+check(
+  mapBox.sceneW >= 540,
+  "地图场景宽度接近上限（≥540px）—— 不再塌成文字宽度",
+  `${mapBox.sceneW}px`
+);
+// 同一行内相邻节点不许重叠（玩家看到的是"节点压在一起"）。
+const byRow = new Map();
+for (const node of mapBox.nodes) {
+  const list = byRow.get(node.row) ?? [];
+  list.push(node);
+  byRow.set(node.row, list);
+}
+let overlaps = [];
+for (const [row, list] of byRow) {
+  list.sort((a, b) => a.left - b.left);
+  for (let i = 1; i < list.length; i += 1) {
+    if (list[i].left < list[i - 1].right - 0.5) {
+      overlaps.push(`row ${row}: ${Math.round(list[i - 1].right - list[i].left)}px 重叠`);
+    }
+  }
+}
+check(overlaps.length === 0, "同一行的节点**互不重叠**", overlaps.slice(0, 2).join(" / ") || "0 处");
+
+// 走到奖励屏（打完一场）。
+const map = await ev("window.__run.map()");
+const first = map.nodes.find((node) => node.reachable);
+await ev(`window.__run.click("[data-node='${first.index}']")`);
+await sleep(250);
+if ((await ev("window.__run.scene()")).base === "SC-03") {
+  await ev('window.__run.click("[data-fight-begin]")');
+  await sleep(400);
+}
+for (let steps = 0; steps < 240; steps += 1) {
+  const hand = await ev("window.__run.hand()");
+  if (!hand || hand.result !== "ongoing") break;
+  const play = hand.actions.find((action) => action.kind === "play");
+  const result = play
+    ? await ev(`window.__run.play(${play.handSlot}, ${play.targetSlot})`)
+    : await ev("window.__run.endTurn()");
+  if (result?.accepted === false) break;
+}
+await ev('(() => { const n = document.querySelector("[data-combat-continue]"); if (n) n.click(); })()');
+await sleep(300);
+
+const scene = await ev("window.__run.scene()");
+if (scene.base === "SC-04") {
+  /** 读一次布局指纹（场景宽 / 面板宽 / 卡牌行数）。 */
+  const fingerprint = () =>
+    ev(`(() => {
+      const scene = document.querySelector(".scene");
+      const tip = document.querySelector("[data-card-tip]");
+      const cards = Array.from(document.querySelectorAll("[data-reward-card]"));
+      // ⚠️ 用 offsetTop（**布局位置**），不是 getBoundingClientRect().top：
+      // .reward-card:hover 有 transform: translateY(-1px)，用 rect 会把"鼠标下那张高了 1px"
+      // 数成"换了一行"（第一版就是这样，报了 [1,2,2,2] 的假红）。
+      const rows = new Set(cards.map((c) => c.offsetTop));
+      return {
+        sceneW: Math.round(scene.getBoundingClientRect().width),
+        tipW: tip ? Math.round(tip.getBoundingClientRect().width) : null,
+        rows: rows.size,
+        cards: cards.length,
+      };
+    })()`);
+
+  // 先把鼠标放到角落（没有面板），再依次指三张牌。
+  await page.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 4, y: 4, button: "none", buttons: 0 });
+  await sleep(100);
+  const idle = await fingerprint();
+  const samples = [idle];
+  for (const slot of [0, 1, 2]) {
+    const point = await ev(`(() => {
+      const el = document.querySelector("[data-reward-card='${slot}']");
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    })()`);
+    if (!point) continue;
+    await page.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: point.x, y: point.y, button: "none", buttons: 0 });
+    await sleep(140);
+    samples.push(await fingerprint());
+  }
+
+  const widths = samples.map((sample) => sample.sceneW);
+  const tipWidths = samples.filter((sample) => sample.tipW !== null).map((sample) => sample.tipW);
+  const rowCounts = samples.map((sample) => sample.rows);
+  summary.widths = new Set(widths).size;
+  summary.rows = new Set(rowCounts).size;
+  check(
+    new Set(widths).size === 1,
+    "奖励屏的**场景宽度**在“无面板 / 指第 1 张 / 第 2 张 / 第 3 张”下完全不变",
+    JSON.stringify(widths)
+  );
+  check(
+    new Set(tipWidths).size === 1 && tipWidths.length > 0,
+    "悬浮面板宽度不随内容变（否则会把容器宽度顶来顶去）",
+    JSON.stringify(tipWidths)
+  );
+  check(
+    new Set(rowCounts).size === 1,
+    "卡牌**行数**不来回跳（一列/两列抖动）",
+    JSON.stringify(rowCounts)
+  );
+} else {
+  check(true, `没走到奖励屏（${scene.base}），布局稳定性部分跳过`);
+}
+
+await page.close();
+console.log("");
+if (failures > 0) {
+  console.error(`${GATE} FAIL: ${failures} 条`);
+  process.exit(1);
+}
+console.log(
+  `UI_LAYOUT_WORDS PASS cards=${summary.cards} effects=${summary.effects} ` +
+    `scene-widths=${summary.widths} row-counts=${summary.rows}`
+);

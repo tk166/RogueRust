@@ -60,7 +60,11 @@ export function EventScene({ eventId, text, options, needs, onChoose, busy = fal
             <span className="event-option-label">
               {option.label ? eventOptionLabel(option.label) : `选项 ${option.slot + 1}`}
             </span>
-            <span className="event-option-effect muted">{effectSummary(option.effects)}</span>
+            {/* §382：`-1`（没有效果码）时 `effectSummary` 给空串 ⇒ **不画**这一行，
+                而不是画"未知效果 -1"。选项自己的文字已经把话说清楚了。 */}
+            {effectSummary(option.effects) !== "" && (
+              <span className="event-option-effect muted">{effectSummary(option.effects)}</span>
+            )}
             {!option.available && <span className="event-option-why">不满足条件</span>}
           </button>
         ))}

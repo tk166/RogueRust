@@ -212,6 +212,14 @@ body {
    */
   flex: 1 1 auto;
   min-height: 0;
+  /*
+   * ⚠️ **宽度必须显式给**。`margin: 0 auto` 会让这个 flex item 失去 `align-self: stretch`
+   * 的效果，于是宽度退回 **fit-content** —— 而地图节点改成绝对定位之后，画布没有固有宽度了，
+   * 整个场景就塌成"最长那一行文字"的宽度（实测：地图只有 230px，4 个节点互相压住；
+   * 奖励屏也只剩 330px，三张牌挤成 2+1）。
+   * `width: 100%` + `max-width` + `auto` 外边距是"占满但不超过上限、并且居中"的标准写法。
+   */
+  width: 100%;
 }
 
 .scene-head h1,
@@ -522,19 +530,32 @@ button.primary:disabled {
  * 贴边时飘窗会被裁掉，而且它会盖住相邻的牌 —— 反而更难选。
  * `pointer-events: none`：它盖在货架上方，不许挡住"再指下一张"。
  */
+/*
+ * ⚠️ **必须脱离文档流**（`fixed`），不能是 `sticky`。
+ *
+ * `sticky` 仍然参与布局：面板的宽度由文字长度决定 ⇒ 它一出现就把场景的宽度撑大/缩回去 ⇒
+ * 卡牌网格在"一列 / 两列"之间来回跳 ⇒ 鼠标下的牌换位置 ⇒ hover 换目标 ⇒ 面板换文字 ⇒
+ * **死循环抖动**（玩家实测："悬浮窗宽度不固定，一列和两列来回切换"）。
+ * `fixed` 之后它与布局彻底无关，宽度只由 `min()` 决定。
+ */
 .card-tip {
-  position: sticky;
-  bottom: 8px;
-  z-index: 20;
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 40;
   pointer-events: none;
   display: grid;
   gap: 4px;
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid rgba(120, 160, 210, 0.4);
-  background: rgba(10, 16, 22, 0.94);
+  background: rgba(10, 16, 22, 0.96);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-  max-width: 520px;
+  /* 宽度只跟视口有关：与容器宽度、文字长度都无关（否则又回到上面的抖动）。 */
+  width: min(92vw, 520px);
+  max-height: 40vh;
+  overflow: hidden;
 }
 
 .card-tip__head {

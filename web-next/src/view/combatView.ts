@@ -13,11 +13,13 @@
 // ⚠️ **渲染层不许自己推规则**：每张牌能丢到哪儿（`optionsFor`）必须来自生产者：
 // wasm 那边是内核的动作表，mock 那边是演示逻辑。P1 的教训（§352）就是"UI 自己猜落点"。
 
-import type { DropOption } from "../input/pointerMachine";
-import { liveEnemySlots, type MockScene } from "../mock/scene";
-import type { CombatSnapshot } from "../wasm/snapshot";
-import { displayName, displayText } from "../i18n";
-import cardMeta from "./cardMeta";
+// ⚠️ 扩展名写全 `.js`：闸门 56 把本文件**直接编译成 ESM** 跑（不经打包器），
+// Node 的 ESM 解析不猜扩展名。这是本仓库既有的约定（见 `i18n/index.ts` 的头注释）。
+import type { DropOption } from "../input/pointerMachine.js";
+import { liveEnemySlots, type MockScene } from "../mock/scene.js";
+import type { CombatSnapshot } from "../wasm/snapshot.js";
+import { displayName, displayText } from "../i18n/index.js";
+import cardMeta from "./cardMeta.js";
 
 /** 与 `cardMeta.ts` 的 `CardMeta["kind"]` 一致（内容包 `Tags` 的五种）。 */
 export type CardKind = "attack" | "skill" | "power" | "status" | "curse";

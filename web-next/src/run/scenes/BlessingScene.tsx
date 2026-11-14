@@ -7,6 +7,10 @@
 //
 // 数据全部来自内核：条数（`rd_run_start_offer_count`，§346 **不许写死 2**）、
 // 收益/代价的**判别值**（`rd_run_start_gain/cost` + `_amount`）。这里只做"数字 → 人话"。
+//
+// ⚠️ §382：词表**复用** `models.ts` 的 `effectLabel`，不再自己写一份 `switch`。
+// 两份词表必然漂（这次就是把 `remove_card`(6) 画成"未知效果 6（0）"）。
+import { effectLabel } from "../models.js";
 
 export interface Blessing {
   readonly slot: number;
@@ -51,8 +55,11 @@ export function blessingEffectLabel(kind: number, amount: number): string {
       return `生命上限 +${amount}`;
     case BLESSING_EFFECT.nothing:
       return "无";
+    // §382：祝福这一侧**复用**事件那一份词表（同一个闭集）。原来这里是**另一份**
+    // `switch`，于是"内核加了码、两处各漂一次"——这次就是它把 `remove_card`(6) 画成了
+    // "未知效果 6（0）"。
     default:
-      return `未知效果 ${kind}（${amount}）`;
+      return effectLabel(kind, amount);
   }
 }
 

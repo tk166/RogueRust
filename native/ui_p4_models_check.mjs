@@ -83,7 +83,12 @@ try {
   check(m.effectLabel(3, 5) === "失去 5 点生命", "3 = 失去生命", m.effectLabel(3, 5));
   check(m.effectLabel(4, 8) === "生命上限 +8", "4 = 上限", m.effectLabel(4, 8));
   check(m.effectLabel(5, 0) === "无", "5 = 无", m.effectLabel(5, 0));
-  check(m.effectLabel(9, 3).includes("未知"), "未知判别值不被显示成无", m.effectLabel(9, 3));
+  // §382：**9 不再是"未知"** —— 它是内核的 `curse`（获得一张诅咒牌）。旧断言把 9 当未知，
+  // 正是这次玩家报的"未知效果 6（0）"的同一个病根（界面词表停在 1..5）。
+  check(m.effectLabel(9, 3).includes("诅咒"), "9 = 获得一张诅咒牌（§382）", m.effectLabel(9, 3));
+  check(m.effectLabel(6, 0).includes("移除"), "6 = 从牌组移除一张牌（§382）", m.effectLabel(6, 0));
+  check(m.effectLabel(-1, 0) === "", "`-1` = 没有效果码 ⇒ 空串（§382）", JSON.stringify(m.effectLabel(-1, 0)));
+  check(m.effectLabel(99, 3).includes("未知"), "真正未知的判别值仍然响亮", m.effectLabel(99, 3));
   check(m.effectLabel(0, 3).includes("未知"), "0 也不被当成无", m.effectLabel(0, 3));
   check(
     m.effectSummary([{ kind: 1, amount: 7 }, { kind: 2, amount: 20 }]) === "回复 7 点生命 · 获得 20 金币",

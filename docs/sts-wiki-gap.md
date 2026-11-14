@@ -196,7 +196,7 @@ wiki 常见而我们**没有**的：
 | ~~Boss 池~~ | ✅ **每幕三只**（§194）：Slime Boss / Guardian / Hexaghost，Champ / Automaton / Collector，Time Eater / Awakened One / Donu & Deca | — |
 | 药水 | **33 / 33**（Ironclad 口径） | — （见 §D.1，全部落地） |
 | 遗物 | **152 / 193**（`audit_relic_gap.py` 的账：`MISSING: 41`、`METADATA: 0`、`IMPLEMENTED: 内核不认识 0`）。分档、载体决策树与逐条清单见 §D.2 与 `docs/relic-inventory.md` | 内容（缺的 41 件：Blight 13 / 别的角色 20 / `bottled_*` 3 / `necronomicon` / `circlet` 2 / 其余 2） |
-| 篝火选项 | **六个全通**（§259）：Rest / Smith / **Recall**（红钥匙）/ **Lift**（`Girya`，最多 3 次、之后每场战斗带这些力量）/ **Toke**（`Peace Pipe`，删牌免费）/ **Dig**（`Shovel`，只抽 Common/Uncommon/Rare）；`Coffee Dripper` / `Mark of the Bloom` 关 Rest、`Fusion Hammer` 关 Smith、`Dream Catcher` 让休息额外给一次卡牌奖励 | — （`Recall` 的用处是第四幕，见最后一行） |
+| 篝火选项 | **六个全通**（§259）：Rest / Smith / **Recall**（红钥匙）/ **Lift**（`Girya`，最多 3 次、之后每场战斗带这些力量）/ **Toke**（`Peace Pipe`，删牌免费）/ **Dig**（`Shovel`，只抽 Common/Uncommon/Rare）。⚠️ §383：**Recall 当前不提供** —— wiki 允许任何篝火拿钥匙，但钥匙的用途只有第四幕（未实现）+ 解锁条件（三职业通关，无元进度）⇒ 提供一个永远用不上的选项是陷阱；`ACT4_IMPLEMENTED` 翻成 `true` 即恢复；`Coffee Dripper` / `Mark of the Bloom` 关 Rest、`Fusion Hammer` 关 Smith、`Dream Catcher` 让休息额外给一次卡牌奖励 | — （`Recall` 的用处是第四幕，见最后一行） |
 | 商店 | **四排齐全**（§332）：5 张有色卡（**2 攻 / 2 技 / 1 能力**，稀有度按 wiki 的 **9/37/54** 掷、受保底影响但不更新保底（§377），**随机一张 5 折**）、**2 张无色卡**（1 Uncommon + 1 Rare，**贵 20%**）、**3 瓶药水**（65/25/10）、**3 件遗物**（**最右必为 `Shop` 档**、前三格排除、价格按稀有度 143-158 / 238-263 / 285-315）+ 删卡服务（75 起、每次 +25，`smiling_mask` 固定 50）。A16 加价（**补货的商品除外**）、`the_courier` 补货（**四排都补**：有色/无色/药水/遗物）、`membership_card` 折扣都在；折扣**乘法叠加**（0.5 × 0.8 = 40%）且**向上取整**（§338）。
 **四排的价格 ABI 都返回折后价**（§342：无色/药水两排曾经返回挂牌价 ⇒ 页面把买得起的商品禁用）；
 遗物补货按**补出来那一件**的稀有度定价（§342）；`smiling_mask` 是**硬价 50**，不涨价不折扣（§342）。

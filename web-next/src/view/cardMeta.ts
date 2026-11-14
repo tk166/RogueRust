@@ -1103,13 +1103,13 @@ const cardMeta: Record<string, CardMeta> = {
  },
  "spot_weakness": {
   "kind": "skill",
-  "targeting": "none",
+  "targeting": "singleEnemy",
   "cost": 1,
   "rarity": "Uncommon"
  },
  "spot_weakness+": {
   "kind": "skill",
-  "targeting": "none",
+  "targeting": "singleEnemy",
   "cost": 1,
   "rarity": "Uncommon"
  },

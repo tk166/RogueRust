@@ -241,9 +241,21 @@ def main():
             cost = '-'
         else:
             cost = energy
+        # §381：**"要不要目标"不能只看 `sel.eventTarget`**。
+        #
+        # `观察弱点`（`spot_weakness`）的程序是 `conditional{ intent.targetIntendsAttack }`
+        # —— 它**间接**读事件目标（"那只敌人的意图是攻击吗"），JSON 里一个 `sel.eventTarget`
+        # 都没有。于是旧启发式把它判成"无目标"，界面就把"打向任意敌人"归并成一次无目标出牌：
+        # 玩家没选敌人，卡直接结算，条件读到空目标 ⇒ 力量一点没加（玩家实测报的"没有选择敌人
+        # 就直接触发了"）。
+        #
+        # 判据：程序里出现 `sel.eventTarget` **或** `intent.target*`（条件/表达式读事件目标）。
+        # 内容里目前只有 `intent.targetIntendsAttack` 一种，但前缀匹配是**穷尽**的
+        # （闸门 56 遍历全部卡牌，断言"提到目标 ⇒ 被标成定向"没有遗漏）。
+        needs_target = 'sel.eventTarget' in program or 'intent.target' in program
         meta[card['Id']] = {
             'kind': kind,
-            'targeting': 'singleEnemy' if 'sel.eventTarget' in program else 'none',
+            'targeting': 'singleEnemy' if needs_target else 'none',
             'cost': cost,
             'rarity': card.get('Rarity') or 'Common',
         }
