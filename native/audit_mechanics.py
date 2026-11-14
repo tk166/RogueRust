@@ -302,9 +302,50 @@ def main():
     else:
         print('  ok  C1：%d 个敌人动作的意图种类与节目一致' % len(actions))
 
-    # ── D. 拾取类遗物清单（兑现由内核测试守，这里只列出范围）────────────────
+    # ── D. 选牌问句的边界（`node.chooseCards`）──────────────────────────────
+    print('[D] 选牌问句')
+    # 内核的容量：`Min` 0..=10、`Max` 1..=10（= ABI 的手牌格数）、`Copies` 1..=4。
+    # `forethought+` 的 "any number" 写的是 Max:10，而内核原来只到 8 ⇒ 一打就
+    # `StepThrew(Script:Effect)`（§412 的"每张卡都打一遍"扫描抓到的）。
+    MAX_SELECTED = 10
+    MAX_COPIES = 4
+    bad = []
+    def walk_choose(node, owner):
+        if isinstance(node, dict):
+            if node.get('kind') == 'node.chooseCards':
+                value = node.get('value') or {}
+                lo = value.get('Min')
+                hi = value.get('Max')
+                copies = value.get('Copies')
+                if not isinstance(lo, int) or not (0 <= lo <= MAX_SELECTED):
+                    bad.append('%s: Min=%r 越界（0..=%d）' % (owner, lo, MAX_SELECTED))
+                if not isinstance(hi, int) or not (1 <= hi <= MAX_SELECTED):
+                    bad.append('%s: Max=%r 越界（1..=%d）' % (owner, hi, MAX_SELECTED))
+                if isinstance(lo, int) and isinstance(hi, int) and lo > hi:
+                    bad.append('%s: Min %d > Max %d' % (owner, lo, hi))
+                if copies is not None and (not isinstance(copies, int) or not (1 <= copies <= MAX_COPIES)):
+                    bad.append('%s: Copies=%r 越界（1..=%d）' % (owner, copies, MAX_COPIES))
+            for child in node.values():
+                walk_choose(child, owner)
+        elif isinstance(node, list):
+            for child in node:
+                walk_choose(child, owner)
 
-    print('[D] 拾取类遗物')
+    for section in ('Cards', 'Statuses', 'EnemyActions', 'Potions', 'Relics'):
+        for row in doc.get(section) or []:
+            walk_choose(row.get('Program'), eid(row))
+            walk_choose(row.get('LifecyclePrograms'), eid(row))
+            walk_choose(row.get('Triggers'), eid(row))
+    if bad:
+        for line in bad:
+            fail('D1', line)
+    else:
+        print('  ok  D1：所有 chooseCards 的 Min/Max/Copies 都在内核容量内')
+
+    # ── E. 拾取类遗物清单（兑现由内核测试守，这里只列出范围）────────────────
+
+
+    print('[E] 拾取类遗物')
     pickup = []
     for relic in doc['Relics']:
         text = json.dumps(relic.get('Effects') or relic.get('Effect') or '', ensure_ascii=False)
@@ -323,7 +364,7 @@ def main():
         for kind, message in problems:
             print('  [%s] %s' % (kind, message))
         return 1
-    print('MECHANICS_AUDIT PASS（A1/A3/B1/B2/C1 全过；A2 是人工复核清单；行为层面两条在 wasm 测试里）')
+    print('MECHANICS_AUDIT PASS（A1/A3/B1/B2/C1/D1 全过；A2 是人工复核清单；行为层面三条在 wasm 测试里）')
     return 0
 
 

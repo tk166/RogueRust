@@ -3164,7 +3164,13 @@ pub const MAX_COPIES_PER_CHOICE: usize = 4;
 /// §195.4：`node.selectCards` 一次最多搬几张（与 `Count` 的上限是同一个数）。
 ///
 /// 8 是**容量**，不是规则：超了报 `Missing("Count")`（越界的 Count 是内容错，不是"少搬几张"）。
-pub const MAX_SELECTED_CARDS: usize = 8;
+/// 一次"选牌问句"最多几张（`node.selectCards` 的 `Count` 与 `node.chooseCards` 的 `Max`）。
+///
+/// ⚠️ **它必须 ≥ 手牌容量**：`forethought+`（"Put **any number** of cards …"）写的是
+/// `Max: 10`，而 ABI 的手牌格数就是 10（`rd-wasm` 的 `MAX_HAND_SLOTS`）。原来是 **8**，
+/// 于是那张牌一打就 `StepThrew(Script:Effect)` —— 而错误桶报的还是 `Min`（见下面那条）。
+/// §412 的"每张卡都打一遍"扫描第一轮就抓到了它。
+pub const MAX_SELECTED_CARDS: usize = 10;
 
 /// `DealDamage`：`Amount` → `TargetSelector` → **每个目标一条请求**（不写状态）。
 ///
@@ -5893,10 +5899,15 @@ fn choose_cards_node(
         "ToHand" => crate::state::ChoiceThen::ToHand,
         _ => return Err(ExecError::Ir(IrError::UnknownKind)),
     };
-    if !(0..=MAX_SELECTED_CARDS as i32).contains(&min)
-        || !(1..=MAX_SELECTED_CARDS as i32).contains(&max)
-        || min > max
-    {
+    // ⚠️ 三条判据**分开报**：第一版把它们合成一个 `Missing("Min")`，于是
+    // "`Max` 超了"看起来像"`Min` 写错"，排查时白走一趟（§412 实测）。
+    if !(0..=MAX_SELECTED_CARDS as i32).contains(&min) {
+        return Err(ExecError::Ir(IrError::Missing("Min")));
+    }
+    if !(1..=MAX_SELECTED_CARDS as i32).contains(&max) {
+        return Err(ExecError::Ir(IrError::Missing("Max")));
+    }
+    if min > max {
         return Err(ExecError::Ir(IrError::Missing("Min")));
     }
     let mut owners = [CombatantId::EMPTY; MAX_COMBATANTS];

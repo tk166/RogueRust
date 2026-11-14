@@ -4048,6 +4048,145 @@ mod tests {
         );
     }
 
+    /// §412①：**295 张卡逐张真打一遍**，不许有 `StepThrew`。
+    ///
+    /// 静态扫描看不了"节目跑起来会不会炸"：`sel.eventTarget` 解析不出、`moveCardToZone` 的
+    /// 区域不认识、`createCardInstance` 的落区非法 —— 这些都只在执行时暴露。
+    /// 判据：`step_play` 返回 Ok、`problems` 里没有 `StepThrew`、手牌少一张。
+    ///
+    /// `unplayable` 的牌（诅咒/状态）跳过：它们**本来**就打不出去（内容闸门另有一条钉住）。
+    #[test]
+    fn every_card_can_be_played_without_throwing() {
+        let image = rd_core::content::Content::parse(crate::IMAGE).expect("the image parses");
+        let mut card_ids: Vec<&'static str> = Vec::new();
+        for row in image.rows(rd_core::content::Table::Card) {
+            let Some(id) = image.entity_id(rd_core::content::Table::Card, row.index()) else {
+                continue;
+            };
+            card_ids.push(id);
+        }
+        assert!(card_ids.len() > 250, "the content must expose its card table");
+
+        let mut played = 0usize;
+        let mut skipped_unplayable = 0usize;
+        let mut failures: Vec<String> = Vec::new();
+        for card_id in card_ids {
+            // `unplayable` 的牌跳过（内容里带这个标签的本来就不能打）。
+            if image.card_has_tag(card_id, "unplayable") == Some(true) {
+                skipped_unplayable += 1;
+                continue;
+            }
+            // ⚠️ `build_session_at` 要 `&'static [DeckEntry]`，所以用 `Box::leak`
+            // （每次循环一份，295 份 × 24 字节，可以忽略）。
+            let deck: &'static [DeckEntry<'static>] =
+                Box::leak(vec![DeckEntry { card: card_id, count: 10 }].into_boxed_slice());
+            let Ok(mut session) = build_session_at(7, "enc_cultist", 200, Some(deck), 0, 0) else {
+                failures.push(format!("{card_id}: the fight would not build"));
+                continue;
+            };
+            let hand_before = session.hand_len();
+            if hand_before == 0 {
+                failures.push(format!("{card_id}: no cards in the opening hand"));
+                continue;
+            }
+            let played_ok = session.step_play(0, 0).is_ok();
+            let threw = session.problems.iter().any(|p| p.contains("StepThrew"));
+            // ⚠️ **不能**断言"手牌少一张"：抽牌/弃牌/消耗类会把张数拉回去甚至变多
+            // （`pommel_strike` 打 1 抽 1 ⇒ 5→5；`battle_trance` 抽 3 ⇒ 5→7；
+            // `second_wind`/`fiend_fire` 弃光 ⇒ 5→0）。第一版就是按"少一张"判的，
+            // 于是 41 张**完全正常**的牌被报成失败。
+            let hand_after = session.hand_len();
+            if !played_ok || threw {
+                failures.push(format!(
+                    "{card_id}: ok={played_ok} threw={threw} hand {hand_before}->{hand_after} problems={:?}",
+                    session.problems
+                ));
+                continue;
+            }
+            played += 1;
+        }
+        // 先报**为什么**失败，再报数量（否则只看得到"230 < 250"，看不到是哪些）。
+        assert!(
+            failures.is_empty(),
+            "{} card(s) failed to play: {:#?}",
+            failures.len(),
+            &failures[..failures.len().min(10)]
+        );
+        assert!(played > 250, "most cards must be playable, got {played}");
+        let _ = skipped_unplayable;
+    }
+
+    /// §412③：**167 条敌人动作逐条执行一遍**，不许炸。
+    ///
+    /// 与 §410 的"怪物会不会卡住"互补：那条看**选择**（意图规则能不能翻面），这条看**执行**
+    /// （招式节目里引用的选择器/区域/状态是否真的存在）。
+    #[test]
+    fn every_enemy_action_executes() {
+        let image = rd_core::content::Content::parse(crate::IMAGE).expect("the image parses");
+        let content: &'static rd_core::content::Content<'static> = Box::leak(Box::new(image));
+        // 动作 → 拥有它的遭遇/怪物（用 `enc_*` 建局，动作才找得到它的怪物）。
+        let mut cases: Vec<(&'static str, u32)> = Vec::new();
+        let encounter_ids: Vec<&'static str> = content
+            .rows(rd_core::content::Table::Encounter)
+            .filter_map(|row| {
+                rd_core::content::EnctRow::new(row).and_then(|enct| content.string(enct.id()))
+            })
+            .collect();
+        for (index, _) in encounter_ids.iter().enumerate() {
+            let Ok(enemies) = content.encounter_enemies(index as u32) else {
+                continue;
+            };
+            for slot in 0..enemies.len() {
+                let Ok(spec) = enemies.get(slot) else { continue };
+                let Ok(list) = spec.actions() else { continue };
+                for slot in 0..list.len() {
+                    if let Some(action) = list.string(slot) {
+                        cases.push((action, index as u32));
+                    }
+                }
+            }
+        }
+        assert!(cases.len() > 120, "the content must expose its enemy actions");
+        let mut failures: Vec<String> = Vec::new();
+        let mut executed = 0usize;
+        for (action_id, encounter) in cases {
+            let Some(encounter_name) = encounter_ids.get(encounter as usize).copied() else {
+                continue;
+            };
+            let Ok(mut session) = build_session_at(7, encounter_name, 200, None, 0, 0) else {
+                continue;
+            };
+            let Some(row) = content
+                .lookup_in(action_id, rd_core::content::EK_EACTION)
+                .map(|entry| u32::from(entry.index))
+            else {
+                failures.push(format!("{action_id}: not in the EACT table"));
+                continue;
+            };
+            let roster = session.enemy_roster();
+            let Some(actor) = roster.first().copied() else {
+                continue;
+            };
+            match rd_core::intent::execute_action(
+                &mut session.state,
+                content,
+                &actor,
+                row,
+                roster.get(1).copied(),
+            ) {
+                Ok(_) => executed += 1,
+                Err(error) => failures.push(format!("{action_id}: {error:?}")),
+            }
+        }
+        assert!(executed > 120, "most enemy actions must execute, got {executed}");
+        assert!(
+            failures.is_empty(),
+            "{} enemy action(s) failed: {:#?}",
+            failures.len(),
+            &failures[..failures.len().min(8)]
+        );
+    }
+
     /// §411：**分裂之后还能打中、还能看见意图**（玩家报的"打它们不造成伤害、行为也不变"）。
     ///
     /// 根因是"槽位 → 战斗员"的映射用了**开战时**的 `plan.enemies`：分裂出来的战斗员不在那张表里。

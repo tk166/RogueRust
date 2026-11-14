@@ -13071,6 +13071,83 @@ mod tests {
         assert!(granted > 100, "most relics must be grantable, got {granted}");
     }
 
+    /// §412②：**33 瓶药水逐瓶真喝一遍**，不许"喝不了"。
+    ///
+    /// 判据：`rd_env_use_potion(slot, 0)` 返回 0，且腰带少一瓶（`combat_flee` 会结束战斗，
+    /// 所以每瓶重建一局）。⚠️ 这条抓的是"原子在运行时炸"（例如 `choice_offered` 找不到候选、
+    /// `combat_autoplay_top` 抽牌堆空），静态扫描只能确认**名字**认得。
+    #[test]
+    fn every_potion_can_be_drunk() {
+        let deck = ["strike", "strike", "strike", "defend", "defend"];
+        let image = content();
+        let mut potion_ids: Vec<&'static str> = Vec::new();
+        for row in image.rows(rd_core::content::Table::Potion) {
+            if let Some(id) = image.entity_id(rd_core::content::Table::Potion, row.index()) {
+                potion_ids.push(id);
+            }
+        }
+        assert!(potion_ids.len() > 30, "the content must expose its potion table");
+
+        let mut failures: Vec<String> = Vec::new();
+        let mut drunk = 0usize;
+        for potion_id in potion_ids {
+            test_run(7, 80, 80, &deck);
+            // 直接装一场战斗进 `crate::slot()`（`rd_env_use_potion` 读的就是它）。
+            // ⚠️ 不用 `rd_run_fight_begin`：那要求"站在战斗节点上"，而地图是随机的 ——
+            // 第一版就是这么写的，于是 33 瓶一瓶都没测到（`drunk = 0`，看着像"全挂"）。
+            let fight = crate::build_session_at(7, "enc_cultist", 200, None, 0, 0)
+                .expect("the fight builds");
+            *crate::slot() = Some(fight);
+            let granted = unsafe { rd_run_grant_potion(potion_id.as_ptr(), potion_id.len() as i32) };
+            if granted != 0 {
+                failures.push(format!("{potion_id}: grant refused ({granted})"));
+                continue;
+            }
+            let before = run_slot()
+                .as_ref()
+                .map(|run| run.state.potions().len())
+                .unwrap_or(0);
+            let code = rd_env_use_potion(0, 0);
+            let after = run_slot()
+                .as_ref()
+                .map(|run| run.state.potions().len())
+                .unwrap_or(0);
+            if code != 0 {
+                failures.push(format!(
+                    "{potion_id}: use refused code={code} msg={}",
+                    run_error_text()
+                ));
+                continue;
+            }
+            // ⚠️ `potion_fill`（Entropic Brew）**故意**不"少一瓶"：它先腾出自己的格子、
+            // 再把腰带塞满随机药水（1 → 3 是对的）。其余药水必须 -1。
+            let fills_belt = image
+                .potion(
+                    (0..image.potion_count())
+                        .find(|index| {
+                            image.potion(*index).map(|p| p.id) == Some(potion_id)
+                        })
+                        .unwrap_or(u32::MAX),
+                )
+                .map(|potion| potion.effect.contains("potion_fill"))
+                .unwrap_or(false);
+            if !fills_belt && after + 1 != before {
+                failures.push(format!(
+                    "{potion_id}: the belt did not shrink ({before} -> {after})"
+                ));
+                continue;
+            }
+            drunk += 1;
+        }
+        assert!(drunk > 25, "most potions must be drinkable, got {drunk}");
+        assert!(
+            failures.is_empty(),
+            "{} potion(s) failed: {:#?}",
+            failures.len(),
+            &failures[..failures.len().min(8)]
+        );
+    }
+
     /// §401：**Boss 遗物也是遗物入口** —— `calling_bell`（召唤铃铛）从 Boss 奖励里拿到时，
     /// 它的"再给 3 件遗物"是欠账（`pickup_relics`），必须在**这条**路径上兑现。
     ///
