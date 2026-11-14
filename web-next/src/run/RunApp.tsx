@@ -333,7 +333,8 @@ export function RunApp() {
         <div className="run-loot" data-run-loot={state.lastLoot.source}>
           <span>
             {state.lastLoot.source}：金币 +{state.lastLoot.gold}
-            {state.lastLoot.relic ? ` · 遗物 ${state.lastLoot.relic}` : ""}
+            {/* §396：这里以前直接印**内容 id**（截图里是"遗物 potion_belt"）。 */}
+            {state.lastLoot.relic ? ` · 遗物 ${displayName("relics", state.lastLoot.relic)}` : ""}
           </span>
           <button type="button" data-loot-dismiss onClick={() => store.dismissLoot()}>
             知道了

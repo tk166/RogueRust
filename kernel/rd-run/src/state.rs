@@ -8140,15 +8140,22 @@ impl RunState {
             return Err(RunError::Invariant("bosses_fought must be 0 or 1"));
         }
 
-        // 已结算位图只许指向地图上的节点（哨兵与越界位都不算）。
+        // 已结算位图只许指向**地图上的节点**，或者 **Boss 哨兵**（§394）。
+        //
+        // ⚠️ 哨兵必须允许：Boss 在地图之外（`map::BOSS_NODE = 100`，`inv:§7.2`），而打赢它之后
+        // `mark_resolved()` 按 `self.node` 置位 ⇒ bit 100。第一版这里只允许 `< node_count()`，
+        // 于是"赢过 Boss 的存档"写的时候合法、读的时候非法（玩家贴回来的存档就是这么被拒的）。
         for word in 0..self.resolved.len() {
             let mut bits = self.resolved[word];
             while bits != 0 {
                 let bit = bits.trailing_zeros() as usize;
                 bits &= bits - 1;
                 let index = word * 64 + bit;
-                if index >= self.map.node_count() {
-                    return Err(RunError::Invariant("a resolved bit points off the map"));
+                if index >= self.map.node_count() && index != usize::from(crate::map::BOSS_NODE) {
+                    // 带上数字：不带数字的"越界"等于让人去猜是哪一个位。
+                    return Err(RunError::Invariant(
+                        "a resolved bit points off the map (see the archive's node/resolved fields)",
+                    ));
                 }
             }
         }

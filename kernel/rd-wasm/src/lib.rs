@@ -3951,6 +3951,66 @@ mod tests {
     /// combatant, so a "rolled but not stored" build fails here rather than showing up as 0 damage
     /// in a fight nobody is staring at.
     #[test]
+    /// §395：**真实出牌路径**下，史莱姆老大也要在 50% 时分裂。
+    ///
+    /// 上面那条 `the_slime_boss_splits_into_two_large_slimes_at_half_health` 是**手搓**的
+    /// （`exec::resolve_damage` + `host.try_resolve_pending_queues`）。真实路径多一层：
+    /// `rd_env_step` → `step_play` → `run_fight` → `play::try_play_card` →
+    /// `host.resolve_pending_queues`。玩家是在**后者**里遇到"不分裂"的（存档回放：他死在 Boss
+    /// 手里，Boss 一次都没分裂），所以判据必须走后者 —— 否则"手搓能过、真打不能"永远测不出来。
+    #[test]
+    fn the_slime_boss_splits_when_damaged_through_the_play_path() {
+        // 一副只有打击的牌组：一次 6 点，够我们把血量一格一格推下去。
+        static DECK: [DeckEntry<'static>; 1] = [DeckEntry { card: "strike", count: 10 }];
+        let mut session = build_session_at(7, "enc_slime_boss", 80, Some(&DECK), 0, 0)
+            .expect("the slime boss builds");
+        let boss = rd_core::state::CombatantId::new("slime_boss").expect("id");
+        // 直接把它压到 50% 之上一点点（80/140），剩下的用**真牌**打过去。
+        {
+            let combatant = session.state.combatant_mut(&boss).expect("the boss");
+            combatant.health_current = 76;
+        }
+        session.reobserve_after_external_change();
+
+        let mut split = false;
+        for step in 0..80 {
+            if session.state.combatant(&boss).is_none() {
+                split = true;
+                break;
+            }
+            let actions = session.actions.clone();
+            let Some(play) = actions.iter().find(|action| action.kind == ACTION_PLAY).copied() else {
+                // 没牌可出就过一轮。
+                if session.step_end_turn().is_err() {
+                    break;
+                }
+                continue;
+            };
+            if session.step_play(play.arg0.max(0) as usize, play.arg1).is_err() {
+                break;
+            }
+            let _ = step;
+        }
+        assert!(
+            split,
+            "the boss must split once its HP crosses 50% — even through the real play path"
+        );
+        let mut acid = false;
+        let mut spike = false;
+        for combatant in session.state.combatants() {
+            let raw = combatant.id.as_str();
+            let definition = raw.split('#').next().unwrap_or(raw);
+            if definition == "acid_slime_l" {
+                acid = true;
+            }
+            if definition == "spike_slime_l" {
+                spike = true;
+            }
+        }
+        assert!(acid, "1 Acid Slime (L) must be on the field");
+        assert!(spike, "1 Spike Slime (L) must be on the field");
+    }
+
     /// §385：三哨兵的相位是 **1+2**（中间的从 Beam 起手）。
     ///
     /// wiki.gg `Sentry`：*"In the Elite encounter, the middle Sentry instead uses Beam followed by

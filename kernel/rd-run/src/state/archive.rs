@@ -81,7 +81,10 @@ pub enum ArchiveError {
     /// payload 放不下（写）或解码后超长（读）。
     TooLong,
     /// CRC 不匹配：文本被改过或被截断。
-    BadCrc,
+    ///
+    /// §396：带上**数字**（解码出的 payload 长度 + 两边的 CRC）—— 不带数字的"校验和不匹配"
+    /// 让人只能猜"是抄错了还是被截断了"，而这次排查就卡在这里。
+    BadCrc { payload: usize, expected: u32, actual: u32 },
     /// 版本号不认识。
     BadVersion,
     /// §166：这份存档是用**另一份内容**编的。
@@ -107,7 +110,10 @@ impl core::fmt::Display for ArchiveError {
             Self::BadTail => f.write_str("archive has no checksum tail"),
             Self::BadBase64 => f.write_str("archive body is not base64"),
             Self::TooLong => f.write_str("archive does not fit its buffer"),
-            Self::BadCrc => f.write_str("archive checksum mismatch (edited or truncated?)"),
+            // §396：把数字写出来（payload 长度 + 两边的 CRC）—— "抄错"与"被截断"要能分开。
+            Self::BadCrc { payload, expected, actual } => f.write_fmt(format_args!(
+                "archive checksum mismatch (decoded {payload} bytes; text says {expected:08x}, payload is {actual:08x}) — the text was edited or truncated"
+            )),
             Self::BadVersion => f.write_str("archive version is not supported"),
             Self::ContentMismatch { archive, build } => write!(
                 f,
@@ -1116,6 +1122,29 @@ pub fn write(state: &RunState, content: i32, out: &mut [u8]) -> Result<usize, Ar
 ///
 /// `expected_content`：本机内容的指纹。与本存档不同 ⇒ `ContentMismatch`，**在还原之前**。
 pub fn restore(text: &str, expected_content: i32, state: &mut RunState) -> Result<(), ArchiveError> {
+    // §396：先把"抄写噪声"去掉 —— 折行/空白/`-_` 变体都不该让一份好存档回不来。
+    //
+    // ⚠️ 只做**等价变换**：去掉空白（base64 里不出现空白）、把 base64url 的 `-_` 归一成 `+/`。
+    // CRC 与内容指纹照旧逐字节校验 —— 抄错一个字符仍然会被拒。
+    let mut cleaned: [u8; MAX_ARCHIVE * 2] = [0u8; MAX_ARCHIVE * 2];
+    let mut cleaned_len = 0usize;
+    for &byte in text.as_bytes() {
+        if byte.is_ascii_whitespace() {
+            continue;
+        }
+        let mapped = match byte {
+            b'-' => b'+',
+            b'_' => b'/',
+            other => other,
+        };
+        if cleaned_len == cleaned.len() {
+            return Err(ArchiveError::TooLong);
+        }
+        cleaned[cleaned_len] = mapped;
+        cleaned_len += 1;
+    }
+    // ⚠️ 归一之后，`-` 分隔符变成了 `+` —— 所以分隔符要按**原来的最后一个 `-`** 找。
+    // 做法：在规范化之前先定位尾部的 `-<8 hex>`（这一段不含 `-`、也不含空白）。
     let bytes = text.trim().as_bytes();
     let magic = MAGIC.as_bytes();
     if bytes.len() < magic.len() + 10 || &bytes[..magic.len()] != magic || bytes[magic.len()] != b'-' {
@@ -1127,7 +1156,8 @@ pub fn restore(text: &str, expected_content: i32, state: &mut RunState) -> Resul
         return Err(ArchiveError::BadTail);
     }
     let tail_start = body.len() - 9;
-    let encoded = &body[..tail_start];
+    // §396：编码段用**规范化之后**的那一段（去掉空白、`-_` → `+/`），长度从 magic 之后算起。
+    let encoded = &cleaned[magic.len() + 1..cleaned_len - 9];
     let mut sum = 0u32;
     for &byte in &body[tail_start + 1..] {
         let digit = match byte {
@@ -1142,8 +1172,13 @@ pub fn restore(text: &str, expected_content: i32, state: &mut RunState) -> Resul
     let packed_len = base64_decode(encoded, &mut packed)?;
     let mut payload = [0u8; MAX_PAYLOAD];
     let payload_len = rle_decode(&packed[..packed_len], &mut payload)?;
-    if crc32(&payload[..payload_len]) != sum {
-        return Err(ArchiveError::BadCrc);
+    let actual = crc32(&payload[..payload_len]);
+    if actual != sum {
+        return Err(ArchiveError::BadCrc {
+            payload: payload_len,
+            expected: sum,
+            actual,
+        });
     }
     let restored = read_payload(&payload[..payload_len], expected_content)?;
     // §162：**提交前**问一次整局的不变量。CRC 证明"没被改坏"，这一句证明"这样的一局可能存在"。
@@ -1162,6 +1197,82 @@ mod tests {
     /// The fingerprint every test in this module uses unless it is *testing* the mismatch.
     /// A literal at each site would make "which content" a matter of luck.
     const CONTENT: i32 = 0x1234_abcd;
+
+    /// §394：**打赢 Boss 之后存的档必须能读回来**。
+    ///
+    /// Boss 在地图之外（`BOSS_NODE = 100`），而 `mark_resolved()` 按 `self.node` 置位 ⇒
+    /// `resolved` 里出现 bit 100。第一版的 `validate()` 只允许 `< node_count()`，于是
+    /// "赢过 Boss 的档"写的时候合法、读的时候被自己的不变量拒掉
+    /// （玩家贴回来的存档就是这么回不来的）。
+    ///
+    /// 判据两侧都写：① 往返成功；② 读回来之后 `node_resolved()` 仍然为真
+    /// （少了后半条，"把位图清掉"也能让第一条绿）。
+    #[test]
+    fn an_archive_saved_after_a_boss_win_round_trips() {
+        let mut run = sample();
+        // 站到 Boss 哨兵上并结算它（`rd_run_fight_end` 打完之后就是这两个动作）。
+        run.node = i32::from(crate::map::BOSS_NODE);
+        run.floor = crate::map::ROWS as i32 + 1;
+        run.mark_resolved();
+        assert!(run.node_resolved(), "the boss sentinel counts as settled");
+
+        let mut buffer = [0u8; MAX_ARCHIVE];
+        let written = write(&run, CONTENT, &mut buffer).expect("write");
+        let text = core::str::from_utf8(&buffer[..written]).expect("utf-8");
+        // ⚠️ 还原会跑 `validate()` —— 第一版就在这里被拒（bit 100 >= node_count）。
+        let mut restored = RunState::new_with_ascension(7, 80, 11, &["defend"], 9).expect("a skeleton");
+        restore(text, CONTENT, &mut restored).expect("a boss-win archive must read back");
+        assert!(
+            restored.node_resolved(),
+            "the sentinel bit must survive the round trip"
+        );
+        assert_eq!(restored.node, i32::from(crate::map::BOSS_NODE));
+    }
+
+    /// §396：**抄写噪声**不该让存档回不来 —— 折行、空白、base64url 变体都要能吃。
+    ///
+    /// 判据三侧：① 每 60 字符折行 + 行尾空白 ⇒ 仍然能读；② 把 `+/` 换成 `-_`（base64url）
+    /// ⇒ 仍然能读；③ 去掉/替换**一个**字符 ⇒ 仍然被拒（规范化不许把"抄错"也放进来）。
+    #[test]
+    fn an_archive_survives_copy_paste_noise_but_not_a_typo() {
+        let run = sample();
+        let mut out = [0u8; MAX_ARCHIVE];
+        let len = write(&run, CONTENT, &mut out).expect("write");
+        let text = core::str::from_utf8(&out[..len]).expect("ascii");
+
+        let mut target = RunState::new_with_ascension(7, 80, 11, &["defend"], 9).expect("a skeleton");
+        restore(text, CONTENT, &mut target).expect("the plain text reads");
+
+        // ① 折行（每 60 字符一个换行 + 两个空格），模拟编辑器/终端折行。
+        let mut wrapped = std::string::String::new();
+        for (index, ch) in text.chars().enumerate() {
+            if index > 0 && index % 60 == 0 {
+                wrapped.push(char::from_u32(10).expect("newline"));
+                wrapped.push(' ');
+                wrapped.push(' ');
+            }
+            wrapped.push(ch);
+        }
+        let mut target = RunState::new_with_ascension(7, 80, 11, &["defend"], 9).expect("a skeleton");
+        restore(&wrapped, CONTENT, &mut target).expect("a wrapped archive reads");
+
+        // ② base64url 变体：`+` → `-`、`/` → `_`（只在编码段里换，CRC 尾是十六进制不受影响）。
+        let (head, tail) = text.rsplit_once('-').expect("the crc tail");
+        let url = std::format!("{}-{}", head.replace('+', "-").replace('/', "_"), tail);
+        let mut target = RunState::new_with_ascension(7, 80, 11, &["defend"], 9).expect("a skeleton");
+        restore(&url, CONTENT, &mut target).expect("a base64url archive reads");
+
+        // ③ 抄错一个字符：仍然必须被拒（CRC 是唯一的守卫，规范化不许把它放宽）。
+        let mut typo: std::vec::Vec<u8> = text.as_bytes().to_vec();
+        let at = 40;
+        typo[at] = if typo[at] == b'a' { b'b' } else { b'a' };
+        let typo = std::str::from_utf8(&typo).expect("still ascii");
+        let mut target = RunState::new_with_ascension(7, 80, 11, &["defend"], 9).expect("a skeleton");
+        assert!(
+            restore(typo, CONTENT, &mut target).is_err(),
+            "a one-character typo must still be refused"
+        );
+    }
 
     fn sample() -> RunState {
         let deck = [
@@ -1408,7 +1519,12 @@ mod tests {
         let byte = edited.as_bytes()[at];
         let replacement = if byte == b'A' { 'B' } else { 'A' };
         edited.replace_range(at..at + 1, &replacement.to_string());
-        assert_eq!(restore(&edited, CONTENT, &mut run), Err(ArchiveError::BadCrc));
+        // §396：`BadCrc` 现在带数字（payload 长度 + 两边的 CRC），所以按**形状**判，
+        // 而不是逐字比一个常量 —— 断言的是"它是 BadCrc"，不是"那个 CRC 值是多少"。
+        assert!(
+            matches!(restore(&edited, CONTENT, &mut run), Err(ArchiveError::BadCrc { .. })),
+            "an edited archive must be refused as a checksum mismatch"
+        );
 
         // 截掉尾巴 ⇒ 没有校验和。
         let cut = &text[..text.len() - 5];

@@ -45,64 +45,64 @@ LEGACY = os.path.join(ROOT, 'sts', 'content')
 OUT = os.path.join(ROOT, 'web-next', 'src', 'i18n', 'zh.ts')
 META_OUT = os.path.join(ROOT, 'web-next', 'src', 'view', 'cardMeta.ts')
 
-#: 只在状态里出现的词 → 中文（§388 第 ③ 层）。
+#: 只在状态里出现的词 → `(中文名, 中文说明)`（§388 第 ③ 层 + §393）。
 #:
 #: ⚠️ **只作显示名**：任何规则判定都走 id，不走这里。来源是官方中文本地化；
 #: 这些条目没有第二来源核对（不像 wiki 数值那样），所以不写进 `sts-wiki-gap.md` 的账。
 STATUS_ZH = {
-    'standard.artifact': '神器',
-    'standard.cap_cost_at': '费用上限',
-    'standard.confusion': '混乱',
-    'standard.constricted': '紧束',
-    'standard.curiosity': '好奇',
-    'standard.curl_up': '蜷缩',
-    'standard.double_damage': '双倍伤害',
-    'standard.draw_reduction': '抽牌减少',
-    'standard.enrage': '激怒',
-    'standard.entangle_ready': '缠绕就绪',
-    'standard.entangled': '缠绕',
-    'standard.fading': '消逝',
-    'standard.flying': '飞行',
-    'standard.hex': '诅咒',
-    'standard.intangible': '无形',
-    'standard.lagavulin_asleep': '沉睡',
-    'standard.lose_dexterity': '失去敏捷',
-    'standard.lose_strength': '失去力量',
-    'standard.malleable': '可塑',
-    'standard.mode_shift': '模式转换',
-    'standard.nightmare_pending': '噩梦待发',
-    'standard.no_block_from_cards': '卡牌不提供格挡',
-    'standard.no_draw': '无法抽牌',
-    'standard.omega': '欧米伽',
-    'standard.painful_stabs': '痛苦刺击',
-    'standard.phantom_veil': '幻影面纱',
-    'standard.phase_split': '分裂（相位）',
-    'standard.plated_armor': '镀甲',
-    'standard.poison': '中毒',
-    'standard.regain_strength': '恢复力量',
-    'standard.regen': '再生',
-    'standard.sharp_hide': '尖刺外壳',
-    'standard.slow': '迟缓',
-    'standard.split': '分裂',
-    'standard.split_acid_l': '分裂：大型酸液',
-    'standard.split_spike_l': '分裂：大型尖刺',
-    'standard.spore_cloud': '孢子云',
-    'standard.stasis': '停滞',
-    'standard.stasis_ready': '停滞就绪',
-    'standard.the_bomb_damage': '炸弹伤害',
-    'standard.time_warp': '时间扭曲',
-    'standard.unawakened': '未觉醒',
-    # 药水/遗物挂的状态：短名就是药水/遗物的 id，但那几张表里没有它们（非 Ironclad 口径），
-    # 所以在这里补。
-    'standard.fairy_in_a_bottle': '瓶中精灵',
-    'standard.duplication': '复制',
-    'standard.the_boot': '靴子',
-    'standard.paper_phrog': '纸蛙',
-    'standard.paper_krane': '纸鹤',
-    'standard.snecko_skull': '蛇骷髅',
-    'standard.duality': '双重',
-    'standard.energized': '充能',
-    'standard.draw_card_next_turn': '下回合抽牌',
+    'standard.artifact': ('神器', '抵消接下来 N 个负面效果。'),
+    'standard.cap_cost_at': ('费用上限', '这张牌的费用被限制在一个上限。'),
+    'standard.confusion': ('混乱', '抽到的牌费用随机化。'),
+    'standard.constricted': ('紧束', '每回合结束时失去 N 点生命。'),
+    'standard.curiosity': ('好奇', '每当你打出一张能力牌，它获得 N 点力量。'),
+    'standard.curl_up': ('蜷缩', '第一次受到攻击伤害时，获得 N 点格挡。'),
+    'standard.double_damage': ('双倍伤害', '下一张攻击牌打出两次。'),
+    'standard.draw_reduction': ('抽牌减少', '每回合少抽 N 张牌。'),
+    'standard.enrage': ('激怒', '每当你打出一张技能牌，它获得 N 点力量。'),
+    'standard.entangle_ready': ('缠绕就绪', '下一回合缠绕你。'),
+    'standard.entangled': ('缠绕', '本回合不能打出攻击牌。'),
+    'standard.fading': ('消逝', 'N 回合后消失。'),
+    'standard.flying': ('飞行', '受到的攻击伤害减半；被击中 N 次后落地。'),
+    'standard.hex': ('诅咒', '每当你打出一张非攻击牌，获得 1 张虚空。'),
+    'standard.intangible': ('无形', '受到的伤害降为 1。回合结束时减 1 层。'),
+    'standard.lagavulin_asleep': ('沉睡', '沉睡中：N 回合内不行动、也不受伤害。'),
+    'standard.lose_dexterity': ('失去敏捷', '回合结束时失去 N 点敏捷。'),
+    'standard.lose_strength': ('失去力量', '回合结束时失去 N 点力量。'),
+    'standard.malleable': ('可塑', '受到攻击伤害时获得格挡，格挡量逐次增加。'),
+    'standard.mode_shift': ('模式转换', '再受到 N 点伤害就切换形态。'),
+    'standard.nightmare_pending': ('噩梦待发', '下回合把选中的牌各复制 N 张。'),
+    'standard.no_block_from_cards': ('卡牌不提供格挡', '牌给的格挡无效。'),
+    'standard.no_draw': ('无法抽牌', '回合开始时不再抽牌。'),
+    'standard.omega': ('欧米伽', 'N 回合结束时，对所有敌人造成 50 点伤害。'),
+    'standard.painful_stabs': ('痛苦刺击', '每次攻击造成未被格挡的伤害时，塞 1 张伤口。'),
+    'standard.phantom_veil': ('幻影面纱', '本回合受到的伤害降为 1。'),
+    # ⚠️ 名字里必须带**条件**：玩家看到"分裂"就以为"它这一回合要分裂了"（报障原话：
+    # "进来的意图立马是分裂但是实际上并没有分裂"）。带上"生命 ≤50%"之后它读起来是一个**条件**。
+    'standard.phase_split': ('分裂（生命 ≤50%）', '生命降到 50% 以下时，分裂成 1 只大型酸液史莱姆和 1 只大型尖刺史莱姆（各带当前生命）。'),
+    'standard.plated_armor': ('镀甲', '回合结束时获得 N 点格挡；受到未被格挡的攻击伤害时减 1 层。'),
+    'standard.poison': ('中毒', '回合开始时失去 N 点生命，然后层数减 1。'),
+    'standard.regain_strength': ('恢复力量', '回合结束时恢复 N 点力量。'),
+    'standard.regen': ('再生', '回合结束时回复 N 点生命，然后层数减 1。'),
+    'standard.sharp_hide': ('尖刺外壳', '被攻击时对攻击者造成 N 点伤害。'),
+    'standard.slow': ('迟缓', '本回合每打出一张牌，受到的伤害 +10%。'),
+    'standard.split': ('分裂', '死亡时分裂成两只更小的史莱姆。'),
+    'standard.split_acid_l': ('分裂：大型酸液', '死亡时分裂成两只中型酸液史莱姆。'),
+    'standard.split_spike_l': ('分裂：大型尖刺', '死亡时分裂成两只中型尖刺史莱姆。'),
+    'standard.spore_cloud': ('孢子云', '死亡时给凶手 2 层虚弱。'),
+    'standard.stasis': ('停滞', '把你的 1 张牌扣住，之后归还。'),
+    'standard.stasis_ready': ('停滞就绪', '下一次停滞会扣住你的牌。'),
+    'standard.the_bomb_damage': ('炸弹伤害', 'N 回合后爆炸，造成 40 点伤害。'),
+    'standard.time_warp': ('时间扭曲', '本回合每打出 12 张牌，你失去一个回合。'),
+    'standard.unawakened': ('未觉醒', '第一次死亡后复活。'),
+    'standard.fairy_in_a_bottle': ('瓶中精灵', '死亡时回复 30% 生命并复活（一次性）。'),
+    'standard.duplication': ('复制', '下一张打出的牌打出两次。'),
+    'standard.the_boot': ('靴子', '小于等于 4 点的攻击伤害提升到 5 点。'),
+    'standard.paper_phrog': ('纸蛙', '易伤的层数不会在回合结束时减少。'),
+    'standard.paper_krane': ('纸鹤', '虚弱的层数不会在回合结束时减少。'),
+    'standard.snecko_skull': ('蛇骷髅', '每场战斗第一次抽到诅咒时，抽 1 张牌。'),
+    'standard.duality': ('双重', '每打出一张攻击牌，获得 1 点敏捷。'),
+    'standard.energized': ('充能', '获得 N 点额外能量。'),
+    'standard.draw_card_next_turn': ('下回合抽牌', '下回合多抽 N 张牌。'),
 }
 API = 'https://spire-archive.com/api/sts1/%s?lang=%s&limit=500'
 TABLES = ('cards', 'relics', 'potions', 'monsters')
@@ -228,16 +228,24 @@ def main():
     # ── 状态：三条来源，按顺序（§388）────────────────────────────────────────
     statuses = json.load(io.open(os.path.join(LEGACY, 'statuses.json'), encoding='utf-8'))
     legacy = {item['id']: item['name'] for item in statuses}
+    # §393：legacy 里**本来就有** `desc`（中文说明），生成器以前只搬了名字 ⇒ 悬浮窗没字。
+    legacy_text = {item['id']: item.get('desc', '') for item in statuses}
+    def legacy_entry(status_id):
+        """legacy 的一条 → `{name, text}`（`desc` 缺就只给名字）。"""
+        name = legacy[status_id]
+        desc = legacy_text.get(status_id, '')
+        return {'name': name, 'text': desc} if desc else {'name': name}
+
     for axis in ('strength', 'vulnerable', 'weak', 'dexterity', 'frail'):
         if axis in legacy:
-            out['statuses']['standard.' + axis] = {'name': legacy[axis]}
-    for status_id, name in legacy.items():
-        out['statuses'].setdefault(status_id, {'name': name})
+            out['statuses']['standard.' + axis] = legacy_entry(axis)
+    for status_id in legacy:
+        out['statuses'].setdefault(status_id, legacy_entry(status_id))
         # legacy 表里既有 `thorns` 也有 `standard.thorns` 的键，而运行时查的是**全 id**
         # （`standard.thorns`）⇒ 无前缀的那几条也要登记一份带前缀的别名，否则
         # 屏幕上照样是 `thorns`（§388 的第一版就漏了这一步）。
         if '.' not in status_id:
-            out['statuses'].setdefault('standard.' + status_id, {'name': name})
+            out['statuses'].setdefault('standard.' + status_id, legacy_entry(status_id))
 
     # ② 跨表复用：`standard.X` 的 `X` 在别的表里已经翻译过 ⇒ 用那个名字。
     # 状态与它来源（遗物/卡/药水）本来就是同一个词，两份翻译只会漂。
@@ -250,13 +258,21 @@ def main():
         for table in ('relics', 'cards', 'potions', 'monsters'):
             entry = out[table].get(short)
             if entry and entry.get('name'):
-                out['statuses'][status_id] = {'name': entry['name']}
+                # §393：**说明也一起搬** —— 状态与它来源本来就是同一句话
+                # （`orichalcum` 的"没有格挡就获得 6 格挡"就是那条遗物的原文）。
+                merged = {'name': entry['name']}
+                if entry.get('text'):
+                    merged['text'] = entry['text']
+                out['statuses'][status_id] = merged
                 reused += 1
                 break
     # ③ 人工译名（只在状态里出现的词）。来源：官方中文本地化。
     # ⚠️ 这些**只做显示名**，不进任何规则判定（规则一律走 id）。
-    for status_id, name in STATUS_ZH.items():
-        out['statuses'].setdefault(status_id, {'name': name})
+    for status_id, row in STATUS_ZH.items():
+        entry = {'name': row[0]}
+        if row[1]:
+            entry['text'] = row[1]
+        out['statuses'].setdefault(status_id, entry)
     print('  状态复用   %3d 条（跨表）+ %d 条（人工译名表）' % (reused, len(STATUS_ZH)))
     print('  %-9s %3d/%3d 有中文（缺 %d）' % (
         '状态', len(out['statuses']), len(content['Statuses']),

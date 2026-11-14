@@ -936,9 +936,16 @@ button.primary:disabled {
   color: var(--muted);
 }
 
+/*
+ * §392：**一行一件**（玩家报的"商店还不是一行只有一张牌"）。
+ *
+ * 原来是 `auto-fit + minmax(150px, 1fr)` —— 宽屏上会自动排成两三列，于是"卡牌"那一排
+ * 看起来像一堆小方块，价格/名字挤在一起。StS 的商店是一列清单，而且一行一件才读得清
+ * "名字 · 价格 · 为什么不能买"。
+ */
 .shop-rows {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: 1fr;
   gap: 8px;
 }
 

@@ -125,6 +125,19 @@ try {
     "内容里**每一条**状态都有中文名（穷尽 150 条）",
     missingStatus.length === 0 ? `${statusKeys.size} 条` : JSON.stringify(missingStatus.slice(0, 6))
   );
+  // §393：**说明**也要有（玩家报的"状态悬浮窗没有文字说明"）。
+  // 判据是穷尽的：每一条都得有 `text`，不是"抽三条看看"。
+  const missingText = [];
+  for (const status of content.Statuses ?? []) {
+    const row = new RegExp(`"${status.Id.replace(/[.]/g, "\.")}": \{[^}]*"text"`).test(zhSource);
+    if (!row) missingText.push(status.Id);
+  }
+  check(
+    missingText.length === 0,
+    "内容里**每一条**状态都有中文说明（悬浮窗里那一段）",
+    missingText.length === 0 ? "0 缺" : JSON.stringify(missingText.slice(0, 6))
+  );
+
   // 玩家点名的两条，单独钉住（回归时最想知道的就是它们）。
   for (const id of ["standard.orichalcum", "standard.incense_burner"]) {
     const row = new RegExp(`"${id.replace(/[.]/g, "\\.")}": \\{\\s*"name": "([^"]+)"`).exec(zhSource);
@@ -269,6 +282,16 @@ try {
     JSON.stringify(spotNames.map((row) => `${row.id}→${row.name}`))
   );
   // ── 接线：组件必须**用**这个纯函数（纯函数测了但没人调，等于没修）──────────
+  // §392：商店**一行一件**（玩家报的"商店还不是一行只有一张牌"）。
+  // 判据看源码：`.shop-rows` 必须是单列（`grid-template-columns: 1fr`），不是 `auto-fit`。
+  const shopCss = await readFile(join(REPO, "web-next/src/run/run.css"), "utf8");
+  const shopRowsRule = /\.shop-rows \{[^}]*\}/.exec(shopCss);
+  check(
+    shopRowsRule !== null && /grid-template-columns:\s*1fr/.test(shopRowsRule[0]),
+    "商店货架是**单列**（一行一件）",
+    shopRowsRule ? shopRowsRule[0].replace(/\s+/g, " ").slice(0, 90) : "找不到 .shop-rows"
+  );
+
   const modalSource = await readFile(join(REPO, "web-next/src/overlay/ChoiceModal.tsx"), "utf8");
   check(
     /choiceOptionLabel\s*\(/.test(modalSource),

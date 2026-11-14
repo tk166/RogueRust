@@ -1892,478 +1892,636 @@ const zh = {
  },
  "statuses": {
   "standard.strength": {
-   "name": "力量"
+   "name": "力量",
+   "text": "每层使你的攻击伤害 +1。"
   },
   "standard.vulnerable": {
-   "name": "易伤"
+   "name": "易伤",
+   "text": "受到的攻击伤害 x1.5。回合结束时减 1 层。"
   },
   "standard.weak": {
-   "name": "虚弱"
+   "name": "虚弱",
+   "text": "造成的攻击伤害 x0.75。回合结束时减 1 层。"
   },
   "standard.dexterity": {
-   "name": "敏捷"
+   "name": "敏捷",
+   "text": "每层使你获得的格挡 +1。"
   },
   "standard.frail": {
-   "name": "脆弱"
+   "name": "脆弱",
+   "text": "获得的格挡 x0.75。回合结束时减 1 层。"
   },
   "strength": {
-   "name": "力量"
+   "name": "力量",
+   "text": "每层使你的攻击伤害 +1。"
   },
   "dexterity": {
-   "name": "敏捷"
+   "name": "敏捷",
+   "text": "每层使你获得的格挡 +1。"
   },
   "vulnerable": {
-   "name": "易伤"
+   "name": "易伤",
+   "text": "受到的攻击伤害 x1.5。回合结束时减 1 层。"
   },
   "weak": {
-   "name": "虚弱"
+   "name": "虚弱",
+   "text": "造成的攻击伤害 x0.75。回合结束时减 1 层。"
   },
   "frail": {
-   "name": "脆弱"
+   "name": "脆弱",
+   "text": "获得的格挡 x0.75。回合结束时减 1 层。"
   },
   "thorns": {
-   "name": "荆棘"
+   "name": "荆棘",
+   "text": "被攻击时对攻击者造成等量伤害。"
   },
   "standard.thorns": {
-   "name": "荆棘"
+   "name": "荆棘",
+   "text": "被攻击时对攻击者造成等量伤害。"
   },
   "ritual": {
-   "name": "仪式"
+   "name": "仪式",
+   "text": "每回合结束时获得等量力量。"
   },
   "standard.ritual": {
-   "name": "仪式"
+   "name": "仪式",
+   "text": "每回合结束时获得等量力量。"
   },
   "metallicize": {
-   "name": "金属化"
+   "name": "金属化",
+   "text": "每回合结束时获得等量格挡。"
   },
   "standard.metallicize": {
-   "name": "金属化"
+   "name": "金属化",
+   "text": "每回合结束时获得等量格挡。"
   },
   "standard.rage": {
-   "name": "狂怒"
+   "name": "狂怒",
+   "text": "打出此牌后，你在这个回合内每打出一张攻击牌，获得 3 格挡 。"
   },
   "standard.flame_barrier": {
-   "name": "火焰屏障"
+   "name": "火焰屏障",
+   "text": "获得 12 点 格挡 。\n你在这个回合每受到一次攻击，都对攻击者造成 4 点伤害。"
   },
   "standard.combust": {
-   "name": "自燃"
+   "name": "自燃",
+   "text": "在你的回合结束时，你失去1点生命，对所有敌人造成 5 点伤害。"
   },
   "standard.buffer": {
-   "name": "缓冲"
+   "name": "缓冲",
+   "text": "阻止下一次你受到的生命值损伤。"
   },
   "standard.barricade": {
-   "name": "壁垒"
+   "name": "壁垒",
+   "text": "格挡 不再在你的回合开始时消失。"
   },
   "standard.blur": {
-   "name": "残影"
+   "name": "残影",
+   "text": "获得 5 点 格挡 。\n你的下一回合开始时 格挡 不会消失。"
   },
   "standard.berserk": {
-   "name": "狂暴"
+   "name": "狂暴",
+   "text": "获得 2 层 易伤 。\n在每回合开始时获得 [R] 。"
   },
   "standard.demon_form": {
-   "name": "恶魔形态"
+   "name": "恶魔形态",
+   "text": "在每回合开始时获得\n2 点 力量 。"
   },
   "standard.brutality": {
-   "name": "残暴"
+   "name": "残暴",
+   "text": "在你的回合开始时，你失去1点生命，抽1张牌。"
   },
   "standard.rupture": {
-   "name": "撕裂"
+   "name": "撕裂",
+   "text": "每当你从一张牌中失去生命时，获得 1 点 力量 。"
   },
   "standard.juggernaut": {
-   "name": "势不可当"
+   "name": "势不可当",
+   "text": "每当你获得 格挡 时，\n对随机一名敌人造成\n5 点伤害。"
   },
   "standard.evolve": {
-   "name": "进化"
+   "name": "进化",
+   "text": "每当你抽到一张 状态牌 时，抽 1 张牌。"
   },
   "standard.fire_breathing": {
-   "name": "火焰吐息"
+   "name": "火焰吐息",
+   "text": "每当你抽到一张 状态牌 或 诅咒 牌时，对所有敌人造成 6 点伤害。"
   },
   "standard.dark_embrace": {
-   "name": "黑暗之拥"
+   "name": "黑暗之拥",
+   "text": "每当有一张牌被 消耗 时， 抽1张牌。"
   },
   "standard.feel_no_pain": {
-   "name": "无惧疼痛"
+   "name": "无惧疼痛",
+   "text": "每当有一张牌被 消耗 时， 获得 3 点 格挡 。"
   },
   "standard.double_tap": {
-   "name": "双发"
+   "name": "双发",
+   "text": "在这个回合，你打出的下一张攻击牌会打出两次。"
   },
   "standard.corruption": {
-   "name": "腐化"
+   "name": "腐化",
+   "text": "所有技能牌耗能变为0。\n所有技能牌在被打出时被 消耗 。"
   },
   "standard.mayhem": {
-   "name": "乱战"
+   "name": "乱战",
+   "text": "在你的回合开始时，打出你抽牌堆顶部的牌。"
   },
   "standard.magnetism": {
-   "name": "磁力"
+   "name": "磁力",
+   "text": "在每回合开始时，增加一张随机无色牌到你的手牌。"
   },
   "standard.panache": {
-   "name": "神气制胜"
+   "name": "神气制胜",
+   "text": "你每在同个回合内打出5张牌，就对所有敌人造成 10 点伤害。"
   },
   "standard.sadistic_nature": {
-   "name": "残虐天性"
+   "name": "残虐天性",
+   "text": "每当你对一名敌人造成负面 状态 ，使对方受到 5 点伤害。"
   },
   "standard.the_bomb": {
-   "name": "炸弹"
+   "name": "炸弹",
+   "text": "在3回合结束后，对所有敌人造成 40 点伤害。"
   },
   "standard.orichalcum": {
-   "name": "奥利哈钢"
+   "name": "奥利哈钢",
+   "text": "如果你在回合结束时没有任何 格挡 ，获得 6 点 格挡 。"
   },
   "standard.cloak_clasp": {
-   "name": "斗篷扣"
+   "name": "斗篷扣",
+   "text": "在你的回合结束时，每有一张手牌获得 1 点 格挡 。"
   },
   "standard.stone_calendar": {
-   "name": "历石"
+   "name": "历石",
+   "text": "在第 ? 回合结束时，对所有敌人造成 52 点伤害。"
   },
   "standard.mercury_hourglass": {
-   "name": "水银沙漏"
+   "name": "水银沙漏",
+   "text": "在你的回合开始时，对所有敌人造成 3 点伤害。"
   },
   "standard.horn_cleat": {
-   "name": "船夹板"
+   "name": "船夹板",
+   "text": "在你的第二回合开始时，获得 14 点 格挡 。"
   },
   "standard.captains_wheel": {
-   "name": "舵盘"
+   "name": "舵盘",
+   "text": "在你的第三回合开始时，获得 18 点 格挡 。"
   },
   "standard.incense_burner": {
-   "name": "香炉"
+   "name": "香炉",
+   "text": "每 6 回合，获得 1 层 无实体 。"
   },
   "standard.pocketwatch": {
-   "name": "怀表"
+   "name": "怀表",
+   "text": "若你在某个回合打出的牌少于等于 3 张，则在你的下个回合开始时额外抽 3 张牌。"
   },
   "standard.lantern": {
-   "name": "灯笼"
+   "name": "灯笼",
+   "text": "在每场战斗的第一回合获得 [E] 。"
   },
   "standard.bag_of_preparation": {
-   "name": "准备背包"
+   "name": "准备背包",
+   "text": "在每场战斗开始时，额外抽 2 张牌。"
   },
   "standard.ice_cream": {
-   "name": "冰淇淋"
+   "name": "冰淇淋",
+   "text": "多余的能量可以留到下一回合。"
   },
   "standard.calipers": {
-   "name": "外卡钳"
+   "name": "外卡钳",
+   "text": "在你的回合开始时，不再失去所有 格挡 ，而是失去 15 点 格挡 。"
   },
   "standard.kunai": {
-   "name": "苦无"
+   "name": "苦无",
+   "text": "你每在同一回合内打出 ? 张 攻击牌 ，获得 1 点 敏捷 。"
   },
   "standard.shuriken": {
-   "name": "手里剑"
+   "name": "手里剑",
+   "text": "你每在同一回合内打出 ? 张 攻击牌 ，获得 1 点 力量 。"
   },
   "standard.ornamental_fan": {
-   "name": "精致折扇"
+   "name": "精致折扇",
+   "text": "你每在同一回合内打出 3 张 攻击牌 ，就获得 4 点 格挡 。"
   },
   "standard.letter_opener": {
-   "name": "开信刀"
+   "name": "开信刀",
+   "text": "你每在同一回合内打出 3 张技能牌，对所有敌人造成 5 点伤害。"
   },
   "standard.nunchaku": {
-   "name": "双节棍"
+   "name": "双节棍",
+   "text": "你每打出  张 攻击牌 ，获得 [E] 。"
   },
   "standard.ink_bottle": {
-   "name": "墨水瓶"
+   "name": "墨水瓶",
+   "text": "你每打出 10 张牌，抽 1 张牌。"
   },
   "standard.pen_nib": {
-   "name": "钢笔尖"
+   "name": "钢笔尖",
+   "text": "你每打出的第 10 张 攻击牌 将会造成双倍伤害。"
   },
   "standard.gremlin_horn": {
-   "name": "地精之角"
+   "name": "地精之角",
+   "text": "每当有一名敌人死亡，获得 [E] 并抽 1 张牌。"
   },
   "standard.the_specimen": {
-   "name": "生物样本"
+   "name": "生物样本",
+   "text": "每当有敌人死去时，将其身上的 中毒 层数移到一名随机敌人身上。"
   },
   "standard.torii": {
-   "name": "鸟居"
+   "name": "鸟居",
+   "text": "每当你受到小于等于 5 点的未被格挡 攻击 伤害时，将伤害降低为 1。"
   },
   "standard.tungsten_rod": {
-   "name": "钨合金棍"
+   "name": "钨合金棍",
+   "text": "你每次失去生命时，减少失去的生命值 1 点。"
   },
   "standard.champion_belt": {
-   "name": "冠军腰带"
+   "name": "冠军腰带",
+   "text": "每当你给予 易伤 时，同时给予 1 层 虚弱 。"
   },
   "standard.ginger": {
-   "name": "生姜"
+   "name": "生姜",
+   "text": "你不会再被 虚弱 。"
   },
   "standard.turnip": {
-   "name": "萝卜"
+   "name": "萝卜",
+   "text": "你不会再被 脆弱 。"
   },
   "standard.red_skull": {
-   "name": "红头骨"
+   "name": "红头骨",
+   "text": "当你的生命值等于或低于 50% 时， 你获得额外 3 点 力量 。"
   },
   "standard.odd_mushroom": {
-   "name": "奇怪蘑菇"
+   "name": "奇怪蘑菇",
+   "text": "当你有 易伤 状态时，受到的额外伤害从 50% 下降为 25% 。"
   },
   "standard.ring_of_the_snake": {
-   "name": "蛇之戒指"
+   "name": "蛇之戒指",
+   "text": "在每场战斗开始时，额外抽 2 张牌。"
   },
   "standard.ring_of_the_serpent": {
-   "name": "长蛇戒指"
+   "name": "长蛇戒指",
+   "text": "替换 蛇之戒指 。?在你的每个回合开始时，额外抽 1 张牌。"
   },
   "standard.philosophers_stone": {
-   "name": "贤者之石"
+   "name": "贤者之石",
+   "text": "在每回合开始时获得 [E] 。 所有敌人初始获得 1点 力量 。"
   },
   "standard.happy_flower": {
-   "name": "开心小花"
+   "name": "开心小花",
+   "text": "每  个回合，获得 [E] 。"
   },
   "standard.art_of_war": {
-   "name": "孙子兵法"
+   "name": "孙子兵法",
+   "text": "如果你在回合中不打出任何 攻击牌 ，在下一回合得到一点额外 [E] 。"
   },
   "standard.brimstone": {
-   "name": "硫磺"
+   "name": "硫磺",
+   "text": "在你的每个回合开始时，你获得 ? 点 力量 ，所有敌人也获得 1 力量。"
   },
   "standard.mark_of_pain": {
-   "name": "痛楚印记"
+   "name": "痛楚印记",
+   "text": "每回合开始获得 [R] 。在战斗开始时，将 2 张 伤口 放入你的抽牌堆。"
   },
   "standard.mutagenic_strength": {
-   "name": "突变之力"
+   "name": "突变之力",
+   "text": "在每场战斗开始时获得 ? 点 力量 ，在你的第一个回合结束时失去 3 点 力量。"
   },
   "standard.centennial_puzzle": {
-   "name": "百年积木"
+   "name": "百年积木",
+   "text": "你在每场战斗中第一次损伤生命时，抽 3 张牌。"
   },
   "standard.runic_cube": {
-   "name": "符文立方体"
+   "name": "符文立方体",
+   "text": "每当你失去生命时，抽 1 张牌。"
   },
   "standard.charons_ashes": {
-   "name": "卡戎之灰"
+   "name": "卡戎之灰",
+   "text": "每当你 消耗 一张牌，对所有敌人造成 3 点伤害。"
   },
   "standard.akabeko": {
-   "name": "赤牛"
+   "name": "赤牛",
+   "text": "你在每场战斗中的第一次攻击造成 8 点额外伤害"
   },
   "standard.self_forming_clay": {
-   "name": "自成型黏土"
+   "name": "自成型黏土",
+   "text": "每当你在战斗中失去生命，就在下回合获得 3 点 格挡 。"
   },
   "standard.bird_faced_urn": {
-   "name": "鸟面瓮"
+   "name": "鸟面瓮",
+   "text": "每当你打出一张 能力牌 ，回复 2 点生命。"
   },
   "standard.runic_pyramid": {
-   "name": "符文金字塔"
+   "name": "符文金字塔",
+   "text": "你在回合结束时不再自动丢弃所有手牌。"
   },
   "standard.lizard_tail": {
-   "name": "蜥蜴尾巴"
+   "name": "蜥蜴尾巴",
+   "text": "当你要被杀死时，免死并回复到最大生命值的 50% （仅能起效一次）。"
   },
   "standard.unceasing_top": {
-   "name": "不休陀螺"
+   "name": "不休陀螺",
+   "text": "在你的回合，当你没有手牌时，抽一张牌。"
   },
   "standard.slavers_collar": {
-   "name": "奴隶贩子颈环"
+   "name": "奴隶贩子颈环",
+   "text": "在Boss战与精英战中，你在每回合开始时获得 [E] 。"
   },
   "standard.busted_crown": {
-   "name": "破碎金冠"
+   "name": "破碎金冠",
+   "text": "在卡牌奖励画面，可供选择的牌数减少 2 张。在每回合开始时获得 [E] 。"
   },
   "standard.ectoplasm": {
-   "name": "灵体外质"
+   "name": "灵体外质",
+   "text": "你不能再获得任何 金币 。在回合开始时获得 [E] 。"
   },
   "standard.ancient_tea_set": {
-   "name": "古茶具套装"
+   "name": "古茶具套装",
+   "text": "到达休息处后的下一场战斗开始时获得 [E] [E] 。"
   },
   "standard.sozu": {
-   "name": "添水"
+   "name": "添水",
+   "text": "你无法再获得药水。 在每回合开始时获得 [E] 。"
   },
   "standard.snecko_eye": {
-   "name": "异蛇之眼"
+   "name": "异蛇之眼",
+   "text": "每回合多抽 2 张牌。每场战斗开始时获得 混乱 效果。"
   },
   "standard.cursed_key": {
-   "name": "诅咒钥匙"
+   "name": "诅咒钥匙",
+   "text": "你每次打开一个非Boss宝箱，都会获得一张 诅咒 。在每回合开始时获得 [E] 。"
   },
   "standard.the_abacus": {
-   "name": "算盘"
+   "name": "算盘",
+   "text": "你每次将抽牌堆洗牌时，获得 6 点 格挡 。"
   },
   "standard.sundial": {
-   "name": "日晷"
+   "name": "日晷",
+   "text": "你每洗牌  次，获得 [E] [E] 。"
   },
   "standard.hand_drill": {
-   "name": "手钻"
+   "name": "手钻",
+   "text": "每当你突破敌人的 格挡 时，给予其 2 层 易伤 。"
   },
   "standard.chemical_x": {
-   "name": "化学物X"
+   "name": "化学物X",
+   "text": "耗能为 X 的牌的效果数值增加 2 点。"
   },
   "standard.strike_dummy": {
-   "name": "打击木偶"
+   "name": "打击木偶",
+   "text": "名字中有“打击”的卡牌造成 3 点额外伤害。"
   },
   "standard.velvet_choker": {
-   "name": "天鹅绒颈圈"
+   "name": "天鹅绒颈圈",
+   "text": "你每回合不能打出超过  张牌。在每回合开始时获得 [E] 。我只能打出最多"
   },
   "standard.runic_dome": {
-   "name": "符文圆顶"
+   "name": "符文圆顶",
+   "text": "。你无法再看见敌人的 意图 。在每回合开始时获得 [E]"
   },
   "standard.magic_flower": {
-   "name": "魔法花"
+   "name": "魔法花",
+   "text": "战斗中的回复效果提升 50% 。"
   },
   "standard.medical_kit": {
-   "name": "医药箱"
+   "name": "医药箱",
+   "text": "可以打出原本 不能被打出 的 状态牌 。 打出 状态牌 会将其 消耗 。"
   },
   "standard.blue_candle": {
-   "name": "蓝蜡烛"
+   "name": "蓝蜡烛",
+   "text": "可以打出原本 不能被打出 的 诅咒牌 ，\n\n 打出 诅咒牌 会让你失去 1 点生命并将其 消耗 。"
   },
   "standard.enchiridion": {
-   "name": "英雄宝典"
+   "name": "英雄宝典",
+   "text": "每场战斗开始时增加一张随机 能力牌 到你的手牌，这张牌在第一回合的耗能变为 0 。"
   },
   "standard.orange_pellets": {
-   "name": "橙色药丸"
+   "name": "橙色药丸",
+   "text": "你每在同一回合内打出 能力牌 、 攻击牌 和 技能牌 各一张，移除你身上的所有负面效果。"
   },
   "standard.dead_branch": {
-   "name": "枯木树枝"
+   "name": "枯木树枝",
+   "text": "每当你 消耗 一张牌，增加一张随机卡牌到你的手牌。"
   },
   "standard.nilrys_codex": {
-   "name": "尼利的宝典"
+   "name": "尼利的宝典",
+   "text": "在每回合结束时，你可以从 3 张随机牌中选择 1 张，随机洗入你的抽牌堆。"
   },
   "standard.warped_tongs": {
-   "name": "弯曲铁钳"
+   "name": "弯曲铁钳",
+   "text": "在你的每个回合开始时，随机 升级 一张你的手牌（只影响本场战斗）。"
   },
   "standard.mummified_hand": {
-   "name": "干瘪之手"
+   "name": "干瘪之手",
+   "text": "你每打出一张 能力牌 ，手牌中就有一张随机牌在这个回合耗能变为 0 。"
   },
   "standard.strange_spoon": {
-   "name": "奇怪的勺子"
+   "name": "奇怪的勺子",
+   "text": "应该 消耗 的牌在被打出时会有 50% 几率只被丢弃。"
   },
   "standard.artifact": {
-   "name": "神器"
+   "name": "神器",
+   "text": "抵消接下来 N 个负面效果。"
   },
   "standard.cap_cost_at": {
-   "name": "费用上限"
+   "name": "费用上限",
+   "text": "这张牌的费用被限制在一个上限。"
   },
   "standard.confusion": {
-   "name": "混乱"
+   "name": "混乱",
+   "text": "抽到的牌费用随机化。"
   },
   "standard.constricted": {
-   "name": "紧束"
+   "name": "紧束",
+   "text": "每回合结束时失去 N 点生命。"
   },
   "standard.curiosity": {
-   "name": "好奇"
+   "name": "好奇",
+   "text": "每当你打出一张能力牌，它获得 N 点力量。"
   },
   "standard.curl_up": {
-   "name": "蜷缩"
+   "name": "蜷缩",
+   "text": "第一次受到攻击伤害时，获得 N 点格挡。"
   },
   "standard.double_damage": {
-   "name": "双倍伤害"
+   "name": "双倍伤害",
+   "text": "下一张攻击牌打出两次。"
   },
   "standard.draw_reduction": {
-   "name": "抽牌减少"
+   "name": "抽牌减少",
+   "text": "每回合少抽 N 张牌。"
   },
   "standard.enrage": {
-   "name": "激怒"
+   "name": "激怒",
+   "text": "每当你打出一张技能牌，它获得 N 点力量。"
   },
   "standard.entangle_ready": {
-   "name": "缠绕就绪"
+   "name": "缠绕就绪",
+   "text": "下一回合缠绕你。"
   },
   "standard.entangled": {
-   "name": "缠绕"
+   "name": "缠绕",
+   "text": "本回合不能打出攻击牌。"
   },
   "standard.fading": {
-   "name": "消逝"
+   "name": "消逝",
+   "text": "N 回合后消失。"
   },
   "standard.flying": {
-   "name": "飞行"
+   "name": "飞行",
+   "text": "受到的攻击伤害减半；被击中 N 次后落地。"
   },
   "standard.hex": {
-   "name": "诅咒"
+   "name": "诅咒",
+   "text": "每当你打出一张非攻击牌，获得 1 张虚空。"
   },
   "standard.intangible": {
-   "name": "无形"
+   "name": "无形",
+   "text": "受到的伤害降为 1。回合结束时减 1 层。"
   },
   "standard.lagavulin_asleep": {
-   "name": "沉睡"
+   "name": "沉睡",
+   "text": "沉睡中：N 回合内不行动、也不受伤害。"
   },
   "standard.lose_dexterity": {
-   "name": "失去敏捷"
+   "name": "失去敏捷",
+   "text": "回合结束时失去 N 点敏捷。"
   },
   "standard.lose_strength": {
-   "name": "失去力量"
+   "name": "失去力量",
+   "text": "回合结束时失去 N 点力量。"
   },
   "standard.malleable": {
-   "name": "可塑"
+   "name": "可塑",
+   "text": "受到攻击伤害时获得格挡，格挡量逐次增加。"
   },
   "standard.mode_shift": {
-   "name": "模式转换"
+   "name": "模式转换",
+   "text": "再受到 N 点伤害就切换形态。"
   },
   "standard.nightmare_pending": {
-   "name": "噩梦待发"
+   "name": "噩梦待发",
+   "text": "下回合把选中的牌各复制 N 张。"
   },
   "standard.no_block_from_cards": {
-   "name": "卡牌不提供格挡"
+   "name": "卡牌不提供格挡",
+   "text": "牌给的格挡无效。"
   },
   "standard.no_draw": {
-   "name": "无法抽牌"
+   "name": "无法抽牌",
+   "text": "回合开始时不再抽牌。"
   },
   "standard.omega": {
-   "name": "欧米伽"
+   "name": "欧米伽",
+   "text": "N 回合结束时，对所有敌人造成 50 点伤害。"
   },
   "standard.painful_stabs": {
-   "name": "痛苦刺击"
+   "name": "痛苦刺击",
+   "text": "每次攻击造成未被格挡的伤害时，塞 1 张伤口。"
   },
   "standard.phantom_veil": {
-   "name": "幻影面纱"
+   "name": "幻影面纱",
+   "text": "本回合受到的伤害降为 1。"
   },
   "standard.phase_split": {
-   "name": "分裂（相位）"
+   "name": "分裂（生命 ≤50%）",
+   "text": "生命降到 50% 以下时，分裂成 1 只大型酸液史莱姆和 1 只大型尖刺史莱姆（各带当前生命）。"
   },
   "standard.plated_armor": {
-   "name": "镀甲"
+   "name": "镀甲",
+   "text": "回合结束时获得 N 点格挡；受到未被格挡的攻击伤害时减 1 层。"
   },
   "standard.poison": {
-   "name": "中毒"
+   "name": "中毒",
+   "text": "回合开始时失去 N 点生命，然后层数减 1。"
   },
   "standard.regain_strength": {
-   "name": "恢复力量"
+   "name": "恢复力量",
+   "text": "回合结束时恢复 N 点力量。"
   },
   "standard.regen": {
-   "name": "再生"
+   "name": "再生",
+   "text": "回合结束时回复 N 点生命，然后层数减 1。"
   },
   "standard.sharp_hide": {
-   "name": "尖刺外壳"
+   "name": "尖刺外壳",
+   "text": "被攻击时对攻击者造成 N 点伤害。"
   },
   "standard.slow": {
-   "name": "迟缓"
+   "name": "迟缓",
+   "text": "本回合每打出一张牌，受到的伤害 +10%。"
   },
   "standard.split": {
-   "name": "分裂"
+   "name": "分裂",
+   "text": "死亡时分裂成两只更小的史莱姆。"
   },
   "standard.split_acid_l": {
-   "name": "分裂：大型酸液"
+   "name": "分裂：大型酸液",
+   "text": "死亡时分裂成两只中型酸液史莱姆。"
   },
   "standard.split_spike_l": {
-   "name": "分裂：大型尖刺"
+   "name": "分裂：大型尖刺",
+   "text": "死亡时分裂成两只中型尖刺史莱姆。"
   },
   "standard.spore_cloud": {
-   "name": "孢子云"
+   "name": "孢子云",
+   "text": "死亡时给凶手 2 层虚弱。"
   },
   "standard.stasis": {
-   "name": "停滞"
+   "name": "停滞",
+   "text": "把你的 1 张牌扣住，之后归还。"
   },
   "standard.stasis_ready": {
-   "name": "停滞就绪"
+   "name": "停滞就绪",
+   "text": "下一次停滞会扣住你的牌。"
   },
   "standard.the_bomb_damage": {
-   "name": "炸弹伤害"
+   "name": "炸弹伤害",
+   "text": "N 回合后爆炸，造成 40 点伤害。"
   },
   "standard.time_warp": {
-   "name": "时间扭曲"
+   "name": "时间扭曲",
+   "text": "本回合每打出 12 张牌，你失去一个回合。"
   },
   "standard.unawakened": {
-   "name": "未觉醒"
+   "name": "未觉醒",
+   "text": "第一次死亡后复活。"
   },
   "standard.fairy_in_a_bottle": {
-   "name": "瓶中精灵"
+   "name": "瓶中精灵",
+   "text": "死亡时回复 30% 生命并复活（一次性）。"
   },
   "standard.duplication": {
-   "name": "复制"
+   "name": "复制",
+   "text": "下一张打出的牌打出两次。"
   },
   "standard.the_boot": {
-   "name": "靴子"
+   "name": "靴子",
+   "text": "小于等于 4 点的攻击伤害提升到 5 点。"
   },
   "standard.paper_phrog": {
-   "name": "纸蛙"
+   "name": "纸蛙",
+   "text": "易伤的层数不会在回合结束时减少。"
   },
   "standard.paper_krane": {
-   "name": "纸鹤"
+   "name": "纸鹤",
+   "text": "虚弱的层数不会在回合结束时减少。"
   },
   "standard.snecko_skull": {
-   "name": "蛇骷髅"
+   "name": "蛇骷髅",
+   "text": "每场战斗第一次抽到诅咒时，抽 1 张牌。"
   },
   "standard.duality": {
-   "name": "双重"
+   "name": "双重",
+   "text": "每打出一张攻击牌，获得 1 点敏捷。"
   },
   "standard.energized": {
-   "name": "充能"
+   "name": "充能",
+   "text": "获得 N 点额外能量。"
   },
   "standard.draw_card_next_turn": {
-   "name": "下回合抽牌"
+   "name": "下回合抽牌",
+   "text": "下回合多抽 N 张牌。"
   }
  },
  "events": {

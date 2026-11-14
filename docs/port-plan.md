@@ -26649,3 +26649,84 @@ with its current HP."*
 * `intent.targetIntendsAttack` 这类"读目标"的条件在预览里仍然答 -1（`观察弱点` 的意图条不显示伤害，
   它本来也不造成伤害，所以不影响）；
 * 状态 chip 只有名字 + 层数，没有图标；`STATUS_ZH` 那 51 条没有第二来源核对（只作显示名）。
+
+---
+
+## §392–§396 玩家第四轮：商店排版 / 状态说明 / 存档回不来
+
+### 392 商店：一行一件
+
+`.shop-rows` 原来是 `grid-template-columns: repeat(auto-fit, minmax(150px, 1fr))` ——
+宽屏上自动排成两三列，于是"卡牌"那一排看着像一堆小方块，名字/价格/原因挤在一起。
+改成单列 `1fr`：StS 的商店本来就是一列清单，而且一行一件才读得清"名字 · 价格 · 为什么不能买"。
+
+### 393 状态悬浮窗没有文字说明
+
+`zh.ts` 的 `statuses` 条目**只有 `name`**，而悬浮面板读的是 `displayText("statuses", id)`
+⇒ 空 ⇒ 面板上写"（这一条没有说明文本）"。
+
+三层来源（与名字同一套，§388）：
+
+1. **legacy**：`sts/content/statuses.json` 里**本来就有 `desc`**（中文！），生成器以前只搬了名字；
+2. **跨表复用**：`standard.X` 的 `X` 在 relics / cards / potions 里有中文 `text` ⇒ 一起搬
+   （`orichalcum` → "如果你在回合结束时没有任何 格挡，获得 6 点 格挡。"）；
+3. **人工译名表**：`STATUS_ZH` 的每一条从 `name` 升级成 `(name, text)`，补一句中文说明。
+
+覆盖：**158/158 条都有说明**（闸门 56 逐条断言，不抽查）。
+
+### 394 存档回不来：Boss 哨兵位踩了自己的不变量
+
+玩家贴的存档（打赢史莱姆老大之后存的）导入时被拒：
+
+    回档被拒：archive state is inconsistent: a resolved bit points off the map
+
+根因：Boss 在地图**之外**（`map::BOSS_NODE = 100`，`inv:§7.2`），打赢它之后
+`mark_resolved()` 按 `self.node` 置位 ⇒ `resolved` 里出现 **bit 100**；而 `validate()` 只允许
+`index < map.node_count()`（约 70）⇒ **写的时候合法、读的时候非法**。
+
+修法：`validate()` 允许哨兵位；拒绝信息带上"是哪一类越界"。
+回归测试：**打赢 Boss → 导出 → 导入**必须成功，且 `node_resolved()` 仍为真
+（少了后半条，"把位图清掉"也能绿）。
+
+### 395 史莱姆老大"不分裂"：其实是它没到 50%
+
+存档回放证明玩家**死在** Boss 手里（floor 16 / node 100 / health 0），而不是"分裂了没生效"。
+但那条报障仍然指出了两个真问题：
+
+1. **状态标签读起来像"现在就要分裂"**：`standard.phase_split` 原来叫"分裂（相位）"，
+   而它从开战就挂在 Boss 身上（`StartingStatuses`）。改名成 **"分裂（生命 ≤50%）"** ——
+   带上条件之后它读起来是一个**条件**，不是一个正在进行的状态；
+2. **之前的测试是手搓的**：`the_slime_boss_splits_into_two_large_slimes_at_half_health` 用
+   `exec::resolve_damage` + `host.try_resolve_pending_queues`，而真实路径多一层
+   （`rd_env_step` → `step_play` → `run_fight` → `try_play_card` → `resolve_pending_queues`）。
+   新增 `the_slime_boss_splits_when_damaged_through_the_play_path`：**出牌**打到 50% 以下，
+   断言两只 L 史莱姆出现。两条都绿 ⇒ 分裂在真实路径上有效。
+
+⚠️ 顺带修了截图里另一处裸 id：战利品横幅写的是"遗物 potion_belt"（直接印内容 id）。
+
+### 396 存档的抄写鲁棒性（这次的教训）
+
+我把玩家贴在聊天里的存档**人工转抄**进探针 → CRC 不匹配。后来原样落盘再读就通过了。
+暴露两件可修的事：
+
+1. **导入端太挑**：`restore` 只接受 `trim()` 后原封不动的一行。现实里存档会被折行、被插入空白、
+   或被客户端换成 base64url（`-_`）。⇒ 导入先**规范化**（去掉所有空白、`-_` → `+/`），
+   **CRC 不放宽**（抄错一个字符仍然被拒，判据见
+   `an_archive_survives_copy_paste_noise_but_not_a_typo` 的三侧断言）；
+2. **拒绝信息不带数字**：`archive checksum mismatch (edited or truncated?)` 不告诉你哪一段多长。
+   ⇒ `BadCrc { payload, expected, actual }`，消息里写出"解出多少字节、文本说多少、实际多少"。
+
+⚠️ 分隔符的细节：规范化把 `-` 变成 `+`，所以**编码段的边界要从原始文本的尾部 `-<8 hex>` 定位**，
+再从规范化后的缓冲区里切片 —— 直接用规范化结果 `rsplit('-')` 会切错。
+
+配套：`native/replay_save.mjs <file> [--walk]` —— 存档一律**落盘再读**，别再人工转抄。
+
+> ★★ **这条进了持久记忆**（FACT.md）：玩家报障给了 `RDA1-…` 存档时，**先把它原样写进文件**
+> （`.git/user_save.txt`），再 `node native/replay_save.mjs <file>`。人工转抄会丢字符，
+> 而 CRC 只会告诉你"不匹配"，不会告诉你在哪。
+
+### 396.1 闸门
+
+闸门 56 从 27 条扩到 **29 条**：新增"每条状态都有说明（穷尽 158 条）"、
+"商店货架是单列"。内核新增 4 条测试：存档 Boss 往返、抄写噪声三侧、
+真实出牌路径下的分裂、以及 §385 那三条。
