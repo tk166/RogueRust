@@ -122,7 +122,7 @@ const URL_SAYS_MOCK = new URLSearchParams(window.location.search).has("mock");
  */
 const EMPTY_VIEW: CombatView = {
   mode: "wasm",
-  hero: { name: "铁甲战士", hp: 0, hpMax: 0, block: 0, energy: 0, maxEnergy: 0 },
+  hero: { name: "铁甲战士", hp: 0, hpMax: 0, block: 0, energy: 0, maxEnergy: 0, statuses: [] },
   enemies: [],
   hand: [],
   turn: 0,

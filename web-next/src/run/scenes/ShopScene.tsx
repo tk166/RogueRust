@@ -10,10 +10,12 @@
 // 4. **删卡服务每家店一次**（`§343`）：用 `removalAvailable()` 决定，不看"我买过没有"。
 // 5. **离开永远可点**：商店不是必经关卡。
 
+import { useState } from "react";
 import { Badge } from "../../assets/Badge.js";
 import { badgeLook, type BadgeKind } from "../../assets/registry.js";
 import { displayName } from "../../i18n/index.js";
 import { removalUsable, type ShelfRow } from "../models.js";
+import { CardTip, type TipKind, type TipRequest } from "../overlays/CardTip.js";
 
 export interface ShopShelfView {
   readonly kind: "card" | "relic" | "potion" | "colorless";
@@ -45,6 +47,19 @@ function badgeKindOf(kind: ShopShelfView["kind"]): BadgeKind {
   }
 }
 
+/** 货架 → 详情面板的种类（`colorless` 也是卡）。 */
+function tipKindOf(kind: ShopShelfView["kind"]): TipKind {
+  switch (kind) {
+    case "card":
+    case "colorless":
+      return "card";
+    case "relic":
+      return "relic";
+    default:
+      return "potion";
+  }
+}
+
 function shelfName(kind: ShopShelfView["kind"], id: string): string {
   switch (kind) {
     case "card":
@@ -70,6 +85,8 @@ export function ShopScene({
   busy = false,
 }: ShopSceneProps) {
   const canRemove = removalUsable(removalAvailable, removePrice, gold);
+  // §379：商店里"这张牌是什么"只能靠名字猜 —— 现在指着就显示费用/稀有度/规则。
+  const [tip, setTip] = useState<TipRequest | null>(null);
   return (
     <section className="scene scene-shop" data-scene="SC-05">
       <header className="scene-head">
@@ -86,6 +103,9 @@ export function ShopScene({
           <div className="shop-rows">
             {shelf.rows.map((row) => {
               const sold = !row.forSale;
+              // §380："放不下"与"买不起"是两件事 —— 各给一句话，别让玩家自己猜。
+              const blocked = !sold && (!row.room || !row.affordable);
+              const why = sold ? "已售出" : !row.room ? "腰带满了" : !row.affordable ? `金币不够（还差 ${row.price - gold}）` : undefined;
               return (
                 <button
                   key={row.slot}
@@ -93,7 +113,7 @@ export function ShopScene({
                   className={[
                     "shop-row",
                     sold ? "is-sold" : "",
-                    !sold && !row.affordable ? "is-unaffordable" : "",
+                    blocked ? "is-unaffordable" : "",
                   ]
                     .filter(Boolean)
                     .join(" ")}
@@ -101,7 +121,20 @@ export function ShopScene({
                   data-price={row.price}
                   data-sold={sold ? "1" : "0"}
                   data-affordable={row.affordable ? "1" : "0"}
-                  disabled={busy || sold}
+                  data-room={row.room ? "1" : "0"}
+                  title={why}
+                  // ⚠️ `!row.room` 才禁用：腰带满了点也没用，而"买不起"必须能点（见头注释第 2 条）。
+                  disabled={busy || sold || !row.room}
+                  // §379：指着/按住就亮详情。**不拦 click** —— 点一下仍然直接买（触屏也一样）。
+                  onPointerEnter={() =>
+                    setTip({ kind: tipKindOf(shelf.kind), id: row.id, note: sold ? "已售出" : `${row.price} ◈` })
+                  }
+                  onFocus={() =>
+                    setTip({ kind: tipKindOf(shelf.kind), id: row.id, note: sold ? "已售出" : `${row.price} ◈` })
+                  }
+                  onPointerDown={() =>
+                    setTip({ kind: tipKindOf(shelf.kind), id: row.id, note: sold ? "已售出" : `${row.price} ◈` })
+                  }
                   onClick={() => onBuy(shelf.kind, row.slot)}
                 >
                   <span className="shop-row-name">
@@ -111,6 +144,7 @@ export function ShopScene({
                   <span className="shop-row-price">
                     {sold ? "—" : `${row.price} ◈`}
                   </span>
+                  {blocked && <span className="shop-row-why muted">{why}</span>}
                 </button>
               );
             })}
@@ -137,6 +171,8 @@ export function ShopScene({
           {removalAvailable === 0 ? "不可用" : canRemove ? "删一张牌" : "金币不够"}
         </button>
       </div>
+
+      <CardTip request={tip} />
 
       <button type="button" className="primary" data-shop-leave onClick={onLeave} disabled={busy}>
         离开商店

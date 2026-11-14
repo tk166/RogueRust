@@ -38,15 +38,15 @@
 |---|---|---|---|---|---|---|---|---|
 | 怪物 | 61 | 54 | 0 | 7 | 52 | 9 | 7 | 0 |
 | 敌人动作 | 166 | 87 | 79 | 0 | 143 | 23 | 59 | 0 |
-| 卡牌 | 295 | 168 | 127 | 0 | 281 | 14 | 18 | 0 |
+| 卡牌 | 295 | 169 | 126 | 0 | 281 | 14 | 18 | 0 |
 | 状态 | 150 | 139 | 6 | 5 | 0 | 150 | 1 | 0 |
 | 遭遇 | 64 | 46 | 18 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 36 | 36 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 152 | 138 | 14 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 957 | 701 | 244 | 12 | 476 | 196 | 85 | 0 |
+| **合计** | 957 | 702 | 243 | 12 | 476 | 196 | 85 | 0 |
 
-扫描到的具名测试：**1238** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
+扫描到的具名测试：**1241** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
 
 事件：池里有 **39** 个位次、**36** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -293,7 +293,7 @@
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
-| anger | yes | warcry_draws_one_then_puts_the_chosen_card_on_top, perfected_strike_counts_the_tagged_cards_in_hand …(+14) | — | wiki:wiki_cards/anger.txt | — | CARD_WIKI+INV_CARDS/warcry_draws_one_then_puts_the_chosen_card_on_top |
+| anger | yes | warcry_draws_one_then_puts_the_chosen_card_on_top, perfected_strike_counts_the_tagged_cards_in_hand …(+15) | — | wiki:wiki_cards/anger.txt | — | CARD_WIKI+INV_CARDS/warcry_draws_one_then_puts_the_chosen_card_on_top |
 | anger+ | yes | the_upgrade_eggs_upgrade_two_of_their_own_kind | — | wiki:wiki_cards/anger.txt (via anger) | — | INV_CARDS/the_upgrade_eggs_upgrade_two_of_their_own_kind |
 | apotheosis | yes | a_shop_stocks_all_four_shelves_with_the_wikis_composition | — | wiki:wiki_cards/apotheosis.txt | — | §245/CARD_WIKI+INV_CARDS/a_shop_stocks_all_four_shelves_with_the_wikis_composition |
 | apotheosis+ | yes | — | CARD_DIFF | wiki:wiki_cards/apotheosis.txt (via apotheosis) | — | INV_CARDS |
@@ -305,7 +305,7 @@
 | bandage_up | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable, a_shop_stocks_all_four_shelves_with_the_wikis_composition …(+2) | — | wiki:wiki_cards/bandage_up.txt | wiki 偏差：wiki 升级版治疗 6；内容没有 `bandage_up+` 这一行。（`Exhaust` 本身不是偏差：§219 起它由落区 `PlayedCardDestinationZone` 表达。） | §191/CARD_WIKI+INV_CARDS/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
 | barricade | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt | — | CARD_WIKI+INV_CARDS |
 | barricade+ | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt (via barricade) | — | INV_CARDS |
-| bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, warcry_draws_one_then_puts_the_chosen_card_on_top …(+44) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
+| bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, warcry_draws_one_then_puts_the_chosen_card_on_top …(+45) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
 | bash+ | yes | the_unknown_room_events_are_readable, the_upgrade_eggs_upgrade_two_of_their_own_kind …(+3) | — | wiki:wiki_cards/bash.txt (via bash) | — | INV_CARDS/the_unknown_room_events_are_readable |
 | battle_trance | yes | battle_trance_blocks_further_draws_only_this_turn, the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/battle_trance.txt | — | CARD_WIKI+INV_CARDS/battle_trance_blocks_further_draws_only_this_turn |
 | battle_trance+ | yes | — | CARD_DIFF | wiki:wiki_cards/battle_trance.txt (via battle_trance) | — | INV_CARDS |
@@ -322,7 +322,7 @@
 | blood_for_blood+ | yes | — | CARD_DIFF | wiki:wiki_cards/blood_for_blood.txt (via blood_for_blood) | — | INV_CARDS |
 | bloodletting | yes | blood_for_blood_gets_cheaper_each_time_you_lose_hp, losing_hp_is_not_damage_but_it_is_hp_loss …(+2) | — | wiki:wiki_cards/bloodletting.txt | — | §236/CARD_WIKI+INV_CARDS/blood_for_blood_gets_cheaper_each_time_you_lose_hp |
 | bloodletting+ | yes | the_lose_hp_cards_do_what_their_pages_say | — | wiki:wiki_cards/bloodletting.txt (via bloodletting) | — | INV_CARDS/the_lose_hp_cards_do_what_their_pages_say |
-| bludgeon | yes | enlightenment_caps_hand_costs_at_one, the_ten_cards_added_in_221_do_what_the_wiki_says …(+1) | — | wiki:wiki_cards/bludgeon.txt | — | CARD_WIKI+INV_CARDS/enlightenment_caps_hand_costs_at_one |
+| bludgeon | yes | enlightenment_caps_hand_costs_at_one, the_ten_cards_added_in_221_do_what_the_wiki_says …(+2) | — | wiki:wiki_cards/bludgeon.txt | — | CARD_WIKI+INV_CARDS/enlightenment_caps_hand_costs_at_one |
 | bludgeon+ | yes | — | CARD_DIFF | wiki:wiki_cards/bludgeon.txt (via bludgeon) | — | INV_CARDS |
 | blur | yes | blur_gives_five_or_eight_block_and_the_status, a_special_card_is_known_and_never_put_in_a_reward | — | wiki:wiki_cards/blur.txt | — | §218/CARD_WIKI+INV_CARDS/blur_gives_five_or_eight_block_and_the_status |
 | blur+ | yes | blur_gives_five_or_eight_block_and_the_status | — | wiki:wiki_cards/blur.txt (via blur) | — | INV_CARDS/blur_gives_five_or_eight_block_and_the_status |
@@ -336,15 +336,15 @@
 | burn+ | yes | upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade | — | wiki:wiki_cards/burn.txt (via burn) | wiki 偏差：wiki 升级版是"回合末受 4 点伤害"，内容只有基础版（`burn+` 那一行没有生命周期）。 | INV_CARDS/upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade |
 | burning_pact | yes | burning_pact_exhausts_a_card_and_draws | — | wiki:wiki_cards/burning_pact.txt | wiki 偏差：wiki 的 {{KW\|Exhaust}} 是动词（消耗选中的一张牌），不是本牌的关键字；牌本身打完进弃牌堆。 | §239/CARD_WIKI+INV_CARDS/burning_pact_exhausts_a_card_and_draws |
 | burning_pact+ | yes | — | CARD_DIFF | wiki:wiki_cards/burning_pact.txt (via burning_pact) | wiki 偏差：wiki 的 {{KW\|Exhaust}} 是动词（消耗选中的一张牌），不是本牌的关键字；牌本身打完进弃牌堆。 | INV_CARDS |
-| carnage | yes | the_new_red_attacks_do_what_their_pages_say, exhausting_a_card_feeds_feel_no_pain_and_dark_embrace | — | wiki:wiki_cards/carnage.txt | — | §235/CARD_WIKI+INV_CARDS/the_new_red_attacks_do_what_their_pages_say |
+| carnage | yes | the_new_red_attacks_do_what_their_pages_say, exhausting_a_card_feeds_feel_no_pain_and_dark_embrace …(+1) | — | wiki:wiki_cards/carnage.txt | — | §235/CARD_WIKI+INV_CARDS/the_new_red_attacks_do_what_their_pages_say |
 | carnage+ | yes | the_new_red_attacks_do_what_their_pages_say | — | wiki:wiki_cards/carnage.txt (via carnage) | — | INV_CARDS/the_new_red_attacks_do_what_their_pages_say |
 | chrysalis | yes | — | CARD_DIFF | wiki:wiki_cards/chrysalis.txt | — | CARD_WIKI+INV_CARDS |
 | chrysalis+ | yes | — | CARD_DIFF | wiki:wiki_cards/chrysalis.txt (via chrysalis) | — | INV_CARDS |
 | clash | yes | clash_refuses_unless_every_card_in_hand_is_an_attack, the_upgrade_eggs_upgrade_two_of_their_own_kind …(+3) | — | wiki:wiki_cards/clash.txt | — | §239/CARD_WIKI+INV_CARDS/clash_refuses_unless_every_card_in_hand_is_an_attack |
 | clash+ | yes | clash_refuses_unless_every_card_in_hand_is_an_attack, the_upgrade_eggs_upgrade_two_of_their_own_kind | — | wiki:wiki_cards/clash.txt (via clash) | — | INV_CARDS/clash_refuses_unless_every_card_in_hand_is_an_attack |
-| cleave | yes | the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/cleave.txt | — | §221/CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
+| cleave | yes | the_ten_cards_added_in_221_do_what_the_wiki_says, shop_stocks_colored_cards_by_rarity_odds | — | wiki:wiki_cards/cleave.txt | — | §221/CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
 | cleave+ | yes | — | CARD_DIFF | wiki:wiki_cards/cleave.txt (via cleave) | — | INV_CARDS |
-| clothesline | yes | — | CARD_DIFF | wiki:wiki_cards/clothesline.txt | — | CARD_WIKI+INV_CARDS |
+| clothesline | yes | shop_stocks_colored_cards_by_rarity_odds | — | wiki:wiki_cards/clothesline.txt | — | CARD_WIKI+INV_CARDS/shop_stocks_colored_cards_by_rarity_odds |
 | clothesline+ | yes | — | CARD_DIFF | wiki:wiki_cards/clothesline.txt (via clothesline) | — | INV_CARDS |
 | clumsy | yes | — | CARD_DIFF | wiki:wiki_cards/clumsy.txt | — | CARD_WIKI+INV_CARDS |
 | combust | yes | — | CARD_DIFF | wiki:wiki_cards/combust.txt | — | CARD_WIKI+INV_CARDS |
@@ -374,7 +374,7 @@
 | doubt | yes | e2e_7e_a_block_gain_spec_in_the_image_truncates_the_block_like_frail, e2e_8_strong_binder_gains_seven_block_then_applies_one_doubt …(+30) | — | wiki:wiki_cards/doubt.txt | ours §326 已修：回合末顺序改成 ③④①②（TurnEnded 触发/时长衰减 → 牌在手生命周期 → 弃手牌），所以 Doubt 给的 Weak 落在衰减之后、留到下一回合；`Burn`/`Regret` 仍在弃手牌之前 / wiki — —— 我们的 `standard.weak` 衰减是一条 `TurnEnded` 触发器（第 ③ 步），而卡牌生命周期节目在第 ① 步 —— 同一次回合末里刚上的 Weak 当场被扣。参考把衰减放在 `decrease_timed_statuses`，与卡程序的关系不同。要修得动回合末的处理器顺序（影响 Burn 等所有生命周期节目），留作单独一节 | §220/§221/CARD_WIKI+INV_CARDS/e2e_7e_a_block_gain_spec_in_the_image_truncates_the_block_like_frail |
 | dramatic_entrance | yes | — | CARD_DIFF | wiki:wiki_cards/dramatic_entrance.txt | — | CARD_WIKI+INV_CARDS |
 | dramatic_entrance+ | yes | the_zero_cost_utility_batch_matches_its_pages | — | wiki:wiki_cards/dramatic_entrance.txt (via dramatic_entrance) | — | INV_CARDS/the_zero_cost_utility_batch_matches_its_pages |
-| dropkick | yes | the_new_red_attacks_do_what_their_pages_say | — | wiki:wiki_cards/dropkick.txt | — | CARD_WIKI+INV_CARDS/the_new_red_attacks_do_what_their_pages_say |
+| dropkick | yes | the_new_red_attacks_do_what_their_pages_say, shop_stocks_colored_cards_by_rarity_odds | — | wiki:wiki_cards/dropkick.txt | — | CARD_WIKI+INV_CARDS/the_new_red_attacks_do_what_their_pages_say |
 | dropkick+ | yes | — | CARD_DIFF | wiki:wiki_cards/dropkick.txt (via dropkick) | — | INV_CARDS |
 | dual_wield | yes | dual_wield_asks_for_an_attack_and_copies_it, a_dual_wield_question_reads_the_same_three_numbers_in_the_page_layer | — | wiki:wiki_cards/dual_wield.txt | — | §226/§227/CARD_WIKI+INV_CARDS/dual_wield_asks_for_an_attack_and_copies_it |
 | dual_wield+ | yes | — | CARD_DIFF | wiki:wiki_cards/dual_wield.txt (via dual_wield) | — | INV_CARDS |
@@ -390,7 +390,7 @@
 | expunger+ | yes | — | CARD_DIFF | wiki:wiki_cards/expunger.txt (via expunger) | — | INV_CARDS |
 | fame_and_fortune | yes | the_wish_options_are_unplayable_by_hand, wish_offers_three_cards_and_plays_the_pick_at_once | — | wiki:wiki_cards/fame_and_fortune.txt | — | §254/§255/CARD_WIKI+INV_CARDS/the_wish_options_are_unplayable_by_hand |
 | fame_and_fortune+ | yes | wish_plus_offers_the_upgraded_options | — | wiki:wiki_cards/fame_and_fortune.txt (via fame_and_fortune) | — | INV_CARDS/wish_plus_offers_the_upgraded_options |
-| feed | yes | feed_only_raises_max_hp_on_a_fatal_blow | — | wiki:wiki_cards/feed.txt | — | CARD_WIKI+INV_CARDS/feed_only_raises_max_hp_on_a_fatal_blow |
+| feed | yes | feed_only_raises_max_hp_on_a_fatal_blow, shop_stocks_colored_cards_by_rarity_odds | — | wiki:wiki_cards/feed.txt | — | CARD_WIKI+INV_CARDS/feed_only_raises_max_hp_on_a_fatal_blow |
 | feed+ | yes | — | CARD_DIFF | wiki:wiki_cards/feed.txt (via feed) | — | INV_CARDS |
 | feel_no_pain | yes | — | CARD_DIFF | wiki:wiki_cards/feel_no_pain.txt | — | CARD_WIKI+INV_CARDS |
 | feel_no_pain+ | yes | — | CARD_DIFF | wiki:wiki_cards/feel_no_pain.txt (via feel_no_pain) | — | INV_CARDS |
@@ -416,11 +416,11 @@
 | hand_of_greed+ | yes | — | CARD_DIFF | wiki:wiki_cards/hand_of_greed.txt (via hand_of_greed) | — | INV_CARDS |
 | havoc | yes | havoc_plays_the_top_card_for_free_into_the_exhaust_pile | — | wiki:wiki_cards/havoc.txt | wiki 偏差：wiki 的 Exhaust 指的是被打出的那张牌（"and Exhaust **it**"），Havoc 自己进弃牌堆。 | §241/CARD_WIKI+INV_CARDS/havoc_plays_the_top_card_for_free_into_the_exhaust_pile |
 | havoc+ | yes | havoc_plays_the_top_card_for_free_into_the_exhaust_pile | — | wiki:wiki_cards/havoc.txt (via havoc) | wiki 偏差：wiki 的 Exhaust 指的是被打出的那张牌（"and Exhaust **it**"），Havoc 自己进弃牌堆。 | INV_CARDS/havoc_plays_the_top_card_for_free_into_the_exhaust_pile |
-| headbutt | yes | the_new_red_attacks_do_what_their_pages_say | — | wiki:wiki_cards/headbutt.txt | — | CARD_WIKI+INV_CARDS/the_new_red_attacks_do_what_their_pages_say |
+| headbutt | yes | the_new_red_attacks_do_what_their_pages_say, shop_stocks_colored_cards_by_rarity_odds | — | wiki:wiki_cards/headbutt.txt | — | CARD_WIKI+INV_CARDS/the_new_red_attacks_do_what_their_pages_say |
 | headbutt+ | yes | — | CARD_DIFF | wiki:wiki_cards/headbutt.txt (via headbutt) | — | INV_CARDS |
-| heavy_blade | yes | heavy_blade_multiplies_strength_three_or_five_times | — | wiki:wiki_cards/heavy_blade.txt | — | CARD_WIKI+INV_CARDS/heavy_blade_multiplies_strength_three_or_five_times |
+| heavy_blade | yes | heavy_blade_multiplies_strength_three_or_five_times, shop_stocks_colored_cards_by_rarity_odds | — | wiki:wiki_cards/heavy_blade.txt | — | CARD_WIKI+INV_CARDS/heavy_blade_multiplies_strength_three_or_five_times |
 | heavy_blade+ | yes | heavy_blade_multiplies_strength_three_or_five_times | — | wiki:wiki_cards/heavy_blade.txt (via heavy_blade) | — | INV_CARDS/heavy_blade_multiplies_strength_three_or_five_times |
-| hemokinesis | yes | losing_hp_is_not_damage_but_it_is_hp_loss | — | wiki:wiki_cards/hemokinesis.txt | — | CARD_WIKI+INV_CARDS/losing_hp_is_not_damage_but_it_is_hp_loss |
+| hemokinesis | yes | losing_hp_is_not_damage_but_it_is_hp_loss, shop_stocks_colored_cards_by_rarity_odds | — | wiki:wiki_cards/hemokinesis.txt | — | CARD_WIKI+INV_CARDS/losing_hp_is_not_damage_but_it_is_hp_loss |
 | hemokinesis+ | yes | — | CARD_DIFF | wiki:wiki_cards/hemokinesis.txt (via hemokinesis) | — | INV_CARDS |
 | immolate | yes | the_new_red_attacks_do_what_their_pages_say | — | wiki:wiki_cards/immolate.txt | — | CARD_WIKI+INV_CARDS/the_new_red_attacks_do_what_their_pages_say |
 | immolate+ | yes | — | CARD_DIFF | wiki:wiki_cards/immolate.txt (via immolate) | — | INV_CARDS |
@@ -437,7 +437,7 @@
 | insight+ | yes | the_zero_cost_utility_batch_matches_its_pages | — | wiki:wiki_cards/insight.txt (via insight) | — | INV_CARDS/the_zero_cost_utility_batch_matches_its_pages |
 | intimidate | yes | — | CARD_DIFF | wiki:wiki_cards/intimidate.txt | — | CARD_WIKI+INV_CARDS |
 | intimidate+ | yes | the_new_red_skills_do_what_their_pages_say | — | wiki:wiki_cards/intimidate.txt (via intimidate) | — | INV_CARDS/the_new_red_skills_do_what_their_pages_say |
-| iron_wave | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, tied_rarities_are_broken_by_the_combat_rng | — | wiki:wiki_cards/iron_wave.txt | — | §72.5/CARD_WIKI+INV_CARDS/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
+| iron_wave | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, tied_rarities_are_broken_by_the_combat_rng …(+1) | — | wiki:wiki_cards/iron_wave.txt | — | §72.5/CARD_WIKI+INV_CARDS/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
 | iron_wave+ | yes | — | CARD_DIFF | wiki:wiki_cards/iron_wave.txt (via iron_wave) | — | INV_CARDS |
 | j.a.x. | yes | jax_trades_three_hp_for_strength_and_stays_in_play | — | wiki:wiki_cards/j.a.x..txt | — | CARD_WIKI+INV_CARDS/jax_trades_three_hp_for_strength_and_stays_in_play |
 | j.a.x.+ | yes | — | CARD_DIFF | wiki:wiki_cards/j.a.x..txt (via j.a.x.) | — | INV_CARDS |
@@ -487,14 +487,14 @@
 | parasite | yes | parasite_costs_max_health_whenever_it_leaves_the_deck, parasite_never_takes_the_max_health_below_one …(+1) | — | wiki:wiki_cards/parasite.txt | — | CARD_WIKI+INV_CARDS/parasite_costs_max_health_whenever_it_leaves_the_deck |
 | patient_guard | yes | the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/the_keyword_cells_are_in_the_image |
 | patient_guard+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| perfected_strike | yes | perfected_strike_counts_the_tagged_cards_in_hand | — | wiki:wiki_cards/perfected_strike.txt | — | CARD_WIKI+INV_CARDS/perfected_strike_counts_the_tagged_cards_in_hand |
+| perfected_strike | yes | perfected_strike_counts_the_tagged_cards_in_hand, shop_stocks_colored_cards_by_rarity_odds | — | wiki:wiki_cards/perfected_strike.txt | — | CARD_WIKI+INV_CARDS/perfected_strike_counts_the_tagged_cards_in_hand |
 | perfected_strike+ | yes | — | CARD_DIFF | wiki:wiki_cards/perfected_strike.txt (via perfected_strike) | — | INV_CARDS |
-| pommel_strike | yes | evolve_and_fire_breathing_only_answer_to_the_right_tags, the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/pommel_strike.txt | — | §221/CARD_WIKI+INV_CARDS/evolve_and_fire_breathing_only_answer_to_the_right_tags |
+| pommel_strike | yes | evolve_and_fire_breathing_only_answer_to_the_right_tags, the_ten_cards_added_in_221_do_what_the_wiki_says …(+1) | — | wiki:wiki_cards/pommel_strike.txt | — | §221/CARD_WIKI+INV_CARDS/evolve_and_fire_breathing_only_answer_to_the_right_tags |
 | pommel_strike+ | yes | — | CARD_DIFF | wiki:wiki_cards/pommel_strike.txt (via pommel_strike) | — | INV_CARDS |
 | power_through | yes | the_new_red_skills_do_what_their_pages_say | — | wiki:wiki_cards/power_through.txt | — | CARD_WIKI+INV_CARDS/the_new_red_skills_do_what_their_pages_say |
 | power_through+ | yes | the_new_red_skills_do_what_their_pages_say | — | wiki:wiki_cards/power_through.txt (via power_through) | — | INV_CARDS/the_new_red_skills_do_what_their_pages_say |
 | pride | yes | pride_copies_itself_onto_the_top_of_the_draw_pile | — | wiki:wiki_cards/pride.txt | — | CARD_WIKI+INV_CARDS/pride_copies_itself_onto_the_top_of_the_draw_pile |
-| pummel | yes | the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/pummel.txt | — | CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
+| pummel | yes | the_ten_cards_added_in_221_do_what_the_wiki_says, shop_stocks_colored_cards_by_rarity_odds | — | wiki:wiki_cards/pummel.txt | — | CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
 | pummel+ | yes | — | CARD_DIFF | wiki:wiki_cards/pummel.txt (via pummel) | — | INV_CARDS |
 | purity | yes | — | CARD_DIFF | wiki:wiki_cards/purity.txt | — | CARD_WIKI+INV_CARDS |
 | purity+ | yes | — | CARD_DIFF | wiki:wiki_cards/purity.txt (via purity) | — | INV_CARDS |
@@ -504,7 +504,7 @@
 | rampage+ | yes | rampage_grows_this_copy_and_only_this_copy | — | wiki:wiki_cards/rampage.txt (via rampage) | — | INV_CARDS/rampage_grows_this_copy_and_only_this_copy |
 | reaper | yes | reaper_heals_only_the_unblocked_damage | — | wiki:wiki_cards/reaper.txt | — | CARD_WIKI+INV_CARDS/reaper_heals_only_the_unblocked_damage |
 | reaper+ | yes | — | CARD_DIFF | wiki:wiki_cards/reaper.txt (via reaper) | — | INV_CARDS |
-| reckless_charge | yes | the_new_red_attacks_do_what_their_pages_say | — | wiki:wiki_cards/reckless_charge.txt | — | CARD_WIKI+INV_CARDS/the_new_red_attacks_do_what_their_pages_say |
+| reckless_charge | yes | the_new_red_attacks_do_what_their_pages_say, shop_stocks_colored_cards_by_rarity_odds | — | wiki:wiki_cards/reckless_charge.txt | — | CARD_WIKI+INV_CARDS/the_new_red_attacks_do_what_their_pages_say |
 | reckless_charge+ | yes | — | CARD_DIFF | wiki:wiki_cards/reckless_charge.txt (via reckless_charge) | — | INV_CARDS |
 | regret | yes | the_turn_end_curses_do_their_own_thing, every_kind_answers_both_sides …(+2) | — | wiki:wiki_cards/regret.txt | — | CARD_WIKI+INV_CARDS/the_turn_end_curses_do_their_own_thing |
 | rip_and_tear | yes | rip_and_tear_hits_twice_for_seven | — | wiki:wiki_cards/rip_and_tear.txt | — | §228/§229/CARD_WIKI+INV_CARDS/rip_and_tear_hits_twice_for_seven |
@@ -551,11 +551,11 @@
 | smite+ | yes | — | CARD_DIFF | wiki:wiki_cards/smite.txt (via smite) | — | INV_CARDS |
 | spot_weakness | yes | spot_weakness_follows_the_enemy_intent | — | wiki:wiki_cards/spot_weakness.txt | — | §242/CARD_WIKI+INV_CARDS/spot_weakness_follows_the_enemy_intent |
 | spot_weakness+ | yes | — | CARD_DIFF | wiki:wiki_cards/spot_weakness.txt (via spot_weakness) | — | INV_CARDS |
-| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+201) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+202) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+14) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| sword_boomerang | yes | sword_boomerang_rerolls_a_target_for_each_hit | — | wiki:wiki_cards/sword_boomerang.txt | — | §228/CARD_WIKI+INV_CARDS/sword_boomerang_rerolls_a_target_for_each_hit |
+| sword_boomerang | yes | sword_boomerang_rerolls_a_target_for_each_hit, shop_stocks_colored_cards_by_rarity_odds | — | wiki:wiki_cards/sword_boomerang.txt | — | §228/CARD_WIKI+INV_CARDS/sword_boomerang_rerolls_a_target_for_each_hit |
 | sword_boomerang+ | yes | sword_boomerang_rerolls_a_target_for_each_hit | — | wiki:wiki_cards/sword_boomerang.txt (via sword_boomerang) | — | INV_CARDS/sword_boomerang_rerolls_a_target_for_each_hit |
 | the_bomb | yes | — | CARD_DIFF | wiki:wiki_cards/the_bomb.txt | — | CARD_WIKI+INV_CARDS |
 | the_bomb+ | yes | — | CARD_DIFF | wiki:wiki_cards/the_bomb.txt (via the_bomb) | — | INV_CARDS |
@@ -563,7 +563,7 @@
 | thinking_ahead+ | yes | — | CARD_DIFF | wiki:wiki_cards/thinking_ahead.txt (via thinking_ahead) | — | INV_CARDS |
 | through_violence | yes | through_violence_and_safety_differ_only_in_what_they_produce | — | wiki:wiki_cards/through_violence.txt | — | §252/§254/CARD_WIKI+INV_CARDS/through_violence_and_safety_differ_only_in_what_they_produce |
 | through_violence+ | yes | — | CARD_DIFF | wiki:wiki_cards/through_violence.txt (via through_violence) | — | INV_CARDS |
-| thunderclap | yes | the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/thunderclap.txt | — | CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
+| thunderclap | yes | the_ten_cards_added_in_221_do_what_the_wiki_says, shop_stocks_colored_cards_by_rarity_odds | — | wiki:wiki_cards/thunderclap.txt | — | CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
 | thunderclap+ | yes | — | CARD_DIFF | wiki:wiki_cards/thunderclap.txt (via thunderclap) | — | INV_CARDS |
 | transmutation | yes | — | CARD_DIFF | wiki:wiki_cards/transmutation.txt | — | CARD_WIKI+INV_CARDS |
 | transmutation+ | yes | — | CARD_DIFF | wiki:wiki_cards/transmutation.txt (via transmutation) | — | INV_CARDS |
@@ -571,7 +571,7 @@
 | trip+ | yes | the_zero_cost_utility_batch_matches_its_pages | — | wiki:wiki_cards/trip.txt (via trip) | — | INV_CARDS/the_zero_cost_utility_batch_matches_its_pages |
 | true_grit | yes | true_grit_gains_block_and_exhausts_exactly_one_card | — | wiki:wiki_cards/true_grit.txt | — | §195.4/§231/CARD_WIKI+INV_CARDS/true_grit_gains_block_and_exhausts_exactly_one_card |
 | true_grit+ | yes | true_grit_gains_block_and_exhausts_exactly_one_card | — | wiki:wiki_cards/true_grit.txt (via true_grit) | — | INV_CARDS/true_grit_gains_block_and_exhausts_exactly_one_card |
-| twin_strike | yes | a_full_deck_archive_is_bigger_than_the_generic_scratch | — | wiki:wiki_cards/twin_strike.txt | — | §72.5/CARD_WIKI+INV_CARDS/a_full_deck_archive_is_bigger_than_the_generic_scratch |
+| twin_strike | yes | shop_stocks_colored_cards_by_rarity_odds, a_full_deck_archive_is_bigger_than_the_generic_scratch | — | wiki:wiki_cards/twin_strike.txt | — | §72.5/CARD_WIKI+INV_CARDS/shop_stocks_colored_cards_by_rarity_odds |
 | twin_strike+ | yes | — | CARD_DIFF | wiki:wiki_cards/twin_strike.txt (via twin_strike) | — | INV_CARDS |
 | uppercut | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+3) | — | wiki:wiki_cards/uppercut.txt | — | CARD_WIKI+INV_CARDS/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
 | uppercut+ | yes | — | CARD_DIFF | wiki:wiki_cards/uppercut.txt (via uppercut) | — | INV_CARDS |
@@ -864,7 +864,7 @@
 | art_of_war | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | astrolabe | yes | the_pickup_picks_do_not_take_over_the_screen, boss_relic_offer_is_three_distinct_unheld_boss_relics | — | — | — | §273/§274/the_pickup_picks_do_not_take_over_the_screen |
 | bag_of_marbles | yes | the_two_combat_start_carriers_land_on_the_right_side | — | — | — | §221/§224/the_two_combat_start_carriers_land_on_the_right_side |
-| bag_of_preparation | yes | the_five_combat_start_relics_wire_their_own_carrier | — | — | — | §261/the_five_combat_start_relics_wire_their_own_carrier |
+| bag_of_preparation | yes | restocked_relics_are_priced_by_their_own_rarity, the_five_combat_start_relics_wire_their_own_carrier | — | — | — | §261/restocked_relics_are_priced_by_their_own_rarity |
 | bird_faced_urn | yes | the_zero_infrastructure_tail_wires_its_carriers | — | — | — | §267/§268/the_zero_infrastructure_tail_wires_its_carriers |
 | black_blood | yes | the_zero_infrastructure_tail_wires_its_carriers | — | — | — | §267/§268/the_zero_infrastructure_tail_wires_its_carriers |
 | black_star | yes | boss_relic_offer_is_three_distinct_unheld_boss_relics, boss_relic_offer_refuses_bad_slots_and_empty_pools …(+1) | — | — | — | §269/boss_relic_offer_is_three_distinct_unheld_boss_relics |

@@ -18,9 +18,11 @@
 // * 三张牌各自"拿"；
 // * 底部一个"跳过 / 继续"，**永远可点** —— 玩家可能不想要任何一张牌（牌组越薄越好）。
 
+import { useState } from "react";
 import { Badge } from "../../assets/Badge.js";
 import { badgeLook } from "../../assets/registry.js";
 import { displayName } from "../../i18n/index.js";
+import { CardTip, type TipRequest } from "../overlays/CardTip.js";
 
 export interface RewardCard {
   readonly slot: number;
@@ -54,6 +56,14 @@ export function RewardScene({
   onTakeRelic,
   onSkip,
 }: RewardSceneProps) {
+  // §379：指着哪一件。**一个**状态就够 —— 详情面板只有一个。
+  const [tip, setTip] = useState<TipRequest | null>(null);
+  /** 三个事件处理器用同一套：鼠标移入 / 键盘聚焦 / 触摸按下都亮详情。 */
+  const tipProps = (request: TipRequest) => ({
+    onPointerEnter: () => setTip(request),
+    onFocus: () => setTip(request),
+    onPointerDown: () => setTip(request),
+  });
   return (
     <section className="scene scene-reward" data-scene="SC-04">
       <header className="scene-head">
@@ -76,7 +86,11 @@ export function RewardScene({
         )}
 
         {potion && (
-          <div className="reward-row" data-reward-potion={potion}>
+          <div
+            className="reward-row"
+            data-reward-potion={potion}
+            {...tipProps({ kind: "potion", id: potion })}
+          >
             <span className="reward-glyph" aria-hidden>
               ⚗
             </span>
@@ -92,7 +106,11 @@ export function RewardScene({
         )}
 
         {relic && (
-          <div className="reward-row" data-reward-relic={relic}>
+          <div
+            className="reward-row"
+            data-reward-relic={relic}
+            {...tipProps({ kind: "relic", id: relic })}
+          >
             <span className="reward-glyph" aria-hidden>
               ✦
             </span>
@@ -120,6 +138,7 @@ export function RewardScene({
             data-reward-card={card.slot}
             data-reward-card-id={card.id}
             disabled={busy}
+            {...tipProps({ kind: "card", id: card.id })}
             onClick={() => onTakeCard(card.slot)}
           >
             {/*
@@ -136,6 +155,8 @@ export function RewardScene({
         ))}
         {cards.length === 0 && <p className="muted">这一场没有给牌。</p>}
       </div>
+
+      <CardTip request={tip} />
 
       <button type="button" className="primary" data-reward-skip disabled={busy} onClick={onSkip}>
         领完了 · 继续

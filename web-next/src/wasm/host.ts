@@ -65,6 +65,11 @@ const REQUIRED_EXPORTS = [
   "rd_env_card_text_into",
   "rd_env_enemy_name_len",
   "rd_env_enemy_name_into",
+  // §378：状态实例（id + 层数）。观察向量只冻结了 5 条轴，这是**完整**的那一份。
+  "rd_env_status_count",
+  "rd_env_status_id_len",
+  "rd_env_status_id_into",
+  "rd_env_status_stacks",
   "rd_env_scratch_buf",
   "rd_run_grant_potion",
   "rd_run_reward_card_count",
@@ -76,6 +81,8 @@ const REQUIRED_EXPORTS = [
   "rd_run_skip_reward",
   "rd_run_reward_gold",
   "rd_run_potion_count",
+  // §380：腰带容量（3 / A11 减 1 / potion_belt 加 2）。界面不许自己算。
+  "rd_run_potion_slots",
   "rd_run_potion_id_len",
   "rd_run_potion_id_into",
   "rd_env_use_potion",
@@ -245,6 +252,38 @@ export class WasmHost {
       () => (this.ex.rd_env_enemy_name_len as (index: number) => number)(slot),
       (ptr) => (this.ex.rd_env_enemy_name_into as (index: number, ptr: number) => number)(slot, ptr)
     );
+  }
+
+  /**
+   * 战斗者 `whom` 身上的**全部**状态实例（`env-abi.md` §147 那一组）。
+   *
+   * `whom`：`-1` = 英雄，`0..5` = 敌人墙位。`count < 0` ⇒ 没有这个战斗者（返回空数组，
+   * 不是"0 个状态"—— 两者语义不同，但展示层对两者的处理都是"不画"）。
+   *
+   * ⚠️ 为什么不用观察向量里那 5 条轴：那是**冻结**的 ABI，加第 6 条会移动后面每一个偏移。
+   * 而 `Constricted` 这种"每回合掉血"的减益不在那 5 条里 —— 玩家看不见就没法应对。
+   */
+  statuses(whom: number): { id: string; stacks: number }[] {
+    const count = (this.ex.rd_env_status_count as (whom: number) => number)(whom);
+    if (count <= 0) return [];
+    const out: { id: string; stacks: number }[] = [];
+    for (let index = 0; index < count; index += 1) {
+      const id = this.readText(
+        () => (this.ex.rd_env_status_id_len as (whom: number, index: number) => number)(whom, index),
+        (ptr) =>
+          (this.ex.rd_env_status_id_into as (whom: number, index: number, ptr: number) => number)(
+            whom,
+            index,
+            ptr
+          )
+      );
+      const stacks = (this.ex.rd_env_status_stacks as (whom: number, index: number) => number)(
+        whom,
+        index
+      );
+      out.push({ id, stacks });
+    }
+    return out;
   }
 
   // ── 观察 ──────────────────────────────────────────────────────────────────
@@ -1054,6 +1093,11 @@ export class WasmHost {
 
   potionCount(): number {
     return (this.ex.rd_run_potion_count as () => number)();
+  }
+
+  /** 腰带容量（`rd_run_potion_slots`，§380）。`-1` = 没有局。 */
+  potionSlots(): number {
+    return (this.ex.rd_run_potion_slots as () => number)();
   }
 
   potionId(index: number): string {

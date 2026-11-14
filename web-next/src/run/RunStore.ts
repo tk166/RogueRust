@@ -152,6 +152,13 @@ export interface RunState {
   };
   /** 药水腰带（带 `effect`/`needsFight`，界面据此决定能不能用、要不要目标）。 */
   readonly potions: readonly { slot: number; id: string; effect: number; needsFight: number }[];
+  /**
+   * 药水腰带**容量**（`rd_run_potion_slots`，§380）。规则在内核：3 格 / A11 减 1 / `potion_belt` 加 2。
+   *
+   * ⚠️ 界面**不许**自己算这个数：容量是规则，不是展示偏好。商店的药水货架拿它判断
+   * "腰带满了 ⇒ 不可买"（旧版没问，于是点了被内核拒绝 —— `web-soak` 的 dead control）。
+   */
+  readonly potionSlots: number;
   /** 牌组 / 遗物（顶栏与牌组弹窗）。 */
   readonly deck: readonly string[];
   /** 牌组的显示名（与 `deck` 同序，供牌组选择器用）。 */
@@ -255,6 +262,7 @@ export class RunStore {
       event: { id: "", text: "", needs: 0, options: [], offers: [] },
       pickup: { change: 0, picks: 0, add: 0, offers: [] },
       potions: [],
+      potionSlots: 0,
       deck: [],
       deckTitles: [],
       relics: [],
@@ -559,6 +567,7 @@ export class RunStore {
             needsFight: this.host.potionNeedsFight(slot),
           }))
         : [],
+      potionSlots: raw.exists ? this.host.potionSlots() : 0,
       deck: raw.exists ? this.host.deckIds() : [],
       deckTitles: raw.exists ? this.host.deckTitles() : [],
       relics: raw.exists ? this.host.relicIds() : [],

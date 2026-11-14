@@ -100,6 +100,13 @@ export interface ShelfRow {
   /** `price >= 0` 才是"还在卖"（`-1` = 已售）。 */
   readonly forSale: boolean;
   readonly affordable: boolean;
+  /**
+   * 放得下吗（§380）。只有药水那一排会是 `false`（腰带满）。
+   *
+   * ⚠️ 与 `affordable` **并列**而不是合并：页面要能分别说"金币不够"和"腰带满了"——
+   * 合成一个布尔值就只剩一句笼统的"不能买"，玩家不知道该去赚金币还是先喝一瓶。
+   */
+  readonly room: boolean;
 }
 
 /**
@@ -110,7 +117,12 @@ export interface ShelfRow {
  */
 export function shelfRows(
   entries: readonly { slot: number; id: string; price: number }[],
-  gold: number
+  gold: number,
+  /**
+   * 还有没有地方放（§380：只有药水那一排需要 —— 腰带满了就装不下）。
+   * `undefined` = 这一排没有容量限制（卡/遗物）。
+   */
+  room = true
 ): ShelfRow[] {
   return entries.map((entry) => ({
     slot: entry.slot,
@@ -118,7 +130,14 @@ export function shelfRows(
     price: entry.price,
     forSale: entry.price >= 0,
     affordable: entry.price >= 0 && entry.price <= gold,
+    // "买得起"与"放得下"是两件事：腰带 3/3 时金币再多也买不了。
+    room,
   }));
+}
+
+/** 腰带还能不能再装一瓶（`§380`）。`slots <= 0` = 没有局 ⇒ 当作不能。 */
+export function beltHasRoom(held: number, slots: number): boolean {
+  return slots > 0 && held < slots;
 }
 
 /** 这家店的删卡服务能不能用（`§343`：每家店一次）。`-1` 没有局 ⇒ 当作不能用。 */

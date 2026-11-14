@@ -202,12 +202,15 @@ const RD_PANELS = (() => {
         button: { label: "买", action: { kind: "buy_colorless", slot } },
       });
     }
+    // §380：药水这一排还要看**腰带放不放得下**（容量是内核的规则：3 / A11 减 1 / potion_belt 加 2）。
+    // 旧版只看金币 ⇒ 腰带 3/3 时"买"是亮的，点下去被内核拒绝（`web-soak` 的 dead control）。
+    const beltFull = s.potionSlots > 0 && s.potionsHeld >= s.potionSlots;
     for (const [slot, potion] of (s.shopPotions || []).entries()) {
       rows.push({
         label: potion.title || potion.id,
-        sub: "药水",
+        sub: beltFull ? "药水 · 腰带满了" : "药水",
         value: potion.price < 0 ? "已售" : `${potion.price} 金`,
-        disabled: potion.price < 0 || (potion.price >= 0 && potion.price > s.gold),
+        disabled: beltFull || potion.price < 0 || (potion.price >= 0 && potion.price > s.gold),
         button: { label: "买", action: { kind: "buy_potion", slot } },
       });
     }

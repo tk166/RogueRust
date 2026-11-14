@@ -226,25 +226,50 @@ def main():
                      if tag in tags), 'skill')
         program = (json.dumps(card.get('Program'), ensure_ascii=False)
                    + json.dumps(card.get('LifecyclePrograms'), ensure_ascii=False))
+        # §379：费用与稀有度。三条规则都来自内容包，不猜：
+        #   * 能量费 = `Costs[]` 里 `standard.energy` 的 `Amount`；
+        #   * `x_cost` 标签 ⇒ "X"（内容里 Amount 是 0，直接显示会变成"0 费"）；
+        #   * `unplayable` 标签 ⇒ "-"（诅咒/状态牌，没有可支付的费用）。
+        energy = 0
+        for cost in card.get('Costs') or []:
+            if (cost.get('ResourceId') or {}).get('value') == 'standard.energy':
+                energy = cost.get('Amount') or 0
+                break
+        if 'x_cost' in tags:
+            cost = 'X'
+        elif 'unplayable' in tags:
+            cost = '-'
+        else:
+            cost = energy
         meta[card['Id']] = {
             'kind': kind,
             'targeting': 'singleEnemy' if 'sel.eventTarget' in program else 'none',
+            'cost': cost,
+            'rarity': card.get('Rarity') or 'Common',
         }
-    print('  元数据     %3d 张（要目标 %d）' % (
-        len(meta), sum(1 for row in meta.values() if row['targeting'] == 'singleEnemy')))
+    print('  元数据     %3d 张（要目标 %d、X 费 %d、不可打出 %d）' % (
+        len(meta),
+        sum(1 for row in meta.values() if row['targeting'] == 'singleEnemy'),
+        sum(1 for row in meta.values() if row['cost'] == 'X'),
+        sum(1 for row in meta.values() if row['cost'] == '-')))
 
     write_module(
         META_OUT,
         [
             '// 生成物：`python native/build_zh_i18n.py` 重建，**不要手改**。',
             '//',
-            '// 「种类」与「要不要玩家选目标」都来自内容包（`Cards[].Tags` + 程序里的 `sel.eventTarget`）。',
+            '// 「种类」「要不要玩家选目标」「费用」「稀有度」都来自内容包',
+            '// （`Cards[].Tags` + `Costs[]` + `Rarity` + 程序里的 `sel.eventTarget`）。',
             '// ⚠️ **不从动作表的 targetSlot 反推**：内核故意为"每张可出的牌 × 每个活敌人"各发一条',
             '// 动作（它无法廉价判断定向性），那是**枚举策略**，不是卡牌语义（第十四轮 Review P1-A）。',
             '',
             'export interface CardMeta {',
             '  readonly kind: "attack" | "skill" | "power" | "status" | "curse";',
             '  readonly targeting: "none" | "singleEnemy";',
+            '  /** 能量费；`"X"` = X 费牌，`"-"` = 不可打出（诅咒/状态）。 */',
+            '  readonly cost: number | "X" | "-";',
+            '  /** 内容包的 `Rarity`（`Common` / `Uncommon` / `Rare` / …）。 */',
+            '  readonly rarity: string;',
             '}',
             '',
         ],

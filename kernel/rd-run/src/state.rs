@@ -1765,6 +1765,32 @@ pub fn reward_bands(kind: FightKind, offset: i32) -> (i32, i32) {
     (rare_top, uncommon_top)
 }
 
+/// 商店有色卡的**稀有度基数**（wiki `Cards` 页「Base chance pre-offset in Shops」）。
+///
+/// 三个数一起读：Rare 9% / Uncommon 37% / Common 54%（合计 100）。
+/// ⚠️ 与战斗奖励的 3/37/60 **不是**同一张表：商店的稀有档更宽（玩家报的"第一次进店就能买到
+/// 残杀"就是这个数字没掷的直接后果，见 §377）。
+pub const SHOP_RARE_BASE: i32 = 9;
+/// 商店 Uncommon 档的**固定宽度**（与 `FightKind::uncommon_width` 同一个含义：它是宽度，
+/// 不是概率 —— 档位叠在稀有档上面，稀有档变宽它就往下让）。
+pub const SHOP_UNCOMMON_WIDTH: i32 = 37;
+
+/// 商店一张牌的两个档位边界（一次 0–99 的 roll）。
+///
+/// 规则与 [`reward_bands`] 一致，只换基数：
+/// * 稀有档 = `SHOP_RARE_BASE + offset`，**下限 0**；
+/// * Uncommon 档 = 稀有档上沿 + `SHOP_UNCOMMON_WIDTH`，**被裁掉的下界部分进 Common**。
+///
+/// wiki 明说商店的 roll *受*保底影响但**不更新**它（"Shop Cards … do not affect rare offset,
+/// however they are affected by rare chance"），所以调用方掷完**不许**动 `rarity_offset`。
+#[must_use]
+pub const fn shop_bands(offset: i32) -> (i32, i32) {
+    let banded = SHOP_RARE_BASE + offset;
+    let rare_top = if banded < 0 { 0 } else { banded };
+    let clipped = if banded < 0 { -banded } else { 0 };
+    (rare_top, rare_top + SHOP_UNCOMMON_WIDTH - clipped)
+}
+
 /// What a won fight pays (`inv:§5`): gold already granted, plus the cards on offer.
 ///
 /// The three cards are **mutually distinct** (`inv:§3.5`: rolled one at a time, a later roll never
@@ -5693,32 +5719,75 @@ impl RunState {
         Self::pool_fits(card_pool.len())?;
         self.shop = ShopStock::empty();
 
-        // ── 有色卡：2 攻 / 2 技 / 1 能力 ────────────────────────────────────────
-        // 先把"这一类有几张"数出来，再在**类内**洗牌取前 N 张 —— 分类是构成，洗牌是随机。
+        // ── 有色卡：2 攻 / 2 技 / 1 能力，**每个货位先掷稀有度档位** ─────────────
+        //
+        // wiki（`Cards` 页）：商店的档位是 Rare 9% / Uncommon 37% / Common 54%，
+        // 且**受**稀有度保底影响、**不更新**保底。
+        //
+        // ⚠️ 旧实现只做了"2 攻 / 2 技 / 1 能力"的**类型**构成，稀有度**完全没掷** ——
+        // 一个类型组里 Common 三十张、Rare 五张，于是 Rare 的概率变成"组里 Rare 的占比"
+        // （≈14%，而且内容一变就漂）。玩家实测"第一次进商店就能低价买到残杀（Rare）"。
         let wanted = [(CardKind::Attack, 2usize), (CardKind::Skill, 2), (CardKind::Power, 1)];
         let mut shelved_cards = 0usize;
         for (kind, count) in wanted {
-            let mut members = [0u8; MAX_POOL];
-            let mut found = 0usize;
-            for (index, card) in card_pool.iter().enumerate() {
-                if card.colorless || card.kind != kind {
-                    continue;
+            for _ in 0..count {
+                if shelved_cards == MAX_SHOP_CARDS {
+                    break;
                 }
-                if found == MAX_POOL {
-                    return Err(RunError::EmptyPool("cards"));
+                // ① 掷档位（一次 roll，两个边界）。
+                let (rare_top, uncommon_top) = shop_bands(self.rarity_offset);
+                let roll = self.rng.roll(RunStream::Shop, 100)? as i32;
+                let band = if roll < rare_top {
+                    Rarity::Rare
+                } else if roll < uncommon_top {
+                    Rarity::Uncommon
+                } else {
+                    Rarity::Common
+                };
+                // ② 在（这一类型 × 这一档位）里均匀取一张，跳过已经上架的。
+                let mut members = [0u8; MAX_POOL];
+                let mut found = 0usize;
+                for (index, card) in card_pool.iter().enumerate() {
+                    if card.colorless || card.kind != kind || card.rarity != band {
+                        continue;
+                    }
+                    if self.shop.cards[..shelved_cards]
+                        .iter()
+                        .any(|offer| offer.id.as_str() == card.id)
+                    {
+                        continue;
+                    }
+                    if found == MAX_POOL {
+                        return Err(RunError::EmptyPool("cards"));
+                    }
+                    members[found] = index as u8;
+                    found += 1;
                 }
-                members[found] = index as u8;
-                found += 1;
-            }
-            // ⚠️ `shuffle` 洗的是**位置表**（它先把切片写成 `0..n`），所以这里洗 `pos` 而不是
-            // `members` —— 直接洗 `members` 会把它重写成"池子的前 N 张"（§332 踩过）。
-            let mut pos = [0u8; MAX_POOL];
-            for (slot, entry) in pos.iter_mut().take(found).enumerate() {
-                *entry = slot as u8;
-            }
-            self.rng.shuffle(RunStream::Shop, &mut pos[..found]);
-            for slot in 0..count.min(found) {
-                let card = card_pool[members[pos[slot] as usize] as usize];
+                // ③ 兜底：档位里没货 ⇒ 同类型任意档位（wiki 没有明说这一条，但"空着一个货位"
+                //    比"换个档位"更糟；这条与 `stock_shop` 原来的补位是同一个理由）。
+                if found == 0 {
+                    for (index, card) in card_pool.iter().enumerate() {
+                        if card.colorless || card.kind != kind {
+                            continue;
+                        }
+                        if self.shop.cards[..shelved_cards]
+                            .iter()
+                            .any(|offer| offer.id.as_str() == card.id)
+                        {
+                            continue;
+                        }
+                        if found == MAX_POOL {
+                            return Err(RunError::EmptyPool("cards"));
+                        }
+                        members[found] = index as u8;
+                        found += 1;
+                    }
+                }
+                if found == 0 {
+                    continue; // 这一类型整个池子都空了 ⇒ 交给下面的补位
+                }
+                let pick = self.rng.roll(RunStream::Shop, found as u32)? as usize;
+                let card = card_pool[members[pick] as usize];
                 let (low, high) = card_price_band(card.rarity);
                 let price = low + self.rng.roll(RunStream::Shop, (high - low + 1) as u32)? as i32;
                 self.shop.cards[shelved_cards] = Offer {
@@ -5726,53 +5795,69 @@ impl RunState {
                     price: self.marked_up(price),
                 };
                 shelved_cards += 1;
-                if shelved_cards == MAX_SHOP_CARDS {
-                    break;
-                }
             }
             if shelved_cards == MAX_SHOP_CARDS {
                 break;
             }
         }
+        // ⚠️ 这里**不写** `self.rarity_offset`：wiki 明说商店的 roll 不更新保底。
         // 分类不足时**补位**：内容里某一类（通常是 Power）不够 2 张、或池子里的牌没有类型标签时，
         // 从其余的**非无色**牌里补齐。空着整排不是"更忠实"，而是"商店没东西卖"。
-        if shelved_cards < MAX_SHOP_CARDS {
-            let mut rest = [0u8; MAX_POOL];
-            let mut found = 0usize;
-            for (index, card) in card_pool.iter().enumerate() {
-                if card.colorless {
-                    continue;
+        //
+        // ⚠️ 补位**也必须掷档位**：第一版只给"2 攻 / 2 技 / 1 能力"那条主路径加了稀有度 roll，
+        // 补位仍然是"在全部非无色牌里均匀洗牌" —— 于是池子缺某一类时（测试夹具就是这种池子）
+        // Rare 的实际占比又回到"池子里的占比"（实测 20%）。统计测试当场抓到。
+        while shelved_cards < MAX_SHOP_CARDS {
+            let (rare_top, uncommon_top) = shop_bands(self.rarity_offset);
+            let roll = self.rng.roll(RunStream::Shop, 100)? as i32;
+            let band = if roll < rare_top {
+                Rarity::Rare
+            } else if roll < uncommon_top {
+                Rarity::Uncommon
+            } else {
+                Rarity::Common
+            };
+            // 先在本档位里找；没有就退到任意档位（"总得上一张货"，见上一条注释）。
+            let mut picked: Option<usize> = None;
+            for wanted in [Some(band), None] {
+                let mut members = [0u8; MAX_POOL];
+                let mut found = 0usize;
+                for (index, card) in card_pool.iter().enumerate() {
+                    if card.colorless {
+                        continue;
+                    }
+                    if wanted.is_some_and(|rarity| card.rarity != rarity) {
+                        continue;
+                    }
+                    if self.shop.cards[..shelved_cards]
+                        .iter()
+                        .any(|offer| offer.id.as_str() == card.id)
+                    {
+                        continue;
+                    }
+                    if found == MAX_POOL {
+                        return Err(RunError::EmptyPool("cards"));
+                    }
+                    members[found] = index as u8;
+                    found += 1;
                 }
-                let already = self.shop.cards[..shelved_cards]
-                    .iter()
-                    .any(|offer| offer.id.as_str() == card.id);
-                if already {
-                    continue;
-                }
-                if found == MAX_POOL {
-                    return Err(RunError::EmptyPool("cards"));
-                }
-                rest[found] = index as u8;
-                found += 1;
-            }
-            let mut pos = [0u8; MAX_POOL];
-            for (slot, entry) in pos.iter_mut().take(found).enumerate() {
-                *entry = slot as u8;
-            }
-            self.rng.shuffle(RunStream::Shop, &mut pos[..found]);
-            for slot in 0..found {
-                if shelved_cards == MAX_SHOP_CARDS {
+                if found > 0 {
+                    let pick = self.rng.roll(RunStream::Shop, found as u32)? as usize;
+                    picked = Some(members[pick] as usize);
                     break;
                 }
-                let card = card_pool[rest[pos[slot] as usize] as usize];
-                let (low, high) = card_price_band(card.rarity);
-                let price = low + self.rng.roll(RunStream::Shop, (high - low + 1) as u32)? as i32;
-                self.shop.cards[shelved_cards] = Offer {
-                    id: RunId::new(card.id).map_err(|_| RunError::BadId)?,
-                    price: self.marked_up(price),
-                };
-                shelved_cards += 1;
             }
+            let Some(index) = picked else {
+                break; // 池子真的空了：留空格，交给调用方的空货位语义
+            };
+            let card = card_pool[index];
+            let (low, high) = card_price_band(card.rarity);
+            let price = low + self.rng.roll(RunStream::Shop, (high - low + 1) as u32)? as i32;
+            self.shop.cards[shelved_cards] = Offer {
+                id: RunId::new(card.id).map_err(|_| RunError::BadId)?,
+                price: self.marked_up(price),
+            };
+            shelved_cards += 1;
         }
         // wiki: *"One random card will have a 50% discount applied."* —— 挂牌价直接减半，
         // 于是"页面显示的数"与"真的扣的数"仍然是同一个数（§270 的规矩）。
@@ -10650,6 +10735,154 @@ mod tests {
         assert_eq!(run.run_end(), RunEnd::OutOfMap, "and now the act is over");
     }
 
+    /// §377：商店有色卡的档位边界 —— wiki 的 9/37/54，且**受**保底影响、**不更新**保底。
+    ///
+    /// 为什么把边界单独立一条：玩家报的是"第一次进商店就能低价买到残杀（Rare）"，
+    /// 而根因是"稀有度**根本没掷**"。边界函数对了但没人调用它，故障照旧 —— 所以
+    /// `shop_stocks_colored_cards_by_rarity_odds` 那条统计测试才是真正的守卫。
+    #[test]
+    fn shop_rarity_bands_match_the_wiki() {
+        // 保底 0：稀有 0..9、Uncommon 9..46、Common 46..100 ⇒ 9 / 37 / 54。
+        assert_eq!(shop_bands(0), (9, 46), "at offset 0 the bands are 9 / 37 / 54");
+        // 保底 −5（开局）：稀有 0..4，被裁掉的 5 个点进 **Common**（不是 Uncommon）⇒ 4 / 37 / 59。
+        assert_eq!(shop_bands(-5), (4, 41), "a negative offset clips into Common, not Uncommon");
+        // 保底 +10：稀有 0..19、Uncommon 19..56。
+        assert_eq!(shop_bands(10), (19, 56));
+        // 极端负保底：稀有档夹到 0，Uncommon 也整体下移（宽度不变）。
+        // banded = 9 - 20 = -11 ⇒ 稀有夹到 0、Uncommon = 0 + 37 - 11 = 26（宽度不变，整体下移）。
+        assert_eq!(shop_bands(-20), (0, 26), "the rare band floors at 0 and uncommon slides down");
+
+        // 三档宽度之和恒等于 100 —— 这是"一张 roll 分三段"的直接后果。
+        for offset in -5..=20 {
+            let (rare_top, uncommon_top) = shop_bands(offset);
+            assert!(
+                (0..=100).contains(&rare_top) && rare_top <= uncommon_top && uncommon_top <= 100,
+                "offset {offset}: bands must stay ordered inside 0..=100"
+            );
+        }
+    }
+
+    /// §377：**商店的 roll 不更新稀有度保底**（wiki："Shop Cards … do not affect rare offset,
+    /// however they are affected by rare chance"）。
+    ///
+    /// 判据：连开 20 家店，`rarity_offset` 一次都不许动。写成"至少一个字节不变"就够 ——
+    /// 但这里要的是**每一家店之后都等于开局值**，因为"+1 一次"正是最容易漏的那一半。
+    #[test]
+    fn stocking_a_shop_does_not_move_the_rare_offset() {
+        let mut run = ironclad();
+        run.pending = Pending::Shop;
+        let start = run.rarity_offset;
+        assert_eq!(start, RARITY_OFFSET_START, "a fresh run starts at the wiki's −5%");
+        for round in 0..20 {
+            run.stock_shop(&TYPED_CARDS, &RELICS, &POTIONS).expect("stock the shop");
+            assert_eq!(
+                run.rarity_offset, start,
+                "round {round}: shops must not tick (or reset) the rare pity offset"
+            );
+        }
+    }
+
+    /// §377：**稀有度真的掷了**（这才是玩家那条报障的守卫）。
+    ///
+    /// 夹具：一个只有 **3 张 Common / 1 张 Uncommon / 1 张 Rare** 的攻击牌池。
+    /// 如果实现是"在类型组里均匀抽"（旧形状），Rare 的占比会是 **20%**；
+    /// 按 wiki 的 9% 掷，Rare 应该落在 5%–14% 之间（400 家店 × 2 个攻击位 = 800 个样本，
+    /// 二项分布的 4σ 约 ±4%）。
+    ///
+    /// ⚠️ 区间是**故意**宽的：断言"恰好 9.0%"会让随机流的任何一次调整都变红。要证明的是
+    /// "**它被掷了**"，不是"这个数是 9"——后者由上面那条边界测试守。
+    #[test]
+    fn shop_stocks_colored_cards_by_rarity_odds() {
+        // ⚠️ 池子必须**明显大于** 5 个货位。第一版夹具只有 5 张牌，于是每家店必然把 5 张
+        // 全部上架 —— Rare 的占比恒等于池子占比（1/5 = 20%），**与掷不掷档位无关**。
+        // 那条断言看起来在守"稀有度掷了"，实际上什么也没测到（§4.25 的老形状）。
+        let pool: [PoolCard<'static>; 20] = [
+            PoolCard { id: "strike", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None, colorless: false },
+            PoolCard { id: "bash", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None, colorless: false },
+            PoolCard { id: "anger", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None, colorless: false },
+            PoolCard { id: "cleave", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None, colorless: false },
+            PoolCard { id: "clothesline", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None, colorless: false },
+            PoolCard { id: "headbutt", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None, colorless: false },
+            PoolCard { id: "heavy_blade", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None, colorless: false },
+            PoolCard { id: "iron_wave", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None, colorless: false },
+            PoolCard { id: "perfected_strike", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None, colorless: false },
+            PoolCard { id: "pommel_strike", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None, colorless: false },
+            PoolCard { id: "sword_boomerang", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None, colorless: false },
+            PoolCard { id: "thunderclap", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None, colorless: false },
+            PoolCard { id: "twin_strike", rarity: Rarity::Uncommon, kind: CardKind::Attack, upgraded: None, colorless: false },
+            PoolCard { id: "carnage", rarity: Rarity::Uncommon, kind: CardKind::Attack, upgraded: None, colorless: false },
+            PoolCard { id: "dropkick", rarity: Rarity::Uncommon, kind: CardKind::Attack, upgraded: None, colorless: false },
+            PoolCard { id: "hemokinesis", rarity: Rarity::Uncommon, kind: CardKind::Attack, upgraded: None, colorless: false },
+            PoolCard { id: "pummel", rarity: Rarity::Uncommon, kind: CardKind::Attack, upgraded: None, colorless: false },
+            PoolCard { id: "reckless_charge", rarity: Rarity::Uncommon, kind: CardKind::Attack, upgraded: None, colorless: false },
+            PoolCard { id: "bludgeon", rarity: Rarity::Rare, kind: CardKind::Attack, upgraded: None, colorless: false },
+            PoolCard { id: "feed", rarity: Rarity::Rare, kind: CardKind::Attack, upgraded: None, colorless: false },
+        ];
+        let mut run = ironclad();
+        run.pending = Pending::Shop;
+        // 第一段：把保底摆到 **0**，量到的就是 wiki 的基数 9%。
+        run.rarity_offset = 0;
+        let mut rare = 0usize;
+        let mut uncommon = 0usize;
+        let mut common = 0usize;
+        for _ in 0..400 {
+            run.stock_shop(&pool, &RELICS, &POTIONS).expect("stock the shop");
+            for offer in run.shop().cards() {
+                // 按**稀有度**归类，不按具体 id：池子里有 12 Common / 6 Uncommon / 2 Rare，
+                // 直接查池子才是唯一的真相（写死 `bludgeon` 那种做法加一张牌就漂）。
+                let rarity = pool
+                    .iter()
+                    .find(|entry| entry.id == offer.id.as_str())
+                    .map(|entry| entry.rarity);
+                match rarity {
+                    Some(Rarity::Rare) => rare += 1,
+                    Some(Rarity::Uncommon) => uncommon += 1,
+                    Some(_) => common += 1,
+                    None => {}
+                }
+            }
+        }
+        let total = rare + uncommon + common;
+        assert!(total > 500, "the fixture must shelve plenty of cards (got {total})");
+        let rare_percent = rare * 100 / total;
+        assert!(
+            (5..=14).contains(&rare_percent),
+            "Rare must be rolled at the wiki's 9%, not uniform-by-pool-share (20%). \
+             Got {rare_percent}% ({rare}/{total}) — if this is ~20%, the rarity roll is missing"
+        );
+        assert!(
+            uncommon > 0 && common > 0,
+            "every band must be reachable (common {common}, uncommon {uncommon}, rare {rare})"
+        );
+
+        // 第二段：**开局保底 −5%** ⇒ 商店的稀有档 = 9 − 5 = 4%（wiki："are affected by rare
+        // chance"）。这一段证明保底真的接进了商店的 roll —— 少了它，"忘了读 `rarity_offset`"
+        // 的实现照样绿（它只是把第一段的 9% 又跑一遍）。
+        let mut fresh = ironclad();
+        fresh.pending = Pending::Shop;
+        assert_eq!(fresh.rarity_offset, RARITY_OFFSET_START, "a fresh run is at −5%");
+        let mut fresh_rare = 0usize;
+        let mut fresh_total = 0usize;
+        for _ in 0..400 {
+            fresh.stock_shop(&pool, &RELICS, &POTIONS).expect("stock the shop");
+            for offer in fresh.shop().cards() {
+                fresh_total += 1;
+                if pool
+                    .iter()
+                    .any(|entry| entry.id == offer.id.as_str() && entry.rarity == Rarity::Rare)
+                {
+                    fresh_rare += 1;
+                }
+            }
+        }
+        let fresh_percent = fresh_rare * 100 / fresh_total;
+        assert!(
+            (2..=7).contains(&fresh_percent),
+            "with the opening −5% pity the shop's rare band is 4%, not 9%. \
+             Got {fresh_percent}% ({fresh_rare}/{fresh_total}) — if this is ~9%, the offset is ignored"
+        );
+    }
+
     /// §342（第九轮 Review P1-2）：补出来的遗物按**它自己的稀有度**定价。
     ///
     /// 旧实现硬编码 Common 档（143-157），于是 Uncommon / Rare 的补货也按 Common 卖。
@@ -10661,7 +10894,11 @@ mod tests {
     fn restocked_relics_are_priced_by_their_own_rarity() {
         let pool: [PoolRelic<'static>; 9] = [
             PoolRelic { id: "anchor", rarity: Rarity::Common },
-            PoolRelic { id: "bag_of_prep", rarity: Rarity::Common },
+            // ⚠️ 这里曾经写成 `bag_of_prep`（缩写），而内核表的真 id 是 `bag_of_preparation`。
+            // 旧 RNG 路径恰好 80 轮都没抽到它，于是这条夹具**一直绿着**；§377 改动了
+            // `stock_shop` 的掷骰序列之后它立刻炸出来（`UnsupportedRelic`）——
+            // 这正是"夹具没覆盖到的那一格等于没测"的现成例子。
+            PoolRelic { id: "bag_of_preparation", rarity: Rarity::Common },
             PoolRelic { id: "blood_vial", rarity: Rarity::Common },
             PoolRelic { id: "blue_candle", rarity: Rarity::Uncommon },
             PoolRelic { id: "darkstone_periapt", rarity: Rarity::Uncommon },

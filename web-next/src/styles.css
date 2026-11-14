@@ -169,6 +169,48 @@ body,
   color: #9fb3c6;
 }
 
+/* ── 状态（§378）─────────────────────────────────────────────────────────── */
+
+/*
+ * 一个状态 = 一个 chip。**层数写在 chip 里**（1 层不写数字，其余写）——
+ * "力量 3" 与 "力量" 是两种局面，只写名字等于没说。
+ */
+.status-chip {
+  display: inline-block;
+  padding: 0 4px;
+  border-radius: 5px;
+  background: rgba(120, 160, 210, 0.16);
+  border: 1px solid rgba(120, 160, 210, 0.32);
+  color: #cfe3f7;
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.enemy-label__status {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
+  max-width: 140px;
+}
+
+/*
+ * 英雄状态：钉在英雄头顶（位置由 `layout.hero` 的投影点驱动，见 `TextOverlay` 的 rAF）。
+ * `pointer-events: none`：它盖在战场上方，不该抢拖牌的手势。
+ */
+.hero-status {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  will-change: transform;
+  pointer-events: none;
+}
+
 /* ── 详情卡 ───────────────────────────────────────────────────────────────── */
 .detail-card {
   position: absolute;

@@ -1474,6 +1474,18 @@ pub extern "C" fn rd_run_map_row_first(row: i32) -> i32 {
         .map_or(-1, i32::from)
 }
 
+/// 药水腰带**能装几瓶**（§380）。规则在 `RunState::potion_slots`：3 格，A11 减 1，
+/// `potion_belt` 加 2 —— 界面**不许**自己算（同一份规则两处认识就会漂）。
+///
+/// 用途：商店的药水货架在腰带满时必须不可点。旧版没问这一格，于是"点了被内核拒绝"
+/// （`web-soak` 抓到的 dead control：`买药水 被拒 · Capacity`）。
+#[no_mangle]
+pub extern "C" fn rd_run_potion_slots() -> i32 {
+    run_slot()
+        .as_ref()
+        .map_or(-1, |session| i32::from(session.state.potion_slots()))
+}
+
 /// `env-abi.md` §11.2. `i32::MIN` for an out-of-range index or field.
 ///
 /// The edges are reported as **global** node indices: the storage numbers them per row, and

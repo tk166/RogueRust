@@ -132,6 +132,39 @@ body {
 
 /* ── 场景容器（切换时淡入：让"换屏"是可感知的，而不是内容忽然变成另一段）──── */
 
+/* ── 遗物条（§378）───────────────────────────────────────────────────────── */
+
+/*
+ * 常驻第二排：与药水腰带并排。**名字要显示**（只给徽章等于让玩家背 id），
+ * 窄屏时换行而不是横向滚动（横向滚动在触屏上很容易"看不见右边的遗物"）。
+ */
+.relic-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.relic-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 2px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #131820;
+  font-size: 11px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.relic-chip__name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .run-main {
   flex: 1;
   min-height: 0;
@@ -170,6 +203,15 @@ body {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  /*
+   * 高度必须**受约束**，否则 `.map-scroll` 的 `flex: 1; overflow-y: auto` 不会滚动：
+   * 它会被内容撑到 1040px（比 844 的视口还高），于是整页滚、地图自己那层滚不动 ——
+   * 窄屏上第 1 行（现在在**底部**，往上爬）直接落在视口外，看起来"一个能点的都没有"
+   * （闸门 31 实测：`elementFromPoint` 返回 null）。
+   * `flex: 1` + `min-height: 0` 是 flex 容器里让子元素真的滚动的唯一写法。
+   */
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .scene-head h1,
@@ -346,20 +388,39 @@ button.primary:disabled {
   padding: 10px 0;
 }
 
+/*
+ * 画布：**节点与连线共用一套归一化坐标**（`MapScene.place()`）。
+ *
+ * ⚠️ 第一版这里是 `display:flex; flex-direction: column-reverse`，把第 1 行翻到底部；
+ * 而 SVG 连线用 `y = (1 - row/lastRow)` —— 两层互为镜像，玩家看到的线往**下**走，
+ * 可达节点却在上面（实测截图：当前节点在蓝框、可达节点在它下面）。
+ * 现在节点**绝对定位**在 `map.layout` 的坐标上，SVG 与节点都从 `--map-pad` 起算，
+ * 于是"线连到哪个节点"是同一个公式算出来的，不可能再对不上。
+ */
 .map-canvas {
   position: relative;
-  display: flex;
-  flex-direction: column-reverse; /* 第 1 行在底部：往上爬 */
-  gap: 22px;
-  min-height: calc(var(--map-rows) * 62px);
-  padding: 12px 10px;
+  --map-pad: 34px;
+  height: calc(var(--map-rows) * 68px);
+}
+
+.map-field {
+  position: absolute;
+  inset: 0;
 }
 
 .map-edges {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  /*
+   * 与节点同一块区域：`place()` 把 [0,1] 映射到 `[--map-pad, 100% - --map-pad]`。
+   *
+   * ⚠️ **不能用 `inset` + `width: auto`**：SVG 是**替换元素**，`auto` 会退回它自己的
+   * 固有尺寸（`viewBox 0 0 100 100` ⇒ 正方形 145×145），而不是被 `inset` 撑开 ——
+   * 实测连线因此整体缩成画布左上角的一小块（差 800px）。宽度/高度必须**显式**算。
+   */
+  left: var(--map-pad);
+  top: var(--map-pad);
+  width: calc(100% - 2 * var(--map-pad));
+  height: calc(100% - 2 * var(--map-pad));
   pointer-events: none;
 }
 
@@ -374,16 +435,18 @@ button.primary:disabled {
   opacity: 0.9;
 }
 
+/*
+ * 行只是**分组**（`data-row` 给闸门用），不参与布局：`display: contents` 让节点直接
+ * 相对 `.map-field` 定位，这样"第几行"只影响数据，不影响像素。
+ */
 .map-row {
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  gap: 8px;
-  min-height: 56px;
+  display: contents;
 }
 
 .map-node {
-  position: relative;
+  position: absolute;
+  /* 坐标由 `style.left/top` 给（与连线同源）；这里只负责把中心对齐到那个点。 */
+  transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -450,6 +513,58 @@ button.primary:disabled {
 .map-node.kind-boss,
 .map-node.kind-bossChest {
   border-color: #6b2b2b;
+}
+
+/* ── 悬浮详情（§379）─────────────────────────────────────────────────────── */
+
+/*
+ * 固定面板，不是跟着光标飘的 tooltip：
+ * 贴边时飘窗会被裁掉，而且它会盖住相邻的牌 —— 反而更难选。
+ * `pointer-events: none`：它盖在货架上方，不许挡住"再指下一张"。
+ */
+.card-tip {
+  position: sticky;
+  bottom: 8px;
+  z-index: 20;
+  pointer-events: none;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(120, 160, 210, 0.4);
+  background: rgba(10, 16, 22, 0.94);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  max-width: 520px;
+}
+
+.card-tip__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.card-tip__title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #eaf3fb;
+}
+
+.card-tip__note {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.card-tip__subtitle {
+  font-size: 11px;
+  color: #8fb0cc;
+}
+
+.card-tip__body {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #cfe0ef;
 }
 
 /* ── 战斗前 ──────────────────────────────────────────────────────────────── */
@@ -725,7 +840,11 @@ button.primary:disabled {
 
 .run-subbar {
   display: flex;
-  align-items: center;
+  /*
+   * `flex-start` 而不是 `center`：§378 的遗物条会**换行**（遗物多的时候两三行），
+   * 居中会让药水腰带在垂直方向上被拉着走 —— 一排遗物时看不出来，三排时很怪。
+   */
+  align-items: flex-start;
   gap: 10px;
   padding: 4px 14px 6px;
   background: var(--panel);
@@ -818,6 +937,12 @@ button.primary:disabled {
 
 .shop-row:hover:not(:disabled) {
   border-color: var(--accent);
+}
+
+/* §380：为什么不能买（腰带满了 / 金币不够）—— 与价格同一行，不占额外高度。 */
+.shop-row-why {
+  margin-left: 8px;
+  font-size: 11px;
 }
 
 .shop-row.is-unaffordable .shop-row-price {

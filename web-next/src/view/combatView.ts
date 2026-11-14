@@ -40,6 +40,17 @@ export interface ViewCard {
   readonly playable: boolean;
 }
 
+/**
+ * 一个状态实例（§378）。`id` 是内容定义 id（`standard.strength` / `standard.constricted`），
+ * `stacks` 是层数（可能为 1）。
+ */
+export interface ViewStatus {
+  readonly id: string;
+  /** 中文名（`statuses` 表；查不到退回 `id`）。 */
+  readonly name: string;
+  readonly stacks: number;
+}
+
 export interface ViewEnemy {
   readonly slot: number;
   /**
@@ -58,6 +69,8 @@ export interface ViewEnemy {
   readonly alive: boolean;
   /** 一行意图文本（"攻击 9" / "未知"）。wasm 给 kind+damage，这里只做展示。 */
   readonly intent: string;
+  /** 身上的状态（力量/易伤/虚弱/…，含观察向量里没有的那些，如 `constricted`）。 */
+  readonly statuses: readonly ViewStatus[];
 }
 
 export interface ViewHero {
@@ -67,6 +80,7 @@ export interface ViewHero {
   readonly block: number;
   readonly energy: number;
   readonly maxEnergy: number;
+  readonly statuses: readonly ViewStatus[];
 }
 
 export type ViewResult = "ongoing" | "victory" | "defeat" | "draw" | "aborted";
@@ -119,6 +133,39 @@ export interface WasmNames {
   cardName(slot: number): string;
   cardText(slot: number): string;
   enemyName(slot: number): string;
+  /**
+   * 战斗者身上的状态实例（`-1` = 英雄，`0..5` = 敌人墙位）。
+   *
+   * ⚠️ **可选**：`?mock` 那条路（P1 的确定局面）没有 wasm，状态一律为空数组。
+   * 写成必需会让 mock 分支编不过，而 mock 分支是 P1 那 94 条断言的夹具。
+   */
+  statuses?(whom: number): { id: string; stacks: number }[];
+}
+
+/**
+ * 状态 id → 可读标签。
+ *
+ * i18n 表里没有的那一条**不显示裸 id**（`standard.spore_cloud` 在界面上是一串机器码）：
+ * 剥掉命名空间、下划线换空格 ⇒ `spore cloud`。它仍然是英文（诚实：说明这条没翻译），
+ * 但至少读得出来。回退**照常计数**（`coverage()` 不会因此少报）。
+ */
+function statusLabel(id: string): string {
+  const translated = displayName("statuses", id);
+  if (translated !== id) return translated;
+  return id.replace(/^standard\./, "").replace(/_/g, " ");
+}
+
+/** 状态实例 → 展示形状。 */
+function viewStatuses(
+  names: WasmNames,
+  whom: number
+): readonly ViewStatus[] {
+  const raw = names.statuses?.(whom) ?? [];
+  return raw.map((status) => ({
+    id: status.id,
+    name: statusLabel(status.id),
+    stacks: status.stacks,
+  }));
 }
 
 /**
@@ -158,18 +205,27 @@ export function viewFromWasm(snapshot: CombatSnapshot, names: WasmNames, epoch =
       block: snapshot.hero.block,
       energy: snapshot.hero.energy,
       maxEnergy: snapshot.hero.energyMax,
+      statuses: viewStatuses(names, -1),
     },
-    enemies: snapshot.enemies.map((enemy) => ({
-      slot: enemy.slot,
-      id: `enemy-${enemy.slot}`,
-      defId: names.enemyName(enemy.slot),
-      name: displayName("monsters", names.enemyName(enemy.slot)),
-      hp: enemy.hp,
-      hpMax: enemy.hpMax,
-      block: enemy.block,
-      alive: enemy.alive,
-      intent: intentText(enemy.intentKind, enemy.intentDamage),
-    })),
+    // ⚠️ **死掉的敌人不进视图**（玩家实测：打死了还站在场上，而且下一回合还换一个新意图 ——
+    // 虽然点了也不会生效）。内核把 `alive = 0` 的格子留在快照里是对的（位置要稳定、动作表要
+    // 稳定），但"要不要画"是展示层的决定：一具站着的尸体比一个空位更让人困惑。
+    //
+    // 副作用是好的：`layout.enemies` 里没有它 ⇒ 拖牌不会命中它（它本来也不是合法目标）。
+    enemies: snapshot.enemies
+      .filter((enemy) => enemy.alive)
+      .map((enemy) => ({
+        slot: enemy.slot,
+        id: `enemy-${enemy.slot}`,
+        defId: names.enemyName(enemy.slot),
+        name: displayName("monsters", names.enemyName(enemy.slot)),
+        hp: enemy.hp,
+        hpMax: enemy.hpMax,
+        block: enemy.block,
+        alive: enemy.alive,
+        intent: intentText(enemy.intentKind, enemy.intentDamage),
+        statuses: viewStatuses(names, enemy.slot),
+      })),
     hand,
     turn: snapshot.turn,
     round: snapshot.round,
@@ -219,6 +275,8 @@ export function viewFromMock(scene: MockScene): CombatView {
       block: scene.hero.block,
       energy: scene.hero.energy,
       maxEnergy: scene.hero.maxEnergy,
+      // Mock 局面没有内核状态：空数组（不是"假装有 0 层"）。
+      statuses: [],
     },
     enemies: scene.enemies.map((enemy) => ({
       slot: enemy.slot,
@@ -230,6 +288,7 @@ export function viewFromMock(scene: MockScene): CombatView {
       block: 0,
       alive: enemy.hp > 0,
       intent: enemy.intent,
+      statuses: [],
     })),
     hand: scene.hand.map((card) => ({
       // ⚠️ id 保持原样：P1 的闸门按 `strike` 这样的 id 断言。重复 id 不影响 React key

@@ -23,6 +23,11 @@ pwsh tools/play.ps1          # 默认 8080；被占用会自动换端口并打�
 pwsh tools/play.ps1 -Port 8090   # 想要固定地址就自己挑一个（避开 Steam 的 8080/8081）
 ```
 
+> **地图**：第 1 层在**底部**，往上爬；开局会自动滚到你脚下那一排。
+> **状态**：英雄头顶与敌人名牌上各有一排状态（力量/易伤/束缚…），层数写在名字后面。
+> **遗物/药水**：顶栏下面那一排是**常驻**的（战斗里、商店里都看得见）。
+> **卡牌详情**：奖励屏/商店里把鼠标移到牌上（触屏是按住）就显示 种类 · 费用 · 稀有度 · 规则。
+>
 > ⚠️ **Windows 上 8080/8081 常被 Steam 的 CEF 调试端口占着**。如果浏览器打开看到的是 Steam，
 > 说明端口没抢到 —— 现在的服务器会自己换端口、并把真地址打印出来（§375）。
 > 它还会**自检**"这个端口答的是不是我"，所以"启动成功但看到别人的页面"不会再发生。
@@ -243,7 +248,7 @@ python -m http.server 8000
 | `kernel/rd-firmware/` | 裸机启动壳（独立的 `[workspace]`，只在 riscv 目标上存在）——**只为证明链接得过** |
 | `kernel/rd-hashdump` `rd-rngdump` `rd-sizeprobe` `rd-fightdump` | 诊断二进制：哈希对拍、洗牌序列对拍、RISC-V 代码体积、把一局战斗逐步打出来 |
 | `tools/contentc/` | **Python 内容编译器**：JSON 源 → `rdcf` 二进制镜像（段目录 + 字符串池 + 效果程序 IR） |
-| `tools/acceptance.ps1` | **聚合验收**：53 道闸门（含 `coverage-matrix`、`state-fields`、`ui-state`、`ui-abi`、`ui-next`、`ui-pointer`、`ui-pure`、`ui-wasm`、`ui-wasm-ui`、`ui-wasm-choice`、`ui-wasm-fixtures`、`ui-wasm-xcost`、`ui-scene`、`ui-next-loop`、`ui-p4-models`、`ui-next-p4`、`ui-beats`、`ui-next-p5`、`ui-mobile` 与 `ui-soak-p6`），一道红就整体红 |
+| `tools/acceptance.ps1` | **聚合验收**：55 道闸门（含 `coverage-matrix`、`state-fields`、`ui-state`、`ui-abi`、`ui-next`、`ui-pointer`、`ui-pure`、`ui-wasm`、`ui-wasm-ui`、`ui-wasm-choice`、`ui-wasm-fixtures`、`ui-wasm-xcost`、`ui-scene`、`ui-next-loop`、`ui-p4-models`、`ui-next-p4`、`ui-beats`、`ui-next-p5`、`ui-mobile` 与 `ui-soak-p6`），一道红就整体红 |
 | `tools/rdcf_verify.py` `rdcf_terms.py` | 内容镜像的**独立**字节级校验（段目录 / count×stride / term 表形状） |
 | `web/` | 前端（零构建、零 CDN）：`index.html` + `ui_render.js`（战斗语义）+ `ui_panels.js`（14 个节点状态）+ `map.html` + `pixels.mjs`（像素度量）+ 门 13–20 的脚本 |
 | `native/RogueDeck.Oracle` `RogueDeck.Native` | C# 侧：对拍导出（NativeAOT）与 RL 环境 ABI |

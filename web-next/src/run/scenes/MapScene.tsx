@@ -59,9 +59,17 @@ export function MapScene({
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   // 打到新的一层后自动滚到当前节点附近（不然玩家要自己找）。
+  //
+  // ⚠️ `current < 0`（还没出发）时**滚到底部**：第 1 行在底部（往上爬），开局的可选节点
+  // 就在最下面。不滚的话玩家打开地图看到的是**地图顶端**（Boss 那一头），得自己往下翻
+  // ——窄屏（390×844）上这就是"看不到任何可点的东西"（闸门 31 实测：触摸点在视口外）。
   useEffect(() => {
     const container = scrollRef.current;
-    if (!container || current < 0) return;
+    if (!container) return;
+    if (current < 0) {
+      container.scrollTop = container.scrollHeight;
+      return;
+    }
     const marker = container.querySelector<HTMLElement>(`[data-node="${current}"]`);
     marker?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [current]);
@@ -88,6 +96,13 @@ export function MapScene({
   }, [map, current]);
 
   // 行分组：每行一个 `data-row`，从最后一行往前画（顶部是 Boss）。
+  //
+  // ⚠️ **DOM 顺序 == 视觉顺序**（大行号在前 = 屏幕上方）。第一版靠 CSS
+  // `flex-direction: column-reverse` 把第 1 行翻到底部，而 SVG 连线用的是
+  // `y = (1 - row/lastRow)` —— **两层互为镜像**，于是"节点在这一行、连线连到下一行"
+  // （玩家实测：高亮的线往**下**走，可达节点却在上面）。现在改成：
+  // 节点**绝对定位**在 `map.layout` 给的归一化坐标上，与连线**同一个公式**，
+  // 所以"节点和线对不上"在结构上不可能再发生（闸门 54 逐条比对像素）。
   const rows = useMemo(() => {
     const byRow = new Map<number, MapNode[]>();
     for (const node of map.nodes) {
@@ -99,6 +114,15 @@ export function MapScene({
       .sort((a, b) => b[0] - a[0])
       .map(([row, nodes]) => ({ row, nodes: nodes.sort((a, b) => a.col - b.col) }));
   }, [map]);
+
+  /**
+   * 归一化坐标 → CSS 位置。**连线与节点共用这一个函数**（同一个事实只有一个来源）。
+   *
+   * `--map-pad` 是画布内边距：节点中心落在 `[pad, 100% - pad]` 区间里，SVG 也用同一个内边距
+   * （`inset: var(--map-pad)`），所以 `x=0` 在两边是同一个像素。
+   */
+  const place = (value: number) =>
+    `calc(var(--map-pad) + (100% - 2 * var(--map-pad)) * ${value.toFixed(6)})`;
 
   const boss = map.nodes.find((node) => BOSS_ROW_KINDS.has(node.kind)) ?? null;
 
@@ -134,7 +158,8 @@ export function MapScene({
 
       <div className="map-scroll" ref={scrollRef}>
         <div className="map-canvas" style={{ ["--map-rows" as string]: String(map.rows) }}>
-          {/* 连线在底层：`pointer-events: none` 保证不会挡住节点的点击。 */}
+          {/* 连线在底层：`pointer-events: none` 保证不会挡住节点的点击。
+              坐标与节点同源（`place()` + `--map-pad`），见上面的注释。 */}
           <svg className="map-edges" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
             {edges.map((edge) => {
               const from = map.layout.get(edge.from.index);
@@ -156,11 +181,13 @@ export function MapScene({
             })}
           </svg>
 
+          <div className="map-field">
           {rows.map(({ row, nodes }) => (
             <div className="map-row" data-row={row} key={row}>
               {nodes.map((node) => {
                 const isCurrent = node.index === current;
                 const clickable = node.reachable && !inert;
+                const spot = map.layout.get(node.index) ?? { x: 0.5, y: 0 };
                 return (
                   <button
                     key={node.index}
@@ -181,6 +208,9 @@ export function MapScene({
                       isCurrent ? "（你在这里）" : ""
                     }`}
                     aria-disabled={!clickable}
+                    // 与 `<line>` 用同一个公式：`x` 向右、`y` 归一化是"第 1 行在底部"，
+                    // 所以屏幕纵向要取 `1 - y`。
+                    style={{ left: place(spot.x), top: place(1 - spot.y) }}
                     onClick={() => (clickable ? onEnter(node.index) : onBlocked(node.index))}
                   >
                     <span className="map-node-glyph" aria-hidden>
@@ -193,6 +223,7 @@ export function MapScene({
               })}
             </div>
           ))}
+          </div>
         </div>
       </div>
     </section>

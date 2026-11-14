@@ -180,7 +180,8 @@
 | `relicId(i)` | `R.txt(relic_id, i)` | 规则键；`singing_bowl` 的判据曾经用它 |
 | `hasRelic(id)` | `rd_run_has_relic(ptr, len)` → `1/0/-1` | §346：**"有没有这件遗物"只问内核** —— 页面原来在两处各写了一遍"遍历 + 比字符串" |
 
-**药水腰带**（3 格，`rd_run_potion_count()` 个）：
+**药水腰带**（`rd_run_potion_count()` 个，容量 `rd_run_potion_slots()` —— 3 格，A11 减 1、
+`potion_belt` 加 2；§380）：
 
 | 字段 | 接口 | 备注 |
 |---|---|---|
@@ -189,6 +190,7 @@
 | `needsFight(i)` | `rd_run_potion_needs_fight(i)` | `1` = 只在战斗中可用 |
 | 使用 | `rd_env_use_potion(slot, targetSlot)` | `targetSlot = -1` = 不需要目标 |
 | 丢弃 | `rd_run_drop_potion(slot)` | |
+| 容量 | `rd_run_potion_slots()` | §380：**放不放得下只问内核**。商店的药水货架拿它判断"腰带满了"， 旧版只看金币 ⇒ 点了被拒（`web-soak` 的 dead control） |
 
 > ★ `effect == 1` **且** `E.obs(11) > 1` 时才进入"点敌人"的子状态；`effect == 2/3` 不需要目标。
 > 这条判断今天在页面里，但它的两个输入都来自内核，所以是**数据**，不是规则（符合 R3）。

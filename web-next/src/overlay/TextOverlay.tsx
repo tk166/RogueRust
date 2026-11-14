@@ -83,6 +83,11 @@ export function TextOverlay({ scene, liftedSlot, hoverCardSlot, detailSlot, moda
           `${Math.round(layout.regions.hudBottom + 6)}px`
         );
       }
+      const heroNode = layer.querySelector<HTMLElement>("[data-hero-status]");
+      if (heroNode && layout.hero) {
+        // 英雄头顶再往上一点：与敌人标签的 `-r-22` 同一个理由（别压住血条）。
+        heroNode.style.transform = `translate3d(${layout.hero.x}px, ${layout.hero.y - 46}px, 0) translate(-50%, -100%)`;
+      }
       for (const node of Array.from(layer.querySelectorAll<HTMLElement>("[data-enemy]"))) {
         const slot = Number(node.dataset.enemy);
         const enemy = layout.enemies.find((candidate) => candidate.slot === slot);
@@ -152,8 +157,49 @@ export function TextOverlay({ scene, liftedSlot, hoverCardSlot, detailSlot, moda
             {enemy.hp}/{enemy.hpMax}
           </span>
           <span className="enemy-label__intent">{enemy.intent}</span>
+          {/*
+            §378：状态（力量/易伤/虚弱/束缚…）。玩家报的是"我方和敌人的各种状态看不到"——
+            一个看不见的减益就是玩家没法绕开的减益。层数必须写出来（1 层与 3 层是两种局面）。
+          */}
+          {enemy.statuses.length > 0 && (
+            <span className="enemy-label__status" data-enemy-status={enemy.slot}>
+              {enemy.statuses.map((status) => (
+                <span
+                  key={status.id}
+                  className="status-chip"
+                  data-status-id={status.id}
+                  data-status-stacks={status.stacks}
+                  title={status.id}
+                >
+                  {status.name}
+                  {status.stacks !== 1 ? ` ${status.stacks}` : ""}
+                </span>
+              ))}
+            </span>
+          )}
         </div>
       ))}
+
+      {/*
+        §378：英雄状态。位置由 `layout.hero`（3D 侧每帧投影）驱动，与敌人标签同一个 rAF 循环。
+        放在 DOM 层而不是 3D：中文要字形图集，DOM 是 0 字节。
+      */}
+      {scene.hero.statuses.length > 0 && (
+        <div className="hero-status" data-hero-status={scene.hero.statuses.length}>
+          {scene.hero.statuses.map((status) => (
+            <span
+              key={status.id}
+              className="status-chip"
+              data-status-id={status.id}
+              data-status-stacks={status.stacks}
+              title={status.id}
+            >
+              {status.name}
+              {status.stacks !== 1 ? ` ${status.stacks}` : ""}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* 详情态：被点开的牌放大到可读尺寸（这是"能不能读完整描述"的那一档） */}
       {detailSlot >= 0 && <DetailCard card={scene.hand[detailSlot]} onClose={onCloseDetail} />}

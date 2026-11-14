@@ -985,6 +985,10 @@ function runSnapshot() {
     // §332：无色货架与药水货架（与上面两排同一形状）。
     shopColorless: [],
     shopPotions: [],
+    // §380：药水腰带容量与已带瓶数。旧页面同样没查"放得下"⇒ `web-soak` 抓到 dead control
+    // （腰带 3/3 时"买"药水被内核拒绝，而按钮是亮的）。
+    potionSlots: 0,
+    potionsHeld: 0,
     shopRelics: [],
     rewardCards: [],
     choices: [],
@@ -1035,6 +1039,9 @@ function runSnapshot() {
       snapshot.giryaLifts = ex.rd_run_girya_lifts();
       break;
     case 2:
+      // §380：腰带容量 + 已带瓶数。商店的药水货架拿它判断"放得下"。
+      snapshot.potionSlots = ex.rd_run_potion_slots();
+      snapshot.potionsHeld = ex.rd_run_potion_count();
       snapshot.removePrice = ex.rd_run_remove_price();
       // §343：这家店的删卡服务还能不能用（wiki: "once per Shop"）。`1` 能 / `0` 用过了。
       snapshot.removalAvailable = ex.rd_run_removal_available();

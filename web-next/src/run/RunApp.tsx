@@ -26,7 +26,7 @@ import { Badge } from "../assets/Badge.js";
 import { badgeLook } from "../assets/registry.js";
 import { displayName } from "../i18n/index.js";
 import { WasmHost } from "../wasm/host";
-import { campfireOptionsFromMask, unknownCampfireBits, shelfRows, type DeckPickPurpose } from "./models.js";
+import { beltHasRoom, campfireOptionsFromMask, unknownCampfireBits, shelfRows, type DeckPickPurpose } from "./models.js";
 import { BOSS_SENTINEL, nodeKindLabel } from "./observe.js";
 import { RunStore } from "./RunStore";
 import { endSceneFor, isImplemented, sceneLabel, SCENE } from "./scene.js";
@@ -246,9 +246,23 @@ export function RunApp() {
         </div>
       </header>
 
-      {/* ── 药水腰带 + 牌堆浏览 ───────────────────────────────────────────── */}
+      {/* ── 遗物条 + 药水腰带 + 牌堆浏览 ───────────────────────────────────── */}
       {run && (
         <div className="run-subbar">
+          {/*
+            §378：遗物**必须看得见**。玩家报的是"我方的药水和遗物在战场和商店 ui 里没有显示"——
+            顶栏只有一个 `✦ 2`，而"我到底有什么遗物"是每一次决策的前提（回血/加金币/加能量）。
+            徽章 + 名字（名字可 hover 看 id），与药水腰带同一排。
+          */}
+          <div className="relic-strip" data-relic-strip={state.relics.length}>
+            {state.relics.map((id, index) => (
+              <span className="relic-chip" key={`${id}-${index}`} data-relic-id={id} title={id}>
+                <Badge look={badgeLook("relics", id)} title={id} />
+                <span className="relic-chip__name">{displayName("relics", id)}</span>
+              </span>
+            ))}
+            {state.relics.length === 0 && <span className="muted">没有遗物</span>}
+          </div>
           <PotionBar
             potions={state.potions}
             inFight={base === SCENE.combat}
@@ -430,7 +444,18 @@ export function RunApp() {
             shelves={[
               { kind: "card", title: "卡牌", rows: shelfRows(state.shop.cards, run.gold) },
               { kind: "relic", title: "遗物", rows: shelfRows(state.shop.relics, run.gold) },
-              { kind: "potion", title: "药水", rows: shelfRows(state.shop.potions, run.gold) },
+              // §380：腰带满了 ⇒ 这一排不可买（内核会拒绝，界面必须先知道）。
+              {
+                kind: "potion",
+                title: beltHasRoom(state.potions.length, state.potionSlots)
+                  ? "药水"
+                  : `药水（腰带满了 ${state.potions.length}/${state.potionSlots}）`,
+                rows: shelfRows(
+                  state.shop.potions,
+                  run.gold,
+                  beltHasRoom(state.potions.length, state.potionSlots)
+                ),
+              },
               { kind: "colorless", title: "无色牌", rows: shelfRows(state.shop.colorless, run.gold) },
             ]}
             removePrice={state.shop.removePrice}
