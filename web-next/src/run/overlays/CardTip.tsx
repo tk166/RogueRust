@@ -44,6 +44,7 @@
 // 鼠标下的牌换位置 ⇒ hover 换目标 ⇒ 面板换文字 ⇒ 死循环抖动（§381 实测）。
 
 import { describeTip, type TipRequest } from "../../view/cardTipText.js";
+import { useTipRequest } from "./tipStore.js";
 
 export type { TipKind, TipRequest } from "../../view/cardTipText.js";
 
@@ -54,6 +55,17 @@ export interface CardTipProps {
 /**
  * 固定位置的详情面板。`request === null` 时**不渲染**（不留一个空盒子占位）。
  */
+/**
+ * §389：**唯一那个**面板的宿主 —— 挂在"药水栏下方、战场上方"（`RunApp` 里 subbar 之后）。
+ *
+ * 六个调用点（遗物条 / 药水腰带 / 手牌 / 状态 chip / 奖励屏 / 商店 / 牌组选择器）都只调
+ * `showTip()`，面板只有这一个。
+ */
+export function CardTipHost() {
+  const request = useTipRequest();
+  return <CardTip request={request} />;
+}
+
 export function CardTip({ request }: CardTipProps) {
   if (!request) return null;
   const described = describeTip(request);

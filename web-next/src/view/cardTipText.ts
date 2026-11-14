@@ -30,7 +30,7 @@ const KIND_LABEL: Record<string, string> = {
   curse: "诅咒",
 };
 
-export type TipKind = "card" | "relic" | "potion";
+export type TipKind = "card" | "relic" | "potion" | "status";
 
 export interface TipRequest {
   readonly kind: TipKind;
@@ -53,16 +53,24 @@ export function describeTip(request: TipRequest): {
   body: string;
   note: string;
 } {
-  const table = request.kind === "card" ? "cards" : request.kind === "relic" ? "relics" : "potions";
+  const table =
+    request.kind === "card"
+      ? "cards"
+      : request.kind === "relic"
+        ? "relics"
+        : request.kind === "potion"
+          ? "potions"
+          : "statuses";
   const title = displayName(table, request.id) || request.id;
   const body = displayText(table, request.id) || "";
   if (request.kind !== "card") {
-    return {
-      title,
-      subtitle: request.kind === "relic" ? "遗物" : "药水",
-      body,
-      note: request.note ?? "",
-    };
+    const label =
+      request.kind === "relic"
+        ? "遗物"
+        : request.kind === "potion"
+          ? "药水"
+          : "状态";
+    return { title, subtitle: label, body, note: request.note ?? "" };
   }
   const meta = cardMetaOf(request.id);
   const kind = meta?.kind ? (KIND_LABEL[meta.kind] ?? meta.kind) : "卡牌";

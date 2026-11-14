@@ -47,6 +47,8 @@ import { DeckSelectOverlay } from "./overlays/DeckSelectOverlay";
 import { PickupOverlay } from "./overlays/PickupOverlay";
 import { PileOverlay } from "./overlays/PileOverlay";
 import { PotionBar } from "./overlays/PotionBar";
+import { CardTipHost } from "./overlays/CardTip";
+import { tipHandlers } from "./overlays/tipStore.js";
 import { SettingsOverlay } from "./overlays/SettingsOverlay";
 import { ActCurtain } from "./ActCurtain";
 import { CURTAIN_MS } from "./curtain.js";
@@ -187,20 +189,33 @@ export function RunApp() {
 
   const { run, map, scene } = state;
   const base = scene.base;
+  /**
+   * §391：**战斗中的顶栏要读战斗快照的 HP**，不是运行层的。
+   *
+   * 运行层的 `health` 在战斗里是**故意**不跟的（`RunStore.reconcile` 的注释写着：
+   * 战斗结算 `end_of_combat` 才写回）。于是玩家被史莱姆老大砸了 35 点，顶栏血条纹丝不动
+   * —— 看起来像"这次攻击没生效"（玩家实测报的就是这句）。
+   *
+   * 战斗快照里的 `hero.hp` 才是活的；战斗外两者相等（对账保证），所以这一个表达式
+   * 在两种情况下都对。
+   */
+  const liveHp = base === SCENE.combat && state.combat ? state.combat.hero.hp : (run?.health ?? 0);
+  const liveHpMax =
+    base === SCENE.combat && state.combat ? state.combat.hero.hpMax : (run?.healthMax ?? 0);
 
   return (
     <div className="run-shell" data-scene-base={base} data-scene-overlays={scene.overlays.join(",")}>
       {/* ── 常驻顶栏：HP / 金币 / 层数 / 牌组 / 遗物 / 药水 ─────────────────── */}
       <header className="run-topbar">
-        <div className="run-hp" data-run-hp={run ? `${run.health}/${run.healthMax}` : ""}>
+        <div className="run-hp" data-run-hp={run ? `${liveHp}/${liveHpMax}` : ""}>
           <span className="run-hp-bar">
             <span
               className="run-hp-fill"
-              style={{ width: run ? `${Math.max(0, Math.min(100, (run.health / Math.max(1, run.healthMax)) * 100))}%` : "0%" }}
+              style={{ width: run ? `${Math.max(0, Math.min(100, (liveHp / Math.max(1, liveHpMax)) * 100))}%` : "0%" }}
             />
           </span>
           <span className="run-hp-text">
-            {run ? `${run.health}/${run.healthMax}` : "—"}
+            {run ? `${liveHp}/${liveHpMax}` : "—"}
           </span>
         </div>
         <div className="run-stat" data-run-gold={run?.gold ?? 0}>
@@ -256,7 +271,13 @@ export function RunApp() {
           */}
           <div className="relic-strip" data-relic-strip={state.relics.length}>
             {state.relics.map((id, index) => (
-              <span className="relic-chip" key={`${id}-${index}`} data-relic-id={id} title={id}>
+              <span
+                className="relic-chip"
+                key={`${id}-${index}`}
+                data-relic-id={id}
+                title={id}
+                {...tipHandlers({ kind: "relic", id })}
+              >
                 <Badge look={badgeLook("relics", id)} title={id} />
                 <span className="relic-chip__name">{displayName("relics", id)}</span>
               </span>
@@ -290,6 +311,12 @@ export function RunApp() {
           )}
         </div>
       )}
+
+      {/*
+        §389：**唯一那个**详情面板。挂在这里 = 药水栏下方、战场上方（玩家点名要的位置）。
+        六个调用点都只调 `showTip()`，所以不可能同时出现两个面板。
+      */}
+      <CardTipHost />
 
       {/* ── 幕间幕布（§2.3）：纯演出，不挡操作 ─────────────────────────────── */}
       {state.curtain && (

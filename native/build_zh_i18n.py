@@ -44,6 +44,66 @@ CONTENT = os.path.join(ROOT, 'tools', 'contentc', 'packages', 'sts', 'sts.rogued
 LEGACY = os.path.join(ROOT, 'sts', 'content')
 OUT = os.path.join(ROOT, 'web-next', 'src', 'i18n', 'zh.ts')
 META_OUT = os.path.join(ROOT, 'web-next', 'src', 'view', 'cardMeta.ts')
+
+#: 只在状态里出现的词 → 中文（§388 第 ③ 层）。
+#:
+#: ⚠️ **只作显示名**：任何规则判定都走 id，不走这里。来源是官方中文本地化；
+#: 这些条目没有第二来源核对（不像 wiki 数值那样），所以不写进 `sts-wiki-gap.md` 的账。
+STATUS_ZH = {
+    'standard.artifact': '神器',
+    'standard.cap_cost_at': '费用上限',
+    'standard.confusion': '混乱',
+    'standard.constricted': '紧束',
+    'standard.curiosity': '好奇',
+    'standard.curl_up': '蜷缩',
+    'standard.double_damage': '双倍伤害',
+    'standard.draw_reduction': '抽牌减少',
+    'standard.enrage': '激怒',
+    'standard.entangle_ready': '缠绕就绪',
+    'standard.entangled': '缠绕',
+    'standard.fading': '消逝',
+    'standard.flying': '飞行',
+    'standard.hex': '诅咒',
+    'standard.intangible': '无形',
+    'standard.lagavulin_asleep': '沉睡',
+    'standard.lose_dexterity': '失去敏捷',
+    'standard.lose_strength': '失去力量',
+    'standard.malleable': '可塑',
+    'standard.mode_shift': '模式转换',
+    'standard.nightmare_pending': '噩梦待发',
+    'standard.no_block_from_cards': '卡牌不提供格挡',
+    'standard.no_draw': '无法抽牌',
+    'standard.omega': '欧米伽',
+    'standard.painful_stabs': '痛苦刺击',
+    'standard.phantom_veil': '幻影面纱',
+    'standard.phase_split': '分裂（相位）',
+    'standard.plated_armor': '镀甲',
+    'standard.poison': '中毒',
+    'standard.regain_strength': '恢复力量',
+    'standard.regen': '再生',
+    'standard.sharp_hide': '尖刺外壳',
+    'standard.slow': '迟缓',
+    'standard.split': '分裂',
+    'standard.split_acid_l': '分裂：大型酸液',
+    'standard.split_spike_l': '分裂：大型尖刺',
+    'standard.spore_cloud': '孢子云',
+    'standard.stasis': '停滞',
+    'standard.stasis_ready': '停滞就绪',
+    'standard.the_bomb_damage': '炸弹伤害',
+    'standard.time_warp': '时间扭曲',
+    'standard.unawakened': '未觉醒',
+    # 药水/遗物挂的状态：短名就是药水/遗物的 id，但那几张表里没有它们（非 Ironclad 口径），
+    # 所以在这里补。
+    'standard.fairy_in_a_bottle': '瓶中精灵',
+    'standard.duplication': '复制',
+    'standard.the_boot': '靴子',
+    'standard.paper_phrog': '纸蛙',
+    'standard.paper_krane': '纸鹤',
+    'standard.snecko_skull': '蛇骷髅',
+    'standard.duality': '双重',
+    'standard.energized': '充能',
+    'standard.draw_card_next_turn': '下回合抽牌',
+}
 API = 'https://spire-archive.com/api/sts1/%s?lang=%s&limit=500'
 TABLES = ('cards', 'relics', 'potions', 'monsters')
 
@@ -165,7 +225,7 @@ def main():
     fill('potions', content['Potions'], '药水')
     fill('monsters', content['Monsters'], '怪物')
 
-    # ── 状态：spire-archive 的 powers 只有英文 ⇒ 用仓库自己的中文 ────────────────
+    # ── 状态：三条来源，按顺序（§388）────────────────────────────────────────
     statuses = json.load(io.open(os.path.join(LEGACY, 'statuses.json'), encoding='utf-8'))
     legacy = {item['id']: item['name'] for item in statuses}
     for axis in ('strength', 'vulnerable', 'weak', 'dexterity', 'frail'):
@@ -173,6 +233,31 @@ def main():
             out['statuses']['standard.' + axis] = {'name': legacy[axis]}
     for status_id, name in legacy.items():
         out['statuses'].setdefault(status_id, {'name': name})
+        # legacy 表里既有 `thorns` 也有 `standard.thorns` 的键，而运行时查的是**全 id**
+        # （`standard.thorns`）⇒ 无前缀的那几条也要登记一份带前缀的别名，否则
+        # 屏幕上照样是 `thorns`（§388 的第一版就漏了这一步）。
+        if '.' not in status_id:
+            out['statuses'].setdefault('standard.' + status_id, {'name': name})
+
+    # ② 跨表复用：`standard.X` 的 `X` 在别的表里已经翻译过 ⇒ 用那个名字。
+    # 状态与它来源（遗物/卡/药水）本来就是同一个词，两份翻译只会漂。
+    reused = 0
+    for status in content['Statuses']:
+        status_id = status['Id']
+        if status_id in out['statuses']:
+            continue
+        short = status_id.split('.', 1)[1] if '.' in status_id else status_id
+        for table in ('relics', 'cards', 'potions', 'monsters'):
+            entry = out[table].get(short)
+            if entry and entry.get('name'):
+                out['statuses'][status_id] = {'name': entry['name']}
+                reused += 1
+                break
+    # ③ 人工译名（只在状态里出现的词）。来源：官方中文本地化。
+    # ⚠️ 这些**只做显示名**，不进任何规则判定（规则一律走 id）。
+    for status_id, name in STATUS_ZH.items():
+        out['statuses'].setdefault(status_id, {'name': name})
+    print('  状态复用   %3d 条（跨表）+ %d 条（人工译名表）' % (reused, len(STATUS_ZH)))
     print('  %-9s %3d/%3d 有中文（缺 %d）' % (
         '状态', len(out['statuses']), len(content['Statuses']),
         max(0, len(content['Statuses']) - len(out['statuses']))))

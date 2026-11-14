@@ -5592,9 +5592,13 @@ mod tests {
 
     #[test]
     fn the_boss_phase_splits_once_at_low_health() {
-        // Wiki: the Slime Boss's phase *is* its split. Content trigger: on `DamageTaken`, if my HP is
-        // <= 10, spawn two slimes and **consume the phase status** so it cannot fire twice
-        // (`port-plan.md` §122).
+        // Wiki (`Slime Boss`): *"When its HP is at or below 50%, it will split into 2 smaller
+        // Slimes with its current HP."* Content trigger: on `DamageTaken`, if `current * 100 <=
+        // max * 50`, spawn the two slimes and **consume the phase status** so it cannot fire twice
+        // (`port-plan.md` §122, §387).
+        //
+        // ⚠️ 这条测试以前把阈值写死成"≤10 血"，而 `arena()` 的 `enemy_b` 是 10/10 —— 新规则下
+        // 它**永远不触发**（10 血的 50% 是 5）。夹具必须让被测行为可达，所以下面把它摆成 10/20。
         let blob = std::fs::read(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
@@ -5604,9 +5608,14 @@ mod tests {
         let mut host = Host::new(&content);
         let mut state = arena();
         give(&mut state, "enemy_b", status("st_phase", "standard.phase_split", 1));
+        // 上限抬到 20（当前仍是 10 = 50%），这样"打到 50% 以下"才可达。
+        state
+            .combatant_mut(&cid("enemy_b"))
+            .expect("enemy_b")
+            .health_max = 20;
         let before = state.combatants().len();
 
-        // `enemy_b` is on 10 HP: a 3-point hit lands it at 7, which is <= 10.
+        // `enemy_b` is on 10/20: a 3-point hit lands it at 7, and 7 * 100 <= 20 * 50.
         {
             let mut ctx = crate::exec::ExecContext::new(&mut state, Some(cid("hero")), None, None, 64)
                 .with_content(&content);

@@ -14,8 +14,11 @@
 // 4. **Esc 关闭**：只有在"可以放弃"的地方才给关闭按钮（锻造/删牌可以放弃，`pending 8` 不行）。
 
 import { useMemo, useState } from "react";
+import { Badge } from "../../assets/Badge.js";
+import { badgeLook } from "../../assets/registry.js";
 import { displayName } from "../../i18n/index.js";
 import { deckPickAllowed, deckPickCopy, type DeckPickPurpose } from "../models.js";
+import { tipHandlers } from "./tipStore.js";
 
 export interface DeckSelectOverlayProps {
   readonly purpose: DeckPickPurpose;
@@ -29,6 +32,12 @@ export interface DeckSelectOverlayProps {
   /** 给了才显示关闭按钮（可放弃的场合）。 */
   readonly onClose?: () => void;
   readonly busy?: boolean;
+}
+
+/** 卡名：i18n 中文优先，其次内核的英文 title，最后是 id（§390）。 */
+function translatedCardName(id: string, kernelTitle?: string): string {
+  const translated = displayName("cards", id);
+  return translated !== id ? translated : kernelTitle || id;
 }
 
 export function DeckSelectOverlay({
@@ -50,7 +59,10 @@ export function DeckSelectOverlay({
       .map((id, index) => ({
         index,
         id,
-        name: titles?.[index] || displayName("cards", id),
+        // ⚠️ **i18n 优先**：`titles` 是内核给的英文 `NameKey`（`Strike`），
+        // 直接用它就把中文名盖掉了（§390 实测：六行全是 "Strike"）。
+        // 回退顺序：i18n 中文 → 内核 title（英文，只在没翻译时）→ id。
+        name: translatedCardName(id, titles?.[index]),
         allowed: deckPickAllowed(purpose, id),
       }))
       .filter((row) => {
@@ -87,11 +99,19 @@ export function DeckSelectOverlay({
                 data-deck-allowed={row.allowed ? "1" : "0"}
                 disabled={!row.allowed || busy || !copy.actionable}
                 title={row.allowed ? undefined : "这张牌已经升级过了"}
+                // §389/§390：指着就显示"种类 · 费用 · 稀有度 + 规则"（与商店/奖励同一个面板）。
+                {...tipHandlers({ kind: "card", id: row.id })}
                 onClick={() => onPick(row.index)}
               >
                 <span className="deck-select-index muted">{row.index + 1}</span>
+                {/* §390：二维卡面（两位字母 + 调色板），与商店/奖励同一张素材表。 */}
+                <Badge
+                  look={badgeLook("cards", row.id)}
+                  size="sm"
+                  upgraded={row.id.endsWith("+")}
+                  title={row.id}
+                />
                 <span className="deck-select-name">{row.name}</span>
-                <span className="deck-select-id muted">{row.id}</span>
                 {!row.allowed && <span className="deck-select-why">已升级</span>}
               </button>
             </li>

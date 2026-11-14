@@ -2308,51 +2308,70 @@ mod tests {
     /// **The boss changes its move at half health, from round 2 on.** The rule is a combinator
     /// (`intent.allOf` over `healthPercent` and `round`), so the child term list is exercised too.
     #[test]
-    fn a_combinator_rule_switches_the_boss_move() {
+    fn a_combinator_rule_switches_the_move() {
         let blob = std::fs::read(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
         ))
         .expect("the sts image");
         let content = parse(&blob);
-        let at = slot(&content, "enc_slime_boss", 0);
-        let owner = cid(record_id(&content, at));
-
-        let mut state = arena(owner.as_str());
+        // §387：Slime Boss 的"半血改招"规则**已经删掉**了 —— 它的相位是**分裂**
+        // （`standard.phase_split` 的 `DamageTaken` 触发器），不是"换一招"。
+        // 所以这里断言的是**新事实**：半血也不改招，招还是那条 `(round-1) % 3` 的循环。
+        let boss_at = slot(&content, "enc_slime_boss", 0);
+        let boss = cid(record_id(&content, boss_at));
+        let mut state = arena(boss.as_str());
         {
-            let combatant = state.combatant_mut(&owner).expect("the boss");
+            let combatant = state.combatant_mut(&boss).expect("the boss");
             combatant.health_max = 140;
             combatant.health_current = 70; // exactly 50%
         }
-        state.current_round = 1;
-        let round_one = select_action(&state, &content, at, &owner, 1)
-            .expect("select")
-            .expect("an action");
-        assert_ne!(
-            round_one.action_id.to_string(),
-            "slime_boss.slam".to_string(),
-            "round 1 must not fire the phase rule yet"
+        let half_health_moves: Vec<String> = (1..=6)
+            .map(|round| {
+                select_action(&state, &content, boss_at, &boss, round)
+                    .expect("select")
+                    .expect("an action")
+                    .action_id
+                    .to_string()
+            })
+            .collect();
+        assert_eq!(
+            half_health_moves,
+            vec![
+                "slime_boss.goop_spray",
+                "slime_boss.preparing",
+                "slime_boss.slam",
+                "slime_boss.goop_spray",
+                "slime_boss.preparing",
+                "slime_boss.slam",
+            ],
+            "half health must NOT change the rotation (the split is a status trigger)"
         );
 
-        state.current_round = 2;
-        let round_two = select_action(&state, &content, at, &owner, 2)
+        // 组合条件（`intent.allOf`）的覆盖转到真正还在用它的怪身上：
+        // `spheric_guardian` 有一条 `allOf{round == 1}` ⇒ 第 1 轮 `activate`。
+        let orb_at = slot(&content, "enc_sentry_and_spheric", 1);
+        let orb = cid(record_id(&content, orb_at));
+        // ⚠️ `intent.round` 读的是 `state.current_round`（`condition_matches` 没有 round 参数），
+        // 所以每一轮都要先把状态推到那一轮 —— 只传 `select_action(.., round)` 是不够的。
+        let mut orb_state = arena(orb.as_str());
+        orb_state.current_round = 1;
+        let first = select_action(&orb_state, &content, orb_at, &orb, 1)
             .expect("select")
             .expect("an action");
         assert_eq!(
-            round_two.action_id.to_string(),
-            "slime_boss.slam".to_string(),
-            "half health from round 2 on => the phase move"
+            first.action_id.to_string(),
+            "spheric_guardian.activate",
+            "`intent.allOf` + `intent.round == 1` must pick the opening move"
         );
-
-        state.combatant_mut(&owner).expect("the boss").health_current = 140;
-        state.current_round = 5;
-        let healthy = select_action(&state, &content, at, &owner, 5)
+        orb_state.current_round = 2;
+        let second = select_action(&orb_state, &content, orb_at, &orb, 2)
             .expect("select")
             .expect("an action");
-        assert_ne!(
-            healthy.action_id.to_string(),
-            "slime_boss.slam".to_string(),
-            "a healthy boss must not slam"
+        assert_eq!(
+            second.action_id.to_string(),
+            "spheric_guardian.debuff_attack",
+            "…and the round-2 rule takes over on the next round"
         );
     }
 

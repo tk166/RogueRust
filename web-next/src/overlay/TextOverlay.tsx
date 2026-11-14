@@ -13,6 +13,7 @@ import { useEffect, useRef } from "react";
 import { Badge } from "../assets/Badge";
 import { badgeLook } from "../assets/registry";
 import { layout } from "../stage/layout";
+import { hideTip, showTip, tipHandlers } from "../run/overlays/tipStore.js";
 import type { CombatView, ViewCard } from "../view/combatView";
 
 /** 三档字号：手牌态只显示标题，选中态显示规则，详情态放大。数字写死是为了让闸门能断言。 */
@@ -47,6 +48,19 @@ export interface TextOverlayProps {
 
 export function TextOverlay({ scene, liftedSlot, hoverCardSlot, detailSlot, modalOpen, onCloseDetail }: TextOverlayProps) {
   const layerRef = useRef<HTMLDivElement>(null);
+
+  // §389：手牌的详情**由状态驱动**，不是指针事件 —— `.text-layer` 是 `pointer-events: none`
+  // （必须的：否则 DOM 文字会挡住 R3F 射线，§P1 的老结论）。谁被指着是 3D 拾取算出来的
+  // （`hoverCardSlot` / `detailSlot` / 抬起的那张），这里只把它翻译成一条 tip 请求。
+  useEffect(() => {
+    const slot = detailSlot >= 0 ? detailSlot : liftedSlot >= 0 ? liftedSlot : hoverCardSlot;
+    const card = slot >= 0 ? scene.hand[slot] : undefined;
+    if (card) showTip({ kind: "card", id: card.defId });
+    else hideTip();
+  }, [detailSlot, liftedSlot, hoverCardSlot, scene.hand]);
+
+  // 卸载（离开战斗屏）时收起，避免面板留在下一屏。
+  useEffect(() => () => hideTip(), []);
 
   // rAF 循环：读 `layout`，直接改 style。**不经过 React**（60Hz 重渲染会把 P1 的 FPS 数字毁掉）。
   useEffect(() => {
@@ -170,6 +184,7 @@ export function TextOverlay({ scene, liftedSlot, hoverCardSlot, detailSlot, moda
                   data-status-id={status.id}
                   data-status-stacks={status.stacks}
                   title={status.id}
+                  {...tipHandlers({ kind: "status", id: status.id })}
                 >
                   {status.name}
                   {status.stacks !== 1 ? ` ${status.stacks}` : ""}
@@ -193,6 +208,7 @@ export function TextOverlay({ scene, liftedSlot, hoverCardSlot, detailSlot, moda
               data-status-id={status.id}
               data-status-stacks={status.stacks}
               title={status.id}
+              {...tipHandlers({ kind: "status", id: status.id })}
             >
               {status.name}
               {status.stacks !== 1 ? ` ${status.stacks}` : ""}

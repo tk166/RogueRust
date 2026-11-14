@@ -106,6 +106,35 @@ try {
   );
   summary.cards = needsTarget.length;
 
+  // ── §388：状态表必须覆盖内容里**每一条** status（穷尽）────────────────────
+  //
+  // 玩家报的："一些状态依旧显示英文例如 orichalcum 和 incense_burner"。
+  // 那两条是**遗物挂的状态**（`StartCombatStatus`），旧的 13 条小表里没有 ⇒ 屏幕上就是英文 id。
+  const zhSource = await readFile(join(REPO, "web-next/src/i18n/zh.ts"), "utf8");
+  const statusesBlock = /"statuses": (\{[\s\S]*?\n \}),\n/.exec(zhSource);
+  check(statusesBlock !== null, "`zh.ts` 里有 statuses 表");
+  const statusKeys = new Set(
+    [...(statusesBlock ? statusesBlock[1] : "").matchAll(/"([^"]+)": \{/g)].map((m) => m[1])
+  );
+  const missingStatus = [];
+  for (const status of content.Statuses ?? []) {
+    if (!statusKeys.has(status.Id)) missingStatus.push(status.Id);
+  }
+  check(
+    missingStatus.length === 0,
+    "内容里**每一条**状态都有中文名（穷尽 150 条）",
+    missingStatus.length === 0 ? `${statusKeys.size} 条` : JSON.stringify(missingStatus.slice(0, 6))
+  );
+  // 玩家点名的两条，单独钉住（回归时最想知道的就是它们）。
+  for (const id of ["standard.orichalcum", "standard.incense_burner"]) {
+    const row = new RegExp(`"${id.replace(/[.]/g, "\\.")}": \\{\\s*"name": "([^"]+)"`).exec(zhSource);
+    check(
+      row !== null && /[\u4e00-\u9fa5]/.test(row[1]),
+      `\`${id}\` 有中文名（玩家点名的那两条之一）`,
+      row ? row[1] : "缺"
+    );
+  }
+
   // ── 落点：定向牌必须**每个敌人一个落点**，无目标牌才归并成一个 ──────────
   //
   // 玩家报的"没有选择敌人就直接触发了"在视图层长这样：`optionsFor` 把内核给的
@@ -307,13 +336,72 @@ const ev = (expression) => page.evaluate(expression);
 await ev('window.__run.click("[data-start]")');
 await sleep(250);
 const blessings = await ev("window.__run.blessings()");
-const simple = blessings.find((row) => row.needs === 0) ?? blessings[0];
+// ⚠️ 优先挑**需要选牌**的祝福：那样牌组选择器（§390 的被测对象）一定会开，
+// 而不是"看运气抽到哪个祝福"。抽不到才退回不需要选牌的那个。
+const needsCard = blessings.find((row) => row.needs > 0);
+const simple = needsCard ?? blessings.find((row) => row.needs === 0) ?? blessings[0];
 await ev(`window.__run.click("[data-blessing='${simple.slot}']")`);
 await sleep(300);
-if ((await ev("window.__run.scene()")).base === "SC-01b") {
-  await ev('(() => { const n = document.querySelector("[data-deck-pick][data-deck-allowed=\'1\']"); if (n) n.click(); })()');
-  await sleep(300);
+
+// ── §390：牌组选择器（祝福选牌那条路一开局就能开）────────────────────────
+{
+  const scene = await ev("window.__run.scene()");
+  if (scene.base === "SC-01b") {
+    const rows = await ev(`(() => {
+      const list = document.querySelector("[data-deck-count]");
+      if (!list) return null;
+      return Array.from(list.querySelectorAll("[data-deck-pick]")).slice(0, 6).map((row) => ({
+        id: row.dataset.deckPickId,
+        name: row.querySelector(".deck-select-name")?.textContent.trim() ?? "",
+        badges: row.querySelectorAll("[data-asset-badge]").length,
+        width: Math.round(row.getBoundingClientRect().width * 10) / 10,
+      }));
+    })()`);
+    check(rows !== null && rows.length > 0, "牌组选择器有行", JSON.stringify(rows?.length));
+    check(
+      rows !== null && rows.every((row) => row.badges > 0),
+      "每一行都有**二维卡面**（§390）",
+      JSON.stringify(rows?.map((row) => row.badges))
+    );
+    check(
+      rows !== null && rows.every((row) => /[\u4e00-\u9fa5]/.test(row.name)),
+      "每一行都是**中文名**（不是英文 id）",
+      JSON.stringify(rows?.map((row) => row.name))
+    );
+    const widths = rows?.map((row) => row.width) ?? [];
+    check(
+      widths.length > 0 && new Set(widths).size === 1,
+      "每一行**等宽**（玩家报的参差）",
+      JSON.stringify(widths)
+    );
+    // 指着某一行 ⇒ 同一个面板给出"种类 · 费用 · 稀有度"。
+    const point = await ev(`(() => {
+      const el = document.querySelector("[data-deck-pick]");
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    })()`);
+    if (point) {
+      await page.send("Input.dispatchMouseEvent", {
+        type: "mouseMoved", x: point.x, y: point.y, button: "none", buttons: 0,
+      });
+      await sleep(150);
+      const sub = await ev(
+        `document.querySelector("[data-card-tip] [data-tip-subtitle-text]")?.textContent.trim() ?? ""`
+      );
+      check(/费|不可打出/.test(sub), "牌组选择器的详情带**费用**", sub);
+    }
+    // 断言完就把这张牌选掉（后面的流程要在地图上）。
+    await ev(`(() => {
+      const node = document.querySelector("[data-deck-pick][data-deck-allowed='1']");
+      if (node) node.click();
+    })()`);
+    await sleep(300);
+  } else {
+    check(true, `这一局没有祝福选牌（${scene.base}），牌组选择器部分跳过`);
+  }
 }
+
 
 // 地图：场景宽度必须接近上限（560），节点之间不许互相压住。
 const mapBox = await ev(`(() => {
@@ -355,6 +443,18 @@ await sleep(250);
 if ((await ev("window.__run.scene()")).base === "SC-03") {
   await ev('window.__run.click("[data-fight-begin]")');
   await sleep(400);
+  // §391：战斗里顶栏 HP 必须跟**战斗快照**（不是运行层那份陈旧值）。
+  // 玩家被史莱姆老大砸了 35 点、血条纹丝不动，就是因为读了运行层。
+  const pair = await ev(`(() => {
+    const hp = document.querySelector("[data-run-hp]")?.dataset.runHp ?? "";
+    const combat = window.__run.hand();
+    return { topbar: hp, combat: combat ? combat.heroHp : null };
+  })()`);
+  check(
+    pair.combat !== null && pair.topbar.split("/")[0] === String(pair.combat),
+    "战斗中顶栏 HP == 战斗快照的 HP（§391）",
+    JSON.stringify(pair)
+  );
 }
 for (let steps = 0; steps < 240; steps += 1) {
   const hand = await ev("window.__run.hand()");
@@ -428,6 +528,57 @@ if (scene.base === "SC-04") {
   );
 } else {
   check(true, `没走到奖励屏（${scene.base}），布局稳定性部分跳过`);
+}
+
+// ── §389：遗物条上的 chip 指着要出详情 ─────────────────────────────────────
+{
+  const chipPoint = await ev(`(() => {
+    const el = document.querySelector("[data-relic-id]");
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, id: el.dataset.relicId };
+  })()`);
+  check(chipPoint !== null, "遗物条上有 chip 可指", chipPoint?.id);
+  if (chipPoint) {
+    await page.send("Input.dispatchMouseEvent", {
+      type: "mouseMoved", x: chipPoint.x, y: chipPoint.y, button: "none", buttons: 0,
+    });
+    await sleep(150);
+    const tip = await ev(`(() => {
+      const node = document.querySelector("[data-card-tip]");
+      if (!node) return null;
+      return {
+        kind: node.dataset.tipKind,
+        title: node.querySelector("[data-tip-title-text]")?.textContent.trim() ?? "",
+      };
+    })()`);
+    check(tip !== null, "指着遗物 ⇒ 出现详情面板（§389 的唯一面板）");
+    check(tip !== null && tip.kind === "relic", "面板说的是**遗物**", tip?.kind);
+    check(
+      tip !== null && /[\u4e00-\u9fa5]/.test(tip.title),
+      "遗物详情标题是中文名",
+      tip?.title
+    );
+  }
+}
+
+// ── §391：战斗中顶栏 HP 必须跟战斗快照 ───────────────────────────────────
+{
+  const scene = await ev("window.__run.scene()");
+  if (scene.base === "SC-03b") {
+    const pair = await ev(`(() => {
+      const hp = document.querySelector("[data-run-hp]")?.dataset.runHp ?? "";
+      const combat = window.__run.hand();
+      return { topbar: hp, combat: combat ? combat.heroHp : null };
+    })()`);
+    check(
+      pair.combat !== null && pair.topbar.split("/")[0] === String(pair.combat),
+      "战斗中顶栏 HP == 战斗快照的 HP（不是运行层那份陈旧值）",
+      JSON.stringify(pair)
+    );
+  } else {
+    check(true, `现在不在战斗里（${scene.base}），顶栏 HP 部分跳过`);
+  }
 }
 
 await page.close();

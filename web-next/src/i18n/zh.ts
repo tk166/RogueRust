@@ -1924,11 +1924,446 @@ const zh = {
   "thorns": {
    "name": "荆棘"
   },
+  "standard.thorns": {
+   "name": "荆棘"
+  },
   "ritual": {
+   "name": "仪式"
+  },
+  "standard.ritual": {
    "name": "仪式"
   },
   "metallicize": {
    "name": "金属化"
+  },
+  "standard.metallicize": {
+   "name": "金属化"
+  },
+  "standard.rage": {
+   "name": "狂怒"
+  },
+  "standard.flame_barrier": {
+   "name": "火焰屏障"
+  },
+  "standard.combust": {
+   "name": "自燃"
+  },
+  "standard.buffer": {
+   "name": "缓冲"
+  },
+  "standard.barricade": {
+   "name": "壁垒"
+  },
+  "standard.blur": {
+   "name": "残影"
+  },
+  "standard.berserk": {
+   "name": "狂暴"
+  },
+  "standard.demon_form": {
+   "name": "恶魔形态"
+  },
+  "standard.brutality": {
+   "name": "残暴"
+  },
+  "standard.rupture": {
+   "name": "撕裂"
+  },
+  "standard.juggernaut": {
+   "name": "势不可当"
+  },
+  "standard.evolve": {
+   "name": "进化"
+  },
+  "standard.fire_breathing": {
+   "name": "火焰吐息"
+  },
+  "standard.dark_embrace": {
+   "name": "黑暗之拥"
+  },
+  "standard.feel_no_pain": {
+   "name": "无惧疼痛"
+  },
+  "standard.double_tap": {
+   "name": "双发"
+  },
+  "standard.corruption": {
+   "name": "腐化"
+  },
+  "standard.mayhem": {
+   "name": "乱战"
+  },
+  "standard.magnetism": {
+   "name": "磁力"
+  },
+  "standard.panache": {
+   "name": "神气制胜"
+  },
+  "standard.sadistic_nature": {
+   "name": "残虐天性"
+  },
+  "standard.the_bomb": {
+   "name": "炸弹"
+  },
+  "standard.orichalcum": {
+   "name": "奥利哈钢"
+  },
+  "standard.cloak_clasp": {
+   "name": "斗篷扣"
+  },
+  "standard.stone_calendar": {
+   "name": "历石"
+  },
+  "standard.mercury_hourglass": {
+   "name": "水银沙漏"
+  },
+  "standard.horn_cleat": {
+   "name": "船夹板"
+  },
+  "standard.captains_wheel": {
+   "name": "舵盘"
+  },
+  "standard.incense_burner": {
+   "name": "香炉"
+  },
+  "standard.pocketwatch": {
+   "name": "怀表"
+  },
+  "standard.lantern": {
+   "name": "灯笼"
+  },
+  "standard.bag_of_preparation": {
+   "name": "准备背包"
+  },
+  "standard.ice_cream": {
+   "name": "冰淇淋"
+  },
+  "standard.calipers": {
+   "name": "外卡钳"
+  },
+  "standard.kunai": {
+   "name": "苦无"
+  },
+  "standard.shuriken": {
+   "name": "手里剑"
+  },
+  "standard.ornamental_fan": {
+   "name": "精致折扇"
+  },
+  "standard.letter_opener": {
+   "name": "开信刀"
+  },
+  "standard.nunchaku": {
+   "name": "双节棍"
+  },
+  "standard.ink_bottle": {
+   "name": "墨水瓶"
+  },
+  "standard.pen_nib": {
+   "name": "钢笔尖"
+  },
+  "standard.gremlin_horn": {
+   "name": "地精之角"
+  },
+  "standard.the_specimen": {
+   "name": "生物样本"
+  },
+  "standard.torii": {
+   "name": "鸟居"
+  },
+  "standard.tungsten_rod": {
+   "name": "钨合金棍"
+  },
+  "standard.champion_belt": {
+   "name": "冠军腰带"
+  },
+  "standard.ginger": {
+   "name": "生姜"
+  },
+  "standard.turnip": {
+   "name": "萝卜"
+  },
+  "standard.red_skull": {
+   "name": "红头骨"
+  },
+  "standard.odd_mushroom": {
+   "name": "奇怪蘑菇"
+  },
+  "standard.ring_of_the_snake": {
+   "name": "蛇之戒指"
+  },
+  "standard.ring_of_the_serpent": {
+   "name": "长蛇戒指"
+  },
+  "standard.philosophers_stone": {
+   "name": "贤者之石"
+  },
+  "standard.happy_flower": {
+   "name": "开心小花"
+  },
+  "standard.art_of_war": {
+   "name": "孙子兵法"
+  },
+  "standard.brimstone": {
+   "name": "硫磺"
+  },
+  "standard.mark_of_pain": {
+   "name": "痛楚印记"
+  },
+  "standard.mutagenic_strength": {
+   "name": "突变之力"
+  },
+  "standard.centennial_puzzle": {
+   "name": "百年积木"
+  },
+  "standard.runic_cube": {
+   "name": "符文立方体"
+  },
+  "standard.charons_ashes": {
+   "name": "卡戎之灰"
+  },
+  "standard.akabeko": {
+   "name": "赤牛"
+  },
+  "standard.self_forming_clay": {
+   "name": "自成型黏土"
+  },
+  "standard.bird_faced_urn": {
+   "name": "鸟面瓮"
+  },
+  "standard.runic_pyramid": {
+   "name": "符文金字塔"
+  },
+  "standard.lizard_tail": {
+   "name": "蜥蜴尾巴"
+  },
+  "standard.unceasing_top": {
+   "name": "不休陀螺"
+  },
+  "standard.slavers_collar": {
+   "name": "奴隶贩子颈环"
+  },
+  "standard.busted_crown": {
+   "name": "破碎金冠"
+  },
+  "standard.ectoplasm": {
+   "name": "灵体外质"
+  },
+  "standard.ancient_tea_set": {
+   "name": "古茶具套装"
+  },
+  "standard.sozu": {
+   "name": "添水"
+  },
+  "standard.snecko_eye": {
+   "name": "异蛇之眼"
+  },
+  "standard.cursed_key": {
+   "name": "诅咒钥匙"
+  },
+  "standard.the_abacus": {
+   "name": "算盘"
+  },
+  "standard.sundial": {
+   "name": "日晷"
+  },
+  "standard.hand_drill": {
+   "name": "手钻"
+  },
+  "standard.chemical_x": {
+   "name": "化学物X"
+  },
+  "standard.strike_dummy": {
+   "name": "打击木偶"
+  },
+  "standard.velvet_choker": {
+   "name": "天鹅绒颈圈"
+  },
+  "standard.runic_dome": {
+   "name": "符文圆顶"
+  },
+  "standard.magic_flower": {
+   "name": "魔法花"
+  },
+  "standard.medical_kit": {
+   "name": "医药箱"
+  },
+  "standard.blue_candle": {
+   "name": "蓝蜡烛"
+  },
+  "standard.enchiridion": {
+   "name": "英雄宝典"
+  },
+  "standard.orange_pellets": {
+   "name": "橙色药丸"
+  },
+  "standard.dead_branch": {
+   "name": "枯木树枝"
+  },
+  "standard.nilrys_codex": {
+   "name": "尼利的宝典"
+  },
+  "standard.warped_tongs": {
+   "name": "弯曲铁钳"
+  },
+  "standard.mummified_hand": {
+   "name": "干瘪之手"
+  },
+  "standard.strange_spoon": {
+   "name": "奇怪的勺子"
+  },
+  "standard.artifact": {
+   "name": "神器"
+  },
+  "standard.cap_cost_at": {
+   "name": "费用上限"
+  },
+  "standard.confusion": {
+   "name": "混乱"
+  },
+  "standard.constricted": {
+   "name": "紧束"
+  },
+  "standard.curiosity": {
+   "name": "好奇"
+  },
+  "standard.curl_up": {
+   "name": "蜷缩"
+  },
+  "standard.double_damage": {
+   "name": "双倍伤害"
+  },
+  "standard.draw_reduction": {
+   "name": "抽牌减少"
+  },
+  "standard.enrage": {
+   "name": "激怒"
+  },
+  "standard.entangle_ready": {
+   "name": "缠绕就绪"
+  },
+  "standard.entangled": {
+   "name": "缠绕"
+  },
+  "standard.fading": {
+   "name": "消逝"
+  },
+  "standard.flying": {
+   "name": "飞行"
+  },
+  "standard.hex": {
+   "name": "诅咒"
+  },
+  "standard.intangible": {
+   "name": "无形"
+  },
+  "standard.lagavulin_asleep": {
+   "name": "沉睡"
+  },
+  "standard.lose_dexterity": {
+   "name": "失去敏捷"
+  },
+  "standard.lose_strength": {
+   "name": "失去力量"
+  },
+  "standard.malleable": {
+   "name": "可塑"
+  },
+  "standard.mode_shift": {
+   "name": "模式转换"
+  },
+  "standard.nightmare_pending": {
+   "name": "噩梦待发"
+  },
+  "standard.no_block_from_cards": {
+   "name": "卡牌不提供格挡"
+  },
+  "standard.no_draw": {
+   "name": "无法抽牌"
+  },
+  "standard.omega": {
+   "name": "欧米伽"
+  },
+  "standard.painful_stabs": {
+   "name": "痛苦刺击"
+  },
+  "standard.phantom_veil": {
+   "name": "幻影面纱"
+  },
+  "standard.phase_split": {
+   "name": "分裂（相位）"
+  },
+  "standard.plated_armor": {
+   "name": "镀甲"
+  },
+  "standard.poison": {
+   "name": "中毒"
+  },
+  "standard.regain_strength": {
+   "name": "恢复力量"
+  },
+  "standard.regen": {
+   "name": "再生"
+  },
+  "standard.sharp_hide": {
+   "name": "尖刺外壳"
+  },
+  "standard.slow": {
+   "name": "迟缓"
+  },
+  "standard.split": {
+   "name": "分裂"
+  },
+  "standard.split_acid_l": {
+   "name": "分裂：大型酸液"
+  },
+  "standard.split_spike_l": {
+   "name": "分裂：大型尖刺"
+  },
+  "standard.spore_cloud": {
+   "name": "孢子云"
+  },
+  "standard.stasis": {
+   "name": "停滞"
+  },
+  "standard.stasis_ready": {
+   "name": "停滞就绪"
+  },
+  "standard.the_bomb_damage": {
+   "name": "炸弹伤害"
+  },
+  "standard.time_warp": {
+   "name": "时间扭曲"
+  },
+  "standard.unawakened": {
+   "name": "未觉醒"
+  },
+  "standard.fairy_in_a_bottle": {
+   "name": "瓶中精灵"
+  },
+  "standard.duplication": {
+   "name": "复制"
+  },
+  "standard.the_boot": {
+   "name": "靴子"
+  },
+  "standard.paper_phrog": {
+   "name": "纸蛙"
+  },
+  "standard.paper_krane": {
+   "name": "纸鹤"
+  },
+  "standard.snecko_skull": {
+   "name": "蛇骷髅"
+  },
+  "standard.duality": {
+   "name": "双重"
+  },
+  "standard.energized": {
+   "name": "充能"
+  },
+  "standard.draw_card_next_turn": {
+   "name": "下回合抽牌"
   }
  },
  "events": {

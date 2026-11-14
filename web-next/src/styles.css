@@ -177,6 +177,10 @@ body,
  */
 .status-chip {
   display: inline-block;
+  /* §389：状态 chip 要能指（显示"这个状态做什么"）。它们很小、且在敌人名牌/英雄头顶，
+     不会挡住拖牌落到敌人身上（那一片是 3D 敌人的身体，不是标签）。 */
+  pointer-events: auto;
+  cursor: help;
   padding: 0 4px;
   border-radius: 5px;
   background: rgba(120, 160, 210, 0.16);
@@ -189,6 +193,7 @@ body,
 
 .enemy-label__status {
   display: flex;
+  pointer-events: auto;
   flex-wrap: wrap;
   justify-content: center;
   gap: 2px;
@@ -208,6 +213,7 @@ body,
   align-items: center;
   gap: 2px;
   will-change: transform;
+  /* 容器不吃事件（否则它盖住英雄那一侧），但**里面的 chip** 要能指（见 `.status-chip`）。 */
   pointer-events: none;
 }
 
@@ -397,6 +403,21 @@ body,
 }
 .choice-option.is-selected { border-color: #7cc9ff; background: #22405a; }
 .choice-option__mark { width: 16px; color: #7cc9ff; font-weight: 700; }
+
+/*
+ * §390：牌组选择器的每一行**等宽**（玩家报的"每一行只有一个选项让它们等宽"）。
+ * 名字长度不齐 + 右边一个 id 列 ⇒ 行尾参差；现在：勾选/序号固定宽、卡面固定宽、
+ * 名字吃满剩余（`flex: 1`）、原因列固定宽。
+ */
+.deck-select-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.deck-select-index { width: 2.2em; text-align: right; flex: none; }
+.deck-select-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.deck-select-why { flex: none; }
 /* §384：选牌弹窗的一行 = 勾选 + 二维卡面 + 中文名 +（种类·费用·稀有度）。 */
 .choice-option__sub { margin-left: auto; font-size: 11px; color: #9fb3c6; white-space: nowrap; }
 .choice-panel__refusal { margin: 0 0 10px; font-size: 12px; color: #ff9d8a; }

@@ -989,7 +989,11 @@ INV_MONSTERS = [
     # no `Dazed` card (so Beam is 9 damage and nothing else) and no `Artifact 1` (the kernel has no
     # such status).
     ("sentry_1", 38, 42, ["sentry.bolt", "sentry.beam"]),
-    ("sentry_2", 38, 42, ["sentry.bolt", "sentry.beam"]),
+    # §385：**中间那只从 Beam 起手** —— wiki.gg `Sentry`："In the Elite encounter, the middle
+    # Sentry instead uses Beam followed by Bolt."；fandom `Sentry`："1st and 3rd sentries will
+    # always start with Bolt while the 2nd sentry will always start with Beam."
+    # 内核按 `(round-1) % Actions.len()` 取招 ⇒ "换序"就是"换相位"。
+    ("sentry_2", 38, 42, ["sentry.beam", "sentry.bolt"]),
     ("sentry_3", 38, 42, ["sentry.bolt", "sentry.beam"]),
     # inv:§4.3 -- the act-1 boss. **Downgraded in writing**: no Split (the kernel cannot add
     # combatants mid-fight), which is the fight's identity; the three-move cycle is faithful.

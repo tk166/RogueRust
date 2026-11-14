@@ -289,14 +289,88 @@ fn program_damage(content: &'static Content<'static>, action_row: u32) -> i32 {
         return -1;
     };
     let mut total = 0i32;
-    if !walk_damage(root, 0, &mut total) {
+    if !walk_damage(root, 0, &mut total, None) {
         return -1;
     }
     total
 }
 
+/// §386：**带状态**的版本 —— 掷骰值（`combatantCounter`）能解出来了。
+///
+/// 为什么不复用 [`program_damage`]：那一条是"只看程序文本"的纯函数（`--enemies` 的
+/// 对拍与闸门都用它），加上状态就成了另一个东西。两条并存，调用方按需要选。
+fn program_damage_with_state(
+    content: &'static Content<'static>,
+    action_row: u32,
+    state: &rd_core::state::CombatState,
+    actor: &rd_core::state::CombatantId,
+) -> i32 {
+    let Ok(root) = enemy_action_program_root(content, action_row) else {
+        return -1;
+    };
+    let mut total = 0i32;
+    if !walk_damage(root, 0, &mut total, Some((state, actor))) {
+        return -1;
+    }
+    total
+}
+
+/// `combatantCounter{Selector, CounterId}` → 那个战斗员身上同名计数器的值。
+///
+/// ⚠️ 只认 `sel.source`：预览是"这个敌人要做什么"，读别人的数需要更多上下文
+/// （目标、事件参数），猜错的方向是"显示一个不是自己的数"。解不出 ⇒ `None`（调用方答 -1）。
+fn counter_of(
+    node: NodeRef<'static>,
+    state: &rd_core::state::CombatState,
+    actor: &rd_core::state::CombatantId,
+) -> Option<i32> {
+    if !selector_is_source(node.node_field("Selector").ok().flatten()?) {
+        return None;
+    }
+    let key = node.str_field("CounterId").ok().flatten()?;
+    let key = rd_core::state::CounterId::new(key).ok()?;
+    let combatant = state.combatant(actor)?;
+    combatant
+        .counters()
+        .iter()
+        .find(|counter| counter.key == key)
+        .map(|counter| counter.value)
+}
+
+/// `combatantStatusStacks{Selector, StatusId}` → 那个战斗员身上同名状态的层数。
+fn stacks_of(
+    node: NodeRef<'static>,
+    state: &rd_core::state::CombatState,
+    actor: &rd_core::state::CombatantId,
+) -> Option<i32> {
+    if !selector_is_source(node.node_field("Selector").ok().flatten()?) {
+        return None;
+    }
+    let id = node.str_field("StatusId").ok().flatten()?;
+    let combatant = state.combatant(actor)?;
+    combatant
+        .statuses()
+        .iter()
+        .find(|status| status.definition_id.as_str() == id)
+        .map(|status| status.stacks)
+}
+
+/// 这个选择器是不是"出手者自己"（`sel.source`）。
+fn selector_is_source(selector: NodeRef<'static>) -> bool {
+    selector.kind_str() == Ok("sel.source")
+}
+
 /// Depth-first walk behind [`program_damage`]; `false` = "cannot be answered statically".
-fn walk_damage(node: NodeRef<'static>, depth: usize, total: &mut i32) -> bool {
+///
+/// §386：`state` 给了就能解 `combatantCounter` / `combatantStatusStacks`
+/// （虱子的 `roll.bite` 就挂在这两种上面）。**仍然解不出来的照旧答 `false`** ——
+/// 猜一个数字比不显示更糟：玩家会拿它做决策。
+fn walk_damage(
+    node: NodeRef<'static>,
+    depth: usize,
+    total: &mut i32,
+    state: Option<(&rd_core::state::CombatState, &rd_core::state::CombatantId)>,
+) -> bool {
     if depth > MAX_PREVIEW_DEPTH {
         return false;
     }
@@ -308,11 +382,28 @@ fn walk_damage(node: NodeRef<'static>, depth: usize, total: &mut i32) -> bool {
             let Some(amount) = node.node_field("Amount").ok().flatten() else {
                 return false;
             };
-            if amount.kind_str() != Ok("const") {
-                return false; // 依赖状态 ⇒ 不猜
-            }
-            let Ok(Some(value)) = amount.int_field("Value") else {
-                return false;
+            let value = match amount.kind_str() {
+                Ok("const") => match amount.int_field("Value") {
+                    Ok(Some(value)) => value,
+                    _ => return false,
+                },
+                // §386：掷骰值。`Selector` 现在只有 `sel.source`（虱子的 Bite 就是自己身上的
+                // `roll.bite`）；别的选择器仍然答"解不出来"，不猜。
+                Ok("combatantCounter") => match state {
+                    Some((state, actor)) => match counter_of(amount, state, actor) {
+                        Some(value) => value,
+                        None => return false,
+                    },
+                    None => return false,
+                },
+                Ok("combatantStatusStacks") => match state {
+                    Some((state, actor)) => match stacks_of(amount, state, actor) {
+                        Some(value) => value,
+                        None => return false,
+                    },
+                    None => return false,
+                },
+                _ => return false,
             };
             *total = total.saturating_add(value);
             true
@@ -323,7 +414,7 @@ fn walk_damage(node: NodeRef<'static>, depth: usize, total: &mut i32) -> bool {
                 return false;
             };
             for id in ids.iter().take(count) {
-                if !walk_damage(node.child(*id), depth + 1, total) {
+                if !walk_damage(node.child(*id), depth + 1, total, state) {
                     return false;
                 }
             }
@@ -1340,7 +1431,9 @@ impl Session {
                 };
             let intent = match choice {
                 Ok(Some(choice)) => {
-                    let damage = program_damage(content, choice.action_row);
+                    // §386：带状态求值 —— 掷骰伤害（`roll.bite`）才显示得出来。
+                    let damage =
+                        program_damage_with_state(content, choice.action_row, &self.state, &id);
                     let kind = intent_kind_code(choice.intent_kind);
                     let mut text = choice.action_id.to_string();
                     text.push_str(" | ");
@@ -3858,6 +3951,145 @@ mod tests {
     /// combatant, so a "rolled but not stored" build fails here rather than showing up as 0 damage
     /// in a fight nobody is staring at.
     #[test]
+    /// §385：三哨兵的相位是 **1+2**（中间的从 Beam 起手）。
+    ///
+    /// wiki.gg `Sentry`：*"In the Elite encounter, the middle Sentry instead uses Beam followed by
+    /// Bolt."*；fandom `Sentry`：*"1st and 3rd sentries will always start with Bolt while the 2nd
+    /// sentry will always start with Beam."*
+    ///
+    /// 内核的循环是 `(round - 1) % Actions.len()`（`intent.rs::select_action` B3/B4）—— **按轮次**
+    /// 取，不看"上一招"。所以三个哨兵 `Actions` 一样时相位全同；修法是**把中间那只的两条换序**。
+    /// 这条测试同时钉住"三只都在、且第 2 只是 Beam"。
+    #[test]
+    fn the_three_sentries_start_out_of_phase() {
+        let session = build_session_at(7, "enc_three_sentries", 80, None, 0, 0)
+            .expect("the sentry elite builds");
+        // `refresh_intents` 已经跑过：`intents[slot].text` 里带 authored 动作 id。
+        let texts: Vec<&str> = session
+            .intents
+            .iter()
+            .map(|intent| intent.text.split(' ').next().unwrap_or(""))
+            .collect();
+        assert_eq!(texts.len(), 3, "three sentries: {texts:?}");
+        assert_eq!(texts[0], "sentry.bolt", "1st starts with Bolt: {texts:?}");
+        assert_eq!(texts[1], "sentry.beam", "the MIDDLE one starts with Beam: {texts:?}");
+        assert_eq!(texts[2], "sentry.bolt", "3rd starts with Bolt: {texts:?}");
+    }
+
+    /// §386：**掷骰伤害的意图预览**要给真值，不是 -1（玩家看到的"攻击 0"）。
+    ///
+    /// 虱子的 Bite 伤害是 `combatantCounter("roll.bite")`（开战掷 5–7，A2 起 6–8）。
+    /// 旧 `program_damage` 只认 `const` ⇒ 整个意图答 `-1`。修法：预览带状态求值。
+    ///
+    /// 判据两侧都写：**A0 落在 5..=7**，且与战斗员身上那个计数器**相等**（不是中位数）。
+    #[test]
+    fn the_intent_preview_reads_rolled_damage() {
+        let session = build_session_at(7, "enc_three_louses", 80, None, 0, 0)
+            .expect("the louse fight builds");
+        let mut checked = 0;
+        let roster = session.enemy_roster();
+        for (slot, intent) in session.intents.iter().enumerate() {
+            let Some(raw) = roster.get(slot) else {
+                continue;
+            };
+            let Ok(id) = rd_core::state::CombatantId::new(raw.as_str()) else {
+                continue;
+            };
+            let Some(combatant) = session.state.combatant(&id) else {
+                continue;
+            };
+            let bite = combatant
+                .counters()
+                .iter()
+                .find(|counter| counter.key.as_str() == "roll.bite")
+                .map(|counter| counter.value);
+            let Some(bite) = bite else { continue };
+            assert!(
+                (5..=7).contains(&bite),
+                "A0 louse bite is rolled 5-7 (wiki), got {bite}"
+            );
+            // 这一回合可能是 Spit Web（非攻击，`damage == -1` 是**对的**）；只在攻击招上比。
+            if intent.text.contains("Attack") {
+                assert_eq!(
+                    intent.damage, bite,
+                    "the preview must show the rolled value ({bite}), not -1/0: {}",
+                    intent.text
+                );
+                checked += 1;
+            }
+        }
+        assert!(checked > 0, "at least one louse must open with Bite");
+    }
+
+    /// §387：史莱姆老大在**半血**分裂成 1 只 L 酸 + 1 只 L 尖，各带**当前**血量。
+    ///
+    /// wiki.gg `Slime Boss`：*"When its HP is at or below 50%, it will split into 2 smaller Slimes
+    /// with its current HP."* / *"Split — Disappears and spawns 1 Acid Slime (L) and 1 Spike Slime
+    /// (L) with its current HP."*
+    ///
+    /// 旧内容有三处不对（§387 的正文）：阈值 10 血、召唤两只**中等**史莱姆固定 10 血、
+    /// 外加一条"半血改打 slam"的规则把分裂挡掉了。
+    ///
+    /// 判据：把 Boss 打到 50% 以下 ⇒ 它**消失**，场上出现 `acid_slime_l` 与 `spike_slime_l`，
+    /// 两者的当前血量**都等于**分裂前那一刻 Boss 的血量。
+    #[test]
+    fn the_slime_boss_splits_into_two_large_slimes_at_half_health() {
+        let mut session = build_session_at(7, "enc_slime_boss", 80, None, 0, 0)
+            .expect("the slime boss builds");
+        let boss = rd_core::state::CombatantId::new("slime_boss").expect("id");
+        let max = session
+            .state
+            .combatant(&boss)
+            .expect("the boss is in the fight")
+            .health_max;
+        // 打到 50% 以下（`phase_split` 是 `DamageTaken` 触发器）。
+        let target = max / 2 - 1;
+        session
+            .state
+            .combatant_mut(&boss)
+            .expect("mutable boss")
+            .health_current = target;
+        // 触发一次伤害：走**真实**的伤害管线 + 宿主的触发器相位
+        // （`phase_split` 是 `DamageTaken` 触发器；`exec::drain` 只排效果队列，不跑状态触发器）。
+        let mut host = rd_core::host::Host::new(session.content);
+        {
+            let mut ctx = rd_core::exec::ExecContext::new(
+                &mut session.state,
+                Some(rd_core::state::CombatantId::new("hero").expect("hero")),
+                None,
+                None,
+                64,
+            )
+            .with_content(session.content);
+            rd_core::exec::resolve_damage(&mut ctx, &boss, 1, true).expect("the hit lands");
+        }
+        host.try_resolve_pending_queues(&mut session.state)
+            .expect("the split trigger runs");
+        let mut acid = None;
+        let mut spike = None;
+        for combatant in session.state.combatants() {
+            let raw = combatant.id.as_str();
+            let definition = raw.split('#').next().unwrap_or(raw);
+            if definition == "acid_slime_l" {
+                acid = Some(combatant.health_current);
+            }
+            if definition == "spike_slime_l" {
+                spike = Some(combatant.health_current);
+            }
+        }
+        let expected = target - 1; // 扣掉那 1 点伤害
+        assert_eq!(
+            acid,
+            Some(expected),
+            "1 Acid Slime (L) with the boss's current HP ({expected})"
+        );
+        assert_eq!(
+            spike,
+            Some(expected),
+            "1 Spike Slime (L) with the boss's current HP ({expected})"
+        );
+    }
+
     fn building_a_louse_fight_draws_its_bite_and_a_cultist_fight_does_not() {
         let louse = build_session_at(11, "enc_louse", 70, None, 0, 0).expect("the louse fight builds");
         let cultist =

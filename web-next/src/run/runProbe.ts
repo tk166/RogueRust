@@ -146,6 +146,8 @@ export interface RunProbe {
   hand(): unknown;
   /** 按 (手牌槽位, 目标槽位) 出牌 —— 与 P2 的 `__ui` 探针同一个语义。 */
   play(handSlot: number, targetSlot: number): unknown;
+  /** §391：导入存档（与设置面板的"导入"同一个入口）。 */
+  importArchive(text: string): unknown;
   endTurn(): unknown;
 }
 
@@ -318,6 +320,17 @@ export function installRunProbe(store: RunStore): void {
       return { ...outcome, choice: game.choice() };
     },
     debug: () => ({ ...store.hostForCombat.run(), hasCombatSession: store.hostForCombat.hasCombatSession() }),
+
+    /**
+     * §391：导入一份存档（与设置面板的"导入"同一个入口）。
+     *
+     * 为什么放进探针：复现玩家的 bug 时，**存档就是最精确的夹具** —— 比"找个种子走到那一层"
+     * 可靠得多（玩家给的 `RDA1-…` 直接喂进来）。生产路径不变（设置面板仍在调 `store.importArchive`）。
+     */
+    importArchive(text: string) {
+      const outcome = store.importArchive(text);
+      return { ...outcome, scene: window.__run!.scene(), run: window.__run!.run() };
+    },
 
     start(seed: number, ascension: number) {
       store.startRun(seed, ascension);
