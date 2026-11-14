@@ -68,6 +68,8 @@ try {
       // §381 的落点断言要直接跑 `viewFromWasm`（"定向牌必须给每个敌人一个落点"），
       // 而不是靠在浏览器里抽到那张牌 —— Uncommon 起手抽不到，靠运气就是在写假闸门。
       "src/view/combatView.ts",
+      // §384：选牌弹窗的标签（`武装`/`头击` 要选一张手牌时那一屏）。
+      "src/view/choiceText.ts",
     ],
     { cwd: WEB_NEXT, stdio: "pipe" }
   );
@@ -75,6 +77,7 @@ try {
   const meta = (await import(pathToFileURL(join(out, "view/cardMeta.js")).href)).default;
   const models = await import(pathToFileURL(join(out, "run/models.js")).href);
   const view = await import(pathToFileURL(join(out, "view/combatView.js")).href);
+  const choiceText = await import(pathToFileURL(join(out, "view/choiceText.js")).href);
 
   // ── 定向牌：内容里提到事件目标的牌，一张都不许漏 ────────────────────────
   const content = JSON.parse(
@@ -167,6 +170,95 @@ try {
     unknown.length === 0 ? `${codes.length} 条` : JSON.stringify(unknown)
   );
   summary.effects = codes.length;
+
+  // ── §384：选牌弹窗的一行必须是**中文名**（不是内核的英文 NameKey）─────────
+  //
+  // 玩家报的："武装 / 头击 要选一张手牌时，弹窗显示的是牌的英文名"。
+  // 穷尽遍历内容里的每一张牌：`choiceOptionLabel` 给的 `name` 不许等于英文 `NameKey`。
+  // 判据分两层：
+  //   a. **一张都不许显示英文 NameKey**（这是玩家报的那件事）；
+  //   b. 没翻译的牌只能落在**显式白名单**里（14 张观者/特殊牌，本移植拿不到），
+  //      它们显示的是"美化 id"（`patient_guard` → `patient guard`）而不是机器码。
+  //      ⇒ 新增一张没翻译的牌会让这条红（而不是静默变回英文名）。
+  const UNTRANSLATED = [
+    "patient_guard", "insight", "miracle", "omega", "expunger", "shiv", "smite", "beta",
+    // ⚠️ 内容是 `jax` **和** `j.a.x.` 两个 id：前者在表里但名字是英文 `J.A.X.`，
+    // 后者根本不在表里 —— 两个都算没翻译。
+    "through_violence", "jax", "j.a.x.", "safety", "become_almighty", "live_forever",
+    "fame_and_fortune",
+  ];
+  const untranslated = new Set();
+  const noChinese = [];
+  const rawIds = [];
+  let labelCount = 0;
+  for (const card of content.Cards ?? []) {
+    const nameKey = String(card.NameKey ?? "");
+    const label = choiceText.choiceOptionLabel({ id: card.Id, title: nameKey });
+    labelCount += 1;
+    const hasChinese = /[一-龥]/.test(label.name);
+    if (!hasChinese) {
+      untranslated.add(card.Id.replace(/\++$/, ""));
+      // 第二层必须是**美化**过的 id（`patient guard`），不许把机器码原样印出来。
+      // ⚠️ 只在 id 里**有东西可美化**时判（`omega` 这种单词 id 美化后就是它自己）。
+      if (/[_.]/.test(card.Id) && label.name === card.Id) rawIds.push(card.Id);
+    }
+  }
+  // 白名单之外的每一张牌都必须有汉字名（这就是"不再显示英文"的可判定形式）。
+  for (const card of content.Cards ?? []) {
+    const label = choiceText.choiceOptionLabel({ id: card.Id, title: String(card.NameKey ?? "") });
+    if (!/[一-龥]/.test(label.name) && !UNTRANSLATED.includes(card.Id.replace(/\++$/, ""))) {
+      noChinese.push(card.Id);
+    }
+  }
+  check(
+    noChinese.length === 0,
+    "白名单之外**每一张**牌都显示中文名（穷尽遍历内容里每一张牌）",
+    noChinese.length === 0 ? `${labelCount} 张` : JSON.stringify(noChinese.slice(0, 5))
+  );
+  check(
+    rawIds.length === 0,
+    "没翻译的牌显示**美化 id**（`patient guard`），不是机器码",
+    rawIds.length === 0 ? "0 处" : JSON.stringify(rawIds.slice(0, 5))
+  );
+  const unexpected = [...untranslated].filter((id) => !UNTRANSLATED.includes(id));
+  check(
+    unexpected.length === 0,
+    "没有翻译的牌**只有白名单里那 14 张**（新增一张没翻译的牌会红）",
+    unexpected.length === 0 ? `${untranslated.size} 张` : JSON.stringify(unexpected)
+  );
+  // 反证：玩家报的那两张牌 + 一个升级变体，单独钉住。
+  const spotNames = ["headbutt", "armaments", "strike+"].map((id) => ({
+    id,
+    ...choiceText.choiceOptionLabel({
+      id,
+      title: (content.Cards ?? []).find((card) => card.Id === id)?.NameKey ?? id,
+    }),
+  }));
+  check(
+    spotNames.every((row) => /[一-龥]/.test(row.name)),
+    "`头击` / `武装` / `打击+` 的名字里真的有汉字",
+    JSON.stringify(spotNames.map((row) => `${row.id}→${row.name}`))
+  );
+  // ── 接线：组件必须**用**这个纯函数（纯函数测了但没人调，等于没修）──────────
+  const modalSource = await readFile(join(REPO, "web-next/src/overlay/ChoiceModal.tsx"), "utf8");
+  check(
+    /choiceOptionLabel\s*\(/.test(modalSource),
+    "`ChoiceModal` 真的调了 `choiceOptionLabel`（不是只把它写着好看）"
+  );
+  check(
+    !/\{option\.title \|\| option\.id\}/.test(modalSource),
+    "`ChoiceModal` 不再直接把内核的英文 `option.title` 印出来"
+  );
+  check(
+    /badgeLook\("cards"/.test(modalSource) && /<CardTip/.test(modalSource),
+    "`ChoiceModal` 有二维卡面（`badgeLook`）与悬浮详情（`<CardTip>`）"
+  );
+
+  check(
+    spotNames.every((row) => /费|不可打出/.test(row.subtitle)),
+    "选牌弹窗的副标题带**费用**（与商店/奖励的悬浮面板同一个来源）",
+    JSON.stringify(spotNames.map((row) => row.subtitle))
+  );
 
   // `-1` = "没有效果码"：**空串**，不是"未知效果 -1（0）"。
   check(

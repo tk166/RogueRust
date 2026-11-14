@@ -6,6 +6,11 @@
 // ⚠️ 写成 `.js`：这个文件会被闸门 27 **直接编译成 ESM 跑**（不经打包器），
 // Node 的 ESM 解析要求显式扩展名。TS 的 bundler 解析会把 `.js` 映回 `.ts`，Vite 也认。
 import { CHOICE_THEN, type PendingChoice } from "../wasm/snapshot.js";
+// ⚠️ `.js` 同上：闸门 27 直接编这个文件。`describeTip` 与商店/奖励的悬浮面板**同一个来源**
+// （种类 · 费用 · 稀有度只在一处算）—— 注意它来自 `view/cardTipText.ts`（**纯文案**），
+// 不是 `.tsx` 那个渲染壳：闸门那一趟 tsc 没有 jsx 支持。
+import { displayName } from "../i18n/index.js";
+import { describeTip } from "./cardTipText.js";
 
 function countText(min: number, max: number): string {
   return min === max ? `${min} 张` : `${min}–${max} 张`;
@@ -35,6 +40,37 @@ const THEN_VERB: Record<number, string> = {
  * ⚠️ 只看 `kind` 不够：`kind` 说"拿进手牌"，而"从弃牌堆拿一张"与"从三个候选里选一张"是同一个
  * `then`。所以 `source === 2`（三选一）时"从候选里选"，`source === 1` 时"从牌堆里选"。
  */
+/**
+ * 选牌弹窗里**一行**的文案（§384）。
+ *
+ * ⚠️ 中文名来自 i18n 表（`cards`），**不是**内核的 `title` —— 后者是内容的 `NameKey`（英文
+ * `Strike+`）。商店/奖励屏早就是这条规矩，只有选牌这一屏漏了，于是"武装"要选一张手牌时
+ * 弹出来的是英文名。
+ *
+ * 回退顺序（每一层都显式）：i18n 中文 → 内核 title（英文）→ 定义 id。
+ */
+export function choiceOptionLabel(option: {
+  readonly id: string;
+  /**
+   * 内核的显示名（内容的 `NameKey`，**英文**：`Strike+`）。
+   *
+   * ⚠️ **故意不用它**（§384）：玩家报的就是"弹窗里是英文名"。它的信息量与"美化 id"
+   * 完全一样（`patient_guard` → `patient guard`），而英文名在一屏中文里最扎眼。
+   * 参数留着是因为调用方手里本来就有它，删掉会让调用点再拼一次 —— 但不读。
+   */
+  readonly title: string;
+}): { name: string; subtitle: string } {
+  const translated = displayName("cards", option.id);
+  // 回退顺序只有两层：i18n 中文 → **美化 id**（`patient_guard` → `patient guard`）。
+  // 哪些牌会走到第二层由闸门 56 的**显式白名单**钉住（新增一张没翻译的就红）。
+  const name =
+    translated !== option.id
+      ? translated
+      : option.id.replace(/^standard\./, "").replace(/_/g, " ");
+  const meta = describeTip({ kind: "card", id: option.id });
+  return { name, subtitle: meta.subtitle };
+}
+
 export function choiceSentence(choice: PendingChoice): string {
   const want = countText(choice.min, choice.max);
   const verb = THEN_VERB[choice.kind];

@@ -397,6 +397,8 @@ body,
 }
 .choice-option.is-selected { border-color: #7cc9ff; background: #22405a; }
 .choice-option__mark { width: 16px; color: #7cc9ff; font-weight: 700; }
+/* §384：选牌弹窗的一行 = 勾选 + 二维卡面 + 中文名 +（种类·费用·稀有度）。 */
+.choice-option__sub { margin-left: auto; font-size: 11px; color: #9fb3c6; white-space: nowrap; }
 .choice-panel__refusal { margin: 0 0 10px; font-size: 12px; color: #ff9d8a; }
 .choice-panel__actions { display: flex; gap: 10px; justify-content: flex-end; }
 .choice-button {
