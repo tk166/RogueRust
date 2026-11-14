@@ -30,8 +30,14 @@ body,
   touch-action: none; /* 触摸拖拽必须自己接管，否则浏览器会滚页面 */
 }
 
+/*
+ * ⚠️ `position: fixed`（不是 absolute）：`layout` 里的坐标是**视口**坐标（P6 起加了画布原点），
+ * 而 `absolute` 是相对 `.app` —— 画布不在视口左上角时（运行层外壳有顶栏/药水条），
+ * 文字会整体偏一个画布原点。P2 的回归页画布在 (0,0)，所以两边看不出差别；
+ * 运行层里就变成"卡面文字画在牌下面 79px"。
+ */
 .text-layer {
-  position: absolute;
+  position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 5;
@@ -73,11 +79,34 @@ body,
   color: #ffffff;
 }
 
+/* 卡面素材（`assets/Badge`）：手牌顶上那一小块"立绘"。
+   牌身是 3D 的，这块是 DOM —— 位置跟着 `layout` 走，所以永远贴在牌上。 */
+.card-text__art {
+  display: flex;
+  justify-content: center;
+  margin-top: 1px;
+  margin-bottom: 1px;
+  pointer-events: none;
+}
+
+.card-text.is-selected .card-text__art {
+  margin-top: 2px;
+  margin-bottom: 3px;
+}
+
 /* 紧凑态：屏幕太窄放不下标题 ⇒ 只留费用数字。
    注意 `display:none` 而不是 `visibility:hidden` —— 闸门要能分辨"读得到"与"明确收起"。 */
 .card-text.is-compact .card-text__title,
-.card-text.is-compact .card-text__rules {
+.card-text.is-compact .card-text__rules,
+.card-text.is-compact .card-text__art {
   display: none;
+}
+
+/* 卡牌详情里的"立绘"位置：56px 的徽章居中，下面才是标题与规则。 */
+.detail-card__art {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0 6px;
 }
 
 .card-text.is-compact .card-text__cost {

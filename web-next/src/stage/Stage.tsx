@@ -373,7 +373,7 @@ export function Stage({
               死亡时压暗而不是换几何：形状是身份，不该因为倒下而变。
             */}
             <EnemyFigure
-              look={enemyLook(enemy.id)}
+              look={enemyLook(enemy.defId)}
               opacity={dead ? 0.35 : 1}
               yaw={index % 2 === 0 ? 0.18 : -0.22}
             />

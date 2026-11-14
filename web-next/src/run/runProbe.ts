@@ -6,6 +6,7 @@
 // ⚠️ 探针里**没有** `setScene` / `forceReward` 这类"造局面"的钩子：P3 的退出条件正是
 // "没有隐藏的手工刷新步骤"，一个能直接改场景的钩子会让闸门绕过整个路由。
 
+import { unknownAssets } from "../assets/registry.js";
 import { dprCapFor } from "../stage/perf.js";
 import cardMeta from "../view/cardMeta.js";
 import type { RunStore } from "./RunStore";
@@ -50,6 +51,8 @@ export interface RunProbe {
   frozen(): string | null;
   /** 第几幕（`rd_run_act`，1 起）。 */
   act(): number;
+  /** 素材注册表的**降级计数**（空 = 每个 id 都在清单里）。 */
+  assetsUnknown(): string[];
   /** 导出回放脚本（`null` = 内核拒绝）。 */
   exportReplay(): string | null;
   /** 导入回放并逐步对拍。 */
@@ -216,6 +219,7 @@ export function installRunProbe(store: RunStore): void {
     frozen: () => store.frozen(),
 
     act: () => store.getState().act,
+    assetsUnknown: () => unknownAssets(),
     exportReplay: () => store.exportReplay(),
     importReplay(text: string) {
       const outcome = store.importReplay(text);

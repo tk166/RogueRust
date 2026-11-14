@@ -10,6 +10,7 @@ import type { MockScene } from "./mock/scene";
 import type { CombatView } from "./view/combatView";
 import type { WasmDiagnostics } from "./wasm/host";
 import type { PendingChoice } from "./wasm/snapshot";
+import { badgeLook } from "./assets/registry";
 import { coverage as i18nCoverage, UPGRADED_WITH_BASE_TEXT } from "./i18n";
 import type { CommitLogEntry } from "./combat/CombatScreen";
 
@@ -61,6 +62,13 @@ export interface Probe {
   };
   /** 卡牌与敌人在屏幕上的位置（CSS 像素）。闸门用它决定往哪儿按。 */
   layout: () => ScreenLayout;
+  /**
+   * 每张手牌的**卡面素材期望值**（闸门 52 用它断言"界面上的字母 == 内容 id 查出来的那份"）。
+   *
+   * ⚠️ 必须走 `view().hand[].defId`（**内容 id**），不能用 `hand()` 的合成 id ——
+   * 后者是 `hand-<slot>-<defSlot>`，查素材表会走降级。
+   */
+  handFaces: () => { slot: number; defId: string; letters: string }[];
   hand: () => { slot: number; id: string; name: string; cost: number; targeted: boolean; rules: string }[];
   enemies: () => { slot: number; name: string; hp: number; maxHp: number }[];
   hero: () => { hp: number; maxHp: number; block: number; energy: number; maxEnergy: number; turn: number };
@@ -163,6 +171,12 @@ export function installProbe(options: ProbeOptions): void {
       originY: options.layout.originY,
       hero: { ...options.layout.hero },
     }),
+    handFaces: () =>
+      options.view().hand.map((card, slot) => ({
+        slot,
+        defId: card.defId,
+        letters: badgeLook("cards", card.defId).letters,
+      })),
     hand: () =>
       options.scene().hand.map((card, slot) => ({
         slot,

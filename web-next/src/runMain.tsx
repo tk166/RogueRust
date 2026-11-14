@@ -8,6 +8,11 @@
 import { createRoot } from "react-dom/client";
 import { StrictMode } from "react";
 import { RunApp } from "./run/RunApp";
+// ⚠️ **必须**加载 `styles.css`：战斗屏（`CombatScreen`）的 DOM 覆盖层 —— 卡面文字、
+// 卡牌详情、提示条、状态横幅 —— 全都靠它定位与上色。`run.css` 只管运行层外壳（顶栏/场景/地图）。
+// 第一版漏了这一行，于是 `run.html` 里 `.text-layer` 是 `position: static`：
+// 卡面文字飘在页面最下面（实测 y=1234，牌在 y=591）⇒ **看起来"卡面是空的"**。
+import "./styles.css";
 
 /**
  * `?safe=44,34`：把安全区变量覆盖成指定像素。

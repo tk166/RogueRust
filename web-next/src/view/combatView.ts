@@ -23,7 +23,14 @@ import cardMeta from "./cardMeta";
 export type CardKind = "attack" | "skill" | "power" | "status" | "curse";
 
 export interface ViewCard {
+  /**
+   * **合成 id**（`hand-<slot>-<defSlot>`）：只用来当 React key / 命中标识。
+   *
+   * ⚠️ 它**不是**内容 id —— 拿它查素材表/中文表会走降级。内容 id 是 `defId`。
+   */
   readonly id: string;
+  /** 内容 id（`strike` / `strike+`）：素材表与 i18n 都按它查。 */
+  readonly defId: string;
   readonly name: string;
   readonly cost: number | "X";
   readonly kind: CardKind;
@@ -35,7 +42,15 @@ export interface ViewCard {
 
 export interface ViewEnemy {
   readonly slot: number;
+  /**
+   * **合成 id**（`enemy-<slot>`）：只用来当 React key。
+   *
+   * ⚠️ 拿它查素材表会走降级（`enemyLook("enemy-0")` 命中哈希兜底 ⇒ 每只怪随机一个原型）。
+   * 内容 id 是 `defId`（`cultist` / `spike_slime_m` …）。
+   */
   readonly id: string;
+  /** 内容 id（`cultist` / `spike_slime_m` …）：素材表与 i18n 都按它查。 */
+  readonly defId: string;
   readonly name: string;
   readonly hp: number;
   readonly hpMax: number;
@@ -123,6 +138,7 @@ export function viewFromWasm(snapshot: CombatSnapshot, names: WasmNames, epoch =
     const meta = metaOf(cardId);
     return {
       id: `hand-${card.slot}-${card.defSlot}`,
+      defId: cardId,
       name: displayName("cards", cardId),
       cost: card.cost,
       kind: meta.kind,
@@ -146,6 +162,7 @@ export function viewFromWasm(snapshot: CombatSnapshot, names: WasmNames, epoch =
     enemies: snapshot.enemies.map((enemy) => ({
       slot: enemy.slot,
       id: `enemy-${enemy.slot}`,
+      defId: names.enemyName(enemy.slot),
       name: displayName("monsters", names.enemyName(enemy.slot)),
       hp: enemy.hp,
       hpMax: enemy.hpMax,
@@ -206,6 +223,7 @@ export function viewFromMock(scene: MockScene): CombatView {
     enemies: scene.enemies.map((enemy) => ({
       slot: enemy.slot,
       id: enemy.id,
+      defId: enemy.id,
       name: enemy.name,
       hp: enemy.hp,
       hpMax: enemy.maxHp,
@@ -217,6 +235,8 @@ export function viewFromMock(scene: MockScene): CombatView {
       // ⚠️ id 保持原样：P1 的闸门按 `strike` 这样的 id 断言。重复 id 不影响 React key
       // （`Stage` 用的是 `card.id + index`）。
       id: card.id,
+      // Mock 的 id 就是内容 id（`strike` / `bash`），所以直接用它。
+      defId: card.id,
       name: card.name,
       cost: card.cost,
       kind: card.kind,

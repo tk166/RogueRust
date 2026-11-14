@@ -10,6 +10,8 @@
 // 位置由 `layout`（3D 侧每帧投影出来的屏幕坐标）驱动，所以文字始终贴在牌上。
 
 import { useEffect, useRef } from "react";
+import { Badge } from "../assets/Badge";
+import { badgeLook } from "../assets/registry";
 import { layout } from "../stage/layout";
 import type { CombatView, ViewCard } from "../view/combatView";
 
@@ -109,6 +111,20 @@ export function TextOverlay({ scene, liftedSlot, hoverCardSlot, detailSlot, moda
             <div className="card-text__cost" style={{ fontSize: `${selected ? 14 : 11}px` }}>
               {card.cost}
             </div>
+            {/*
+              卡面素材（`assets/registry.ts` 的流水线产物）：两位字母 + 调色板。
+              ⚠️ 查表用 `card.defId`（**内容 id**），不是 `card.id` —— 后者是
+              `hand-<slot>-<defSlot>` 这种合成 id，查表会走降级。
+              紧凑态（窄屏只剩费用数字）由 CSS 收起。
+            */}
+            <div className="card-text__art" data-card-art>
+              <Badge
+                look={badgeLook("cards", card.defId)}
+                size={selected ? "md" : "sm"}
+                upgraded={card.defId.endsWith("+")}
+                title={card.defId}
+              />
+            </div>
             <div
               className="card-text__title"
               data-title
@@ -150,6 +166,10 @@ function DetailCard({ card, onClose }: { card: ViewCard; onClose: () => void }) 
     <div className="detail-card">
       {/* [P1-UX] 触屏与键盘用户可见的关闭入口，不依赖探针。 */}
       <button type="button" className="detail-card__close" onClick={onClose} aria-label="关闭卡牌详情">×</button>
+      {/* 详情态：卡面素材放在"立绘"的位置（这一档是给人看清"这张牌长什么样"的）。 */}
+      <div className="detail-card__art" data-detail-art>
+        <Badge look={badgeLook("cards", card.defId)} size="lg" upgraded={card.defId.endsWith("+")} title={card.defId} />
+      </div>
       <div className="detail-card__title" style={{ fontSize: `${TYPE_SCALE.detail.title}px` }} data-detail-title>
         {card.name}
       </div>

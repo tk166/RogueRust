@@ -16,8 +16,8 @@ import type { BadgeLook, BadgeKind } from "./registry";
 
 export interface BadgeProps {
   readonly look: BadgeLook;
-  /** 尺寸档：`sm` 用在列表/顶栏，`md` 用在奖励/商店卡片。 */
-  readonly size?: "sm" | "md";
+  /** 尺寸档：`sm` 手牌/列表/顶栏，`md` 奖励/商店卡片，`lg` 卡牌详情。 */
+  readonly size?: "sm" | "md" | "lg";
   /** 是否显示右下角的升级角标（`+`）。 */
   readonly upgraded?: boolean;
   readonly title?: string;
@@ -32,7 +32,7 @@ const KIND_LABEL: Record<BadgeKind, string> = {
 };
 
 export function Badge({ look, size = "sm", upgraded = false, title }: BadgeProps) {
-  const px = size === "md" ? 34 : 22;
+  const px = size === "lg" ? 56 : size === "md" ? 34 : 22;
   return (
     <span
       className={`asset-badge asset-badge--${size}`}
