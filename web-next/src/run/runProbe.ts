@@ -146,6 +146,9 @@ export interface RunProbe {
   hand(): unknown;
   /** 按 (手牌槽位, 目标槽位) 出牌 —— 与 P2 的 `__ui` 探针同一个语义。 */
   play(handSlot: number, targetSlot: number): unknown;
+  /** §411：夹具（只在 `?debug`）—— 往腰带里塞一瓶药水。 */
+  grantPotion?: (id: string) => { code: number; potions: readonly unknown[] };
+
   /** §391：导入存档（与设置面板的"导入"同一个入口）。 */
   importArchive(text: string): unknown;
   endTurn(): unknown;
@@ -261,6 +264,20 @@ export function installRunProbe(store: RunStore): void {
       ? () => {
           const code = store.offerBossRelics();
           return { code, scene: window.__run!.scene(), relics: window.__run!.bossRelics() };
+        }
+      : undefined,
+
+    /**
+     * §411：夹具 —— 往腰带里塞一瓶药水（**只在 `?debug`**）。
+     *
+     * 存在的理由：验"需要选敌人的药水"（恐惧药水）必须有那瓶药水，而起手腰带是空的；
+     * 靠商店/奖励随机抽到它，等于把闸门建在运气上（`grantRelic` 的同一条理由）。
+     */
+    grantPotion: new URLSearchParams(window.location.search).has("debug")
+      ? (id: string) => {
+          const code = store.hostForCombat.grantPotion(id);
+          store.refresh();
+          return { code, potions: [...store.getState().potions] };
         }
       : undefined,
 

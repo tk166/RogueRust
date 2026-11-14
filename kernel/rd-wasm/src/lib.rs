@@ -1420,22 +1420,16 @@ impl Session {
             }
             // §2.4 fork 3: the reference asks the selector about dead enemies too (`EnemyIntentRules`
             // 的 lambda 不检查 IsAlive), so this does too. The page decides whether to show it.
-            let choice: Result<Option<ActionChoice<'static>>, _> =
-                match locate_enemy(content, self.encounter, &id) {
-                    Ok(Some(at)) => select_action(&self.state, content, at, &id, round),
-                    Ok(None) => {
-                        intents.push(Intent::unknown("不在这条遭遇的敌人名单里"));
-                        continue;
-                    }
-                    Err(error) => Err(error),
-                };
+            let _ = round;
+            // §411：与**执行**共用 `intent_action`（含"按定义 id 兜底"）——
+            // 第一版这里只走 `locate_enemy`，于是分裂/召唤出来的敌人意图永远是"未知"。
+            let choice = self.intent_action(&id);
             let intent = match choice {
-                Ok(Some(choice)) => {
+                Ok(Some((action_id, action_row, intent_kind))) => {
                     // §386：带状态求值 —— 掷骰伤害（`roll.bite`）才显示得出来。
-                    let damage =
-                        program_damage_with_state(content, choice.action_row, &self.state, &id);
-                    let kind = intent_kind_code(choice.intent_kind);
-                    let mut text = choice.action_id.to_string();
+                    let damage = program_damage_with_state(content, action_row, &self.state, &id);
+                    let kind = intent_kind_code(intent_kind);
+                    let mut text = action_id.to_string();
                     text.push_str(" | ");
                     text.push_str(match kind {
                         0 => "Unknown",
@@ -1454,7 +1448,7 @@ impl Session {
                     Intent { kind, damage, text }
                 }
                 Ok(None) => Intent::unknown("没有 authored 动作"),
-                Err(error) => Intent::unknown(&format!("intent 读不出来: {}", detail(&error))),
+                Err(error) => Intent::unknown(&format!("intent 读不出来: {}", error)),
             };
             intents.push(intent);
         }
@@ -1709,6 +1703,20 @@ impl Session {
     }
 
     /// Wall-slot indices of enemies that are still alive (their slots never move — `env-abi.md` §10).
+    /// 墙位槽 → **活的**战斗员（§411）。
+    ///
+    /// ⚠️ 这是"槽位 → 战斗员"的**唯一**入口。以前三处（出牌目标、药水目标、意图显示）各自
+    /// 用 `plan.enemies[slot]`（开战时的静态表），而分裂/召唤出来的战斗员不在那张表里：
+    /// 出牌 ⇒ 目标 `None`（打不中）、药水 ⇒ 没有目标（界面卡在选目标）、意图 ⇒ 永远"未知"。
+    ///
+    /// `enemy_roster()` 的顺序**就是**观察向量与动作表用的顺序，所以它才是"槽位"的定义。
+    fn combatant_at_slot(&self, slot: i32) -> Option<CombatantId> {
+        if slot < 0 {
+            return None;
+        }
+        self.enemy_roster().get(slot as usize).copied()
+    }
+
     fn alive_enemy_slots(&self) -> Vec<usize> {
         let mut out = Vec::new();
         for (slot_index, id) in self.enemy_roster().iter().take(MAX_ENEMY_SLOTS).enumerate() {
@@ -2025,14 +2033,11 @@ impl Session {
             self.error = format!("hand slot {hand_index} is empty");
             return Ok(());
         };
-        let target: Option<&'static str> = if target_slot < 0 {
-            None
-        } else {
-            self.plan
-                .enemies
-                .get(target_slot as usize)
-                .map(|enemy| &*Box::leak(enemy.id.to_string().into_boxed_str()))
-        };
+        // §411：目标从**活的**名单取（`combatant_at_slot`），不是开战时的 `plan.enemies`。
+        // 旧写法在分裂/召唤之后 `plan.enemies.get(slot)` 是 `None` ⇒ 卡打空、不掉血。
+        let target: Option<&'static str> = self
+            .combatant_at_slot(target_slot)
+            .map(|id| &*Box::leak(id.as_str().to_string().into_boxed_str()));
         self.exec(&[Step::HeroPlaysInstance {
             card: instance,
             target,
@@ -2132,21 +2137,46 @@ impl Session {
     /// enemy list, so the encounter-indexed selector cannot answer for it. Its actions come from the
     /// content's enemy records by **definition id** (`ENCT[*].Enemies[j].Id`), and the rotation is the
     /// same `Actions[(round - 1) % len]` the kernel falls back to when no `IntentRule` matches.
-    fn action_for(&self, actor: &CombatantId) -> Result<Option<&'static str>, String> {
+    /// 这一回合这个敌人**要打的招**：`(动作 id, EACT 行号, 意图种类)`（§411）。
+    ///
+    /// **执行与显示共用这一个函数**（`action_for` / `refresh_intents`）。第一版把两条路分开写：
+    /// 执行有"按定义 id 兜底"（`summoned_actions`），显示没有 ⇒ 分裂出来的史莱姆"意图永远未知
+    /// 但照样打你"。**同一个事实写两遍，就会有一处漏掉兜底。**
+    fn intent_action(
+        &self,
+        actor: &CombatantId,
+    ) -> Result<Option<(&'static str, u32, Option<rd_core::intent::IntentKind>)>, String> {
         if let Some(at) = locate_enemy(self.content, self.encounter, actor)
             .map_err(|error| format!("locate_enemy: {}", detail(&error)))?
         {
             let choice =
                 select_action(&self.state, self.content, at, actor, self.state.current_round)
                     .map_err(|error| format!("select_action: {}", detail(&error)))?;
-            return Ok(choice.map(|choice| choice.action_id));
+            return Ok(choice.map(|choice| (choice.action_id, choice.action_row, choice.intent_kind)));
         }
+        // 召唤/分裂出来的战斗员：遭遇记录里没有它，按**定义 id** 找它的动作表（轮转）。
         let actions = self.summoned_actions(actor)?;
         if actions.is_empty() {
             return Ok(None);
         }
         let round = self.state.current_round.max(1) as usize;
-        Ok(actions.get((round - 1) % actions.len()).copied())
+        let Some(action_id) = actions.get((round - 1) % actions.len()).copied() else {
+            return Ok(None);
+        };
+        let row = self
+            .content
+            .lookup_in(action_id, rd_core::content::EK_EACTION)
+            .map(|entry| u32::from(entry.index));
+        let kind = row.and_then(|row| {
+            self.content
+                .row(rd_core::content::Table::EnemyAction, row)
+                .and_then(|row| rd_core::intent::intent_kind_of(self.content, row).ok().flatten())
+        });
+        Ok(Some((action_id, row.unwrap_or(u32::MAX), kind)))
+    }
+
+    fn action_for(&self, actor: &CombatantId) -> Result<Option<&'static str>, String> {
+        Ok(self.intent_action(actor)?.map(|(action_id, _, _)| action_id))
     }
 
     /// The action list an encounter record gives for this combatant's **definition id** (§176).
@@ -4016,6 +4046,88 @@ mod tests {
             !has_rage(&session),
             "Rage must be gone after the turn ends (it is a one-turn buff)"
         );
+    }
+
+    /// §411：**分裂之后还能打中、还能看见意图**（玩家报的"打它们不造成伤害、行为也不变"）。
+    ///
+    /// 根因是"槽位 → 战斗员"的映射用了**开战时**的 `plan.enemies`：分裂出来的战斗员不在那张表里。
+    /// 三处都中招：出牌目标（打不中）、药水目标（界面卡在选目标）、意图显示（永远"未知"）。
+    ///
+    /// 判据三侧：
+    /// ① 分裂之后 `combatant_at_slot(0/1)` 是两只**新**史莱姆（不是那张静态表）；
+    /// ② 对槽位 0 打一张打击 ⇒ 那只史莱姆**掉血**（旧实现打空）；
+    /// ③ 两只史莱姆的意图**不是**"未知"（旧实现是）。
+    #[test]
+    fn split_slimes_can_be_hit_and_show_their_intents() {
+        static DECK: [DeckEntry<'static>; 1] = [DeckEntry { card: "strike", count: 10 }];
+        let mut session = build_session_at(7, "enc_slime_boss", 200, Some(&DECK), 0, 0)
+            .expect("the slime boss builds");
+        let boss = rd_core::state::CombatantId::new("slime_boss").expect("id");
+        // 直接把分裂动作打出来（§400 之后它是"半血时它的回合"的意图）。
+        {
+            let combatant = session.state.combatant_mut(&boss).expect("the boss");
+            combatant.health_current = 60;
+        }
+        session.state.current_round = 2;
+        let at = rd_core::intent::locate_enemy(session.content, session.encounter, &boss)
+            .expect("locate")
+            .expect("the boss slot");
+        let choice = rd_core::intent::select_action(&session.state, session.content, at, &boss, 2)
+            .expect("select")
+            .expect("an action");
+        assert_eq!(choice.action_id, "slime_boss.split");
+        rd_core::intent::execute_action(
+            &mut session.state,
+            session.content,
+            &boss,
+            choice.action_row,
+            None,
+        )
+        .expect("split");
+        session.reobserve_after_external_change();
+
+        // ① 槽位映射现在是**活的**名单。
+        let roster: Vec<String> = session
+            .enemy_roster()
+            .iter()
+            .map(|id| id.as_str().to_string())
+            .collect();
+        assert_eq!(roster.len(), 2, "two slimes: {roster:?}");
+        for slot in 0..2 {
+            let id = session.combatant_at_slot(slot).expect("slot {slot} maps to a combatant");
+            assert!(
+                id.as_str().starts_with("acid_slime_l") || id.as_str().starts_with("spike_slime_l"),
+                "slot {slot} must be a split slime, got {}",
+                id.as_str()
+            );
+        }
+
+        // ② 打槽位 0：必须掉血。
+        let target = session.combatant_at_slot(0).expect("slot 0");
+        let hp_before = session.state.combatant(&target).expect("alive").health_current;
+        let hand = session.hand_len();
+        let strike_slot = (0..hand)
+            .find(|index| session.hand_defs.get(*index).map(|id| id.as_str()) == Some("strike"))
+            .expect("a strike in hand");
+        session.step_play(strike_slot, 0).expect("play");
+        let hp_after = session
+            .state
+            .combatant(&target)
+            .map(|c| c.health_current)
+            .unwrap_or(0);
+        assert!(
+            hp_after < hp_before,
+            "the strike must damage the split slime ({hp_before} -> {hp_after})"
+        );
+
+        // ③ 意图不是"未知"（它有 authored 动作表：corrosive_spit / lick / tackle …）。
+        for intent in session.intents.iter() {
+            assert!(
+                !intent.text.contains("未知") && !intent.text.contains("不在这条遭遇"),
+                "a split slime must show a real intent, got {:?}",
+                intent.text
+            );
+        }
     }
 
     /// §410：**每只怪都会动、而且会打人** —— 行为层面的"卡住"扫描。

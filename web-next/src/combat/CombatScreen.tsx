@@ -161,9 +161,23 @@ export interface CombatScreenProps {
    * 就是 §4.22 那种"按类型点名的接口"。
    */
   readonly onFinish?: () => void;
+  /**
+   * §411：正在等玩家选敌人的**药水槽**（`-1` = 没在选）。
+   *
+   * ⚠️ 这个值以前只在 `RunApp` 里用来显示一行提示文字，**战斗屏根本没消费它** ⇒
+   * 玩家点"选目标"之后点敌人毫无反应（实机报的"恐惧药水选目标卡住了"）。
+   */
+  readonly potionTargeting?: number;
+  /** 选中了哪个敌人（墙位槽）。由外壳调 `store.usePotion(slot, target)`。 */
+  readonly onPotionTarget?: (slot: number, enemySlot: number) => void;
+  /** 取消选目标（Esc / 点空白）。 */
+  readonly onPotionCancel?: () => void;
 }
 
 export function CombatScreen(props: CombatScreenProps) {
+  const potionTargeting = props.potionTargeting ?? -1;
+  const onPotionTarget = props.onPotionTarget;
+  const onPotionCancel = props.onPotionCancel;
   const store = useMemo(() => new MachineStore(), []);
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   /** Mock 侧的局面。`mode === "mock"` 时由 URL 造（P1 的 `?debug&enemies=N`）。 */
@@ -537,6 +551,11 @@ export function CombatScreen(props: CombatScreenProps) {
         }
         // ⚠️ 有问句时 Esc 什么都不做：动作表此时为空，关掉弹窗等于把玩家扔进"点不动"的界面。
         if (choice) return;
+        // §411：药水在等目标时，Esc 先取消它（否则玩家没有任何退出路径）。
+        if (potionTargeting >= 0) {
+          onPotionCancel?.();
+          return;
+        }
         if (modalOpen) setModalOpen(false);
         else if (detailSlot >= 0) setDetailSlot(-1);
         else cancel();
@@ -744,6 +763,26 @@ export function CombatScreen(props: CombatScreenProps) {
             setContextLost(true);
           });
           gl.domElement.addEventListener("webglcontextrestored", () => setContextLost(false));
+        }}
+        // §411：药水在等目标时，点敌人 = 选它（这是"恐惧药水卡住"的修复点）。
+        // 放在 Canvas 上而不是敌人 mesh 上：命中用**屏幕**布局（与拖牌同一套投影），
+        // 免得"点得到牌、点不到药水目标"这种两套几何。
+        onClick={(event) => {
+          if (potionTargeting < 0) return;
+          const slot = enemyAtScreen(
+            layout.enemies,
+            event.clientX,
+            event.clientY,
+            new Set(layout.enemies.map((enemy) => enemy.slot))
+          );
+          // ⚠️ `enemyAtScreen` 没命中时返回 **-1**（不是 null）—— 第一版写成 `=== null`，
+          // 于是"点空白取消"永远不触发，而且会拿 -1 去当目标。
+          if (slot < 0) {
+            // 点空白 = 取消（与 Esc 同一条出口）。
+            onPotionCancel?.();
+            return;
+          }
+          onPotionTarget?.(potionTargeting, slot);
         }}
         // [P1-UX] 桌面右键详情，使用命中布局投影，避免 DOM 覆盖层拦截 3D 射线。
         onContextMenu={(event) => {

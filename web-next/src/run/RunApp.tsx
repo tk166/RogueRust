@@ -418,6 +418,14 @@ export function RunApp() {
             game={store.combat}
             frozen={blocked}
             onFinish={() => store.fightEnd()}
+            // §411：把"正在等目标的药水槽"交给战斗屏 —— 它以前只用来显示提示文字，
+            // 于是"选目标"之后点敌人没有反应（恐惧药水卡住）。
+            potionTargeting={potionTargeting}
+            onPotionTarget={(slot, enemySlot) => {
+              store.usePotion(slot, enemySlot);
+              setPotionTargeting(-1);
+            }}
+            onPotionCancel={() => setPotionTargeting(-1)}
           />
         )}
 

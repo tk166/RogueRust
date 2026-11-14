@@ -1428,7 +1428,7 @@ fn choice<'a>(
 /// 三态：格缺席/为 null ⇒ `Ok(None)`（本内容 394/394 有值）；有值但 `Kind` 字段缺席 ⇒
 /// `Missing("Kind")`；`Kind` 串不认识 ⇒ `UnknownIntentKind`（参考的 `JsonStringEnumConverter`
 /// 在这种输入上同样抛）。
-fn intent_kind_of<'a>(
+pub fn intent_kind_of<'a>(
     content: &'a Content<'a>,
     row: Row<'_>,
 ) -> Result<Option<IntentKind>, IntentError> {

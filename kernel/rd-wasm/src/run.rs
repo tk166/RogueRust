@@ -3299,24 +3299,24 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
             // **Through the existing damage pipeline** (`exec::resolve_damage`), so Block, Vulnerable
             // and every other damage modifier apply exactly as they do for a card. `target` is an
             // enemy slot; `-1` means "the first living enemy".
-            let slot_index = if target >= 0 {
-                target as usize
+            // §411：目标槽 → **活的**战斗员（`combatant_at_slot`）。旧写法查 `plan.enemies`
+            // （开战时的静态表），分裂/召唤之后槽位越界 ⇒ 药水"没有目标" ⇒ 界面卡在选目标。
+            let target_id = if target >= 0 {
+                session.combatant_at_slot(target)
             } else {
-                (0..session.plan.enemies.len())
-                    .find(|index| {
-                        let id = session.plan.enemies[*index].id;
-                        rd_core::state::CombatantId::new(id)
-                            .ok()
-                            .and_then(|cid| session.state.combatant(&cid))
+                let roster = session.enemy_roster();
+                roster
+                    .iter()
+                    .find(|cid| {
+                        session
+                            .state
+                            .combatant(cid)
                             .is_some_and(|c| c.health_current > 0)
                     })
-                    .unwrap_or(usize::MAX)
+                    .copied()
             };
-            let Some(plan_enemy) = session.plan.enemies.get(slot_index) else {
+            let Some(target_id) = target_id else {
                 return refuse("药水没有目标：这一侧没有活着的敌人");
-            };
-            let Ok(target_id) = rd_core::state::CombatantId::new(plan_enemy.id) else {
-                return refuse("敌人的战斗员 id 不合法");
             };
             let mut ctx = rd_core::exec::ExecContext::new(
                 &mut session.state,
@@ -3572,26 +3572,26 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
                 return refuse(&std::format!("`{status_id}` 不是合法的状态 id"));
             };
             let target_id = if needs_target {
-                let slot_index = if target >= 0 {
-                    target as usize
+                // §411：目标从**活的**名单取（`combatant_at_slot`），不是 `plan.enemies`
+                // （开战时的静态表）—— 否则分裂/召唤之后槽位越界 ⇒ 药水"没有目标"。
+                let picked = if target >= 0 {
+                    session.combatant_at_slot(target)
                 } else {
-                    (0..session.plan.enemies.len())
-                        .find(|index| {
-                            let id = session.plan.enemies[*index].id;
-                            rd_core::state::CombatantId::new(id)
-                                .ok()
-                                .and_then(|cid| session.state.combatant(&cid))
+                    let roster = session.enemy_roster();
+                    roster
+                        .iter()
+                        .find(|cid| {
+                            session
+                                .state
+                                .combatant(cid)
                                 .is_some_and(|c| c.health_current > 0)
                         })
-                        .unwrap_or(usize::MAX)
+                        .copied()
                 };
-                let Some(plan_enemy) = session.plan.enemies.get(slot_index) else {
+                let Some(picked) = picked else {
                     return refuse("药水没有目标：这一侧没有活着的敌人");
                 };
-                match rd_core::state::CombatantId::new(plan_enemy.id) {
-                    Ok(id) => id,
-                    Err(_) => return refuse("敌人的战斗员 id 不合法"),
-                }
+                picked
             } else {
                 hero.clone()
             };

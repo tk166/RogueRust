@@ -46,7 +46,7 @@
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
 | **合计** | 957 | 712 | 235 | 10 | 477 | 195 | 86 | 0 |
 
-扫描到的具名测试：**1252** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
+扫描到的具名测试：**1253** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
 
 事件：池里有 **39** 个位次、**36** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -56,7 +56,7 @@
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
-| acid_slime_l | yes | the_slime_boss_splits_on_its_own_turn_not_the_moment_it_is_hurt, the_slime_boss_splits_on_its_turn_through_the_play_path | — | wiki:wiki_asc/acid_slime.txt | — | §313/§400/INV_ASC_HP+INV_MONSTERS/the_slime_boss_splits_on_its_own_turn_not_the_moment_it_is_hurt |
+| acid_slime_l | yes | the_slime_boss_splits_on_its_own_turn_not_the_moment_it_is_hurt, split_slimes_can_be_hit_and_show_their_intents …(+1) | — | wiki:wiki_asc/acid_slime.txt | — | §313/§400/INV_ASC_HP+INV_MONSTERS/the_slime_boss_splits_on_its_own_turn_not_the_moment_it_is_hurt |
 | acid_slime_m | yes | a_large_slime_splits_at_half_health_with_its_current_hp, a_split_spawns_two_combatants_when_the_boss_dies …(+2) | — | wiki:wiki_asc/acid_slime.txt | — | §276/§323/INV_ASC_HP+INV_MONSTERS/a_large_slime_splits_at_half_health_with_its_current_hp |
 | acid_slime_s | yes | — | — | wiki:wiki_asc/acid_slime.txt | — | §276/§323/INV_ASC_HP+INV_MONSTERS |
 | awakened_one | yes | the_awakened_one_survives_its_first_death_and_then_really_dies, the_awakened_one_draws_phase_one_by_weight_and_flips_on_the_guard …(+5) | — | wiki:wiki_asc/awakened_one.txt | gap §H: ⚠️ `Curiosity` 的触发器（`card.hasTag.power`）在本内容里永不触发 —— 因为卡池 0 张 `power` 牌（§A.1 的观者缺口） | §195.8/§282/INV_ASC_HP+INV_MONSTERS/the_awakened_one_survives_its_first_death_and_then_really_dies |
@@ -100,12 +100,12 @@
 | sentry_3 | yes | a_long_fight_never_reports_a_step_problem | — | wiki:wiki_asc/sentry.txt | — | §134/§323/INV_ASC_HP+INV_MONSTERS/a_long_fight_never_reports_a_step_problem |
 | shelled_parasite | yes | act_two_fights_act_two_enemies | — | wiki:wiki_asc/shelled_parasite.txt | — | §312/§313/INV_ASC_HP+INV_MONSTERS/act_two_fights_act_two_enemies |
 | slaver_red | yes | the_five_elite_encounters_match_the_wiki_numbers, the_composed_encounters_pick_from_their_candidates …(+1) | — | wiki:wiki_asc/slavers.txt | — | §258/INV_ASC_HP+INV_MONSTERS/the_five_elite_encounters_match_the_wiki_numbers |
-| slime_boss | yes | the_slime_boss_splits_on_its_own_turn_not_the_moment_it_is_hurt, every_monster_keeps_moving_and_eventually_attacks …(+3) | — | wiki:wiki_asc/slime_boss.txt | — | §312/§313/INV_ASC_HP+INV_MONSTERS/the_slime_boss_splits_on_its_own_turn_not_the_moment_it_is_hurt |
+| slime_boss | yes | the_slime_boss_splits_on_its_own_turn_not_the_moment_it_is_hurt, split_slimes_can_be_hit_and_show_their_intents …(+4) | — | wiki:wiki_asc/slime_boss.txt | — | §312/§313/INV_ASC_HP+INV_MONSTERS/the_slime_boss_splits_on_its_own_turn_not_the_moment_it_is_hurt |
 | snake_plant | yes | malleable_grows_by_one_per_hit_and_resets_when_the_turn_starts | — | spec:INV_ASC_HP+INV_MONSTERS | — | §312/§313/INV_ASC_HP+INV_MONSTERS/malleable_grows_by_one_per_hit_and_resets_when_the_turn_starts |
 | sneaky_gremlin | yes | — | — | wiki:wiki_asc/sneaky_gremlin.txt | — | §138/§323/INV_ASC_HP+INV_MONSTERS |
 | snecko | yes | act_two_fights_act_two_enemies | — | spec:INV_ASC_HP+INV_MONSTERS | — | §147/§282/INV_ASC_HP+INV_MONSTERS/act_two_fights_act_two_enemies |
 | spheric_guardian | yes | every_monster_keeps_moving_and_eventually_attacks, the_sentry_keeps_one_hp_table_across_two_tiers …(+1) | — | spec:INV_MONSTERS+INV_NO_ASC_HP | 无 AscHP：wiki Spheric Guardian: HP 20, no AscHP column | §313/§315/INV_MONSTERS+INV_NO_ASC_HP/every_monster_keeps_moving_and_eventually_attacks |
-| spike_slime_l | yes | the_slime_boss_splits_on_its_own_turn_not_the_moment_it_is_hurt, the_slime_boss_splits_on_its_turn_through_the_play_path | — | wiki:wiki_asc/spike_slime.txt | — | §313/§400/INV_ASC_HP+INV_MONSTERS/the_slime_boss_splits_on_its_own_turn_not_the_moment_it_is_hurt |
+| spike_slime_l | yes | the_slime_boss_splits_on_its_own_turn_not_the_moment_it_is_hurt, split_slimes_can_be_hit_and_show_their_intents …(+1) | — | wiki:wiki_asc/spike_slime.txt | — | §313/§400/INV_ASC_HP+INV_MONSTERS/the_slime_boss_splits_on_its_own_turn_not_the_moment_it_is_hurt |
 | spike_slime_m | yes | a_large_slime_splits_at_half_health_with_its_current_hp, the_composed_encounters_pick_from_their_candidates | — | wiki:wiki_asc/spike_slime.txt | — | §323/INV_ASC_HP+INV_MONSTERS/a_large_slime_splits_at_half_health_with_its_current_hp |
 | spike_slime_s | yes | a_minion_flees_when_its_master_falls, the_summon_cap_is_a_loud_failure | — | wiki:wiki_asc/spike_slime.txt | — | §282/§323/INV_ASC_HP+INV_MONSTERS/a_minion_flees_when_its_master_falls |
 | spiker | yes | spiker_never_repeats_its_attack_and_buffs_thorns_at_most_six_times, starting_statuses_follow_their_ascension_rows | — | wiki:wiki_asc/shapes.txt | — | §214/§312/INV_ASC_HP+INV_MONSTERS/spiker_never_repeats_its_attack_and_buffs_thorns_at_most_six_times |
@@ -243,7 +243,7 @@
 | slime_boss.goop_spray | yes | a_combinator_rule_switches_the_move | — | wiki:wiki_asc/slime_boss.txt (via slime_boss) | — | §4.3/§411/INV_ACTIONS+INV_ASC_VARIANTS/a_combinator_rule_switches_the_move |
 | slime_boss.preparing | yes | a_combinator_rule_switches_the_move | — | wiki:wiki_asc/slime_boss.txt (via slime_boss) · 仅基础值 | 无升档：wiki Slime Boss: Preparing has no numbers | §4.3/§411/INV_ACTIONS+INV_NO_ASC/a_combinator_rule_switches_the_move |
 | slime_boss.slam | yes | a_combinator_rule_switches_the_move | — | wiki:wiki_asc/slime_boss.txt (via slime_boss) | — | §4.3/INV_ACTIONS+INV_ASC_VARIANTS/a_combinator_rule_switches_the_move |
-| slime_boss.split | yes | a_combinator_rule_switches_the_move, the_slime_boss_splits_on_its_own_turn_not_the_moment_it_is_hurt | — | wiki:wiki_asc/slime_boss.txt (via slime_boss) · 仅基础值 | 无升档：wiki Slime Boss: Split has no A-row | §400/INV_ACTIONS+INV_NO_ASC/a_combinator_rule_switches_the_move |
+| slime_boss.split | yes | a_combinator_rule_switches_the_move, the_slime_boss_splits_on_its_own_turn_not_the_moment_it_is_hurt …(+1) | — | wiki:wiki_asc/slime_boss.txt (via slime_boss) · 仅基础值 | 无升档：wiki Slime Boss: Split has no A-row | §400/INV_ACTIONS+INV_NO_ASC/a_combinator_rule_switches_the_move |
 | snake_plant.chomp_chomp | yes | — | ENEMY_DIFF | spec:INV_ACTIONS+INV_ASC_VARIANTS | — | §312/INV_ACTIONS+INV_ASC_VARIANTS |
 | snake_plant.enfeebling_spores | yes | — | ENEMY_DIFF | spec:INV_ACTIONS+INV_NO_ASC | 无升档：wiki Snake Plant: Spores have no A-row | §312/§316/INV_ACTIONS+INV_NO_ASC |
 | sneaky_gremlin.puncture | yes | — | ENEMY_DIFF | wiki:wiki_asc/sneaky_gremlin.txt (via sneaky_gremlin) | — | INV_ACTIONS+INV_ASC_VARIANTS |
@@ -552,7 +552,7 @@
 | smite+ | yes | — | CARD_DIFF | wiki:wiki_cards/smite.txt (via smite) | — | INV_CARDS |
 | spot_weakness | yes | spot_weakness_follows_the_enemy_intent | — | wiki:wiki_cards/spot_weakness.txt | — | §242/CARD_WIKI+INV_CARDS/spot_weakness_follows_the_enemy_intent |
 | spot_weakness+ | yes | — | CARD_DIFF | wiki:wiki_cards/spot_weakness.txt (via spot_weakness) | — | INV_CARDS |
-| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+205) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+206) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+14) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
@@ -789,7 +789,7 @@
 | enc_shelled_parasite | yes | — | entity_tables_decode_row_by_row …(+12) | — | — | §277/§311 |
 | enc_slaver_red | yes | — | entity_tables_decode_row_by_row …(+12) | — | — | §130/§258 |
 | enc_slavers | yes | the_five_elite_encounters_match_the_wiki_numbers, blue_slaver_never_rakes_twice_in_a_row_at_a17 …(+2) | — | — | — | the_five_elite_encounters_match_the_wiki_numbers |
-| enc_slime_boss | yes | every_act_has_three_bosses_and_each_one_is_a_buildable_encounter, a_combinator_rule_switches_the_move …(+5) | — | — | — | §194/every_act_has_three_bosses_and_each_one_is_a_buildable_encounter |
+| enc_slime_boss | yes | every_act_has_three_bosses_and_each_one_is_a_buildable_encounter, a_combinator_rule_switches_the_move …(+6) | — | — | — | §194/every_act_has_three_bosses_and_each_one_is_a_buildable_encounter |
 | enc_small_slimes | yes | a_spawned_combatant_still_resolves_to_its_enemy_record | — | — | — | §130/a_spawned_combatant_still_resolves_to_its_enemy_record |
 | enc_snake_plant | yes | malleable_grows_by_one_per_hit_and_resets_when_the_turn_starts | — | — | — | §311/§312/malleable_grows_by_one_per_hit_and_resets_when_the_turn_starts |
 | enc_snecko | yes | snecko_never_bites_three_times_in_a_row | — | — | — | §147/§282/snecko_never_bites_three_times_in_a_row |

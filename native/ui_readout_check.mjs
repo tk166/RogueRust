@@ -40,7 +40,9 @@ try {
 
 const page = await openPage({
   page: "web-next/dist/run.html",
-  query: "",
+  // `?debug`：闸门要用药水夹具（`grantPotion`）—— 起手腰带是空的，靠运气抽到恐惧药水
+  // 等于把断言建在随机上。
+  query: "debug",
   gate: GATE,
   viewport: { width: 1280, height: 900 },
   waitFor: "Boolean(window.__run && window.__run.ready)",

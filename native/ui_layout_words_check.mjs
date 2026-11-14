@@ -360,7 +360,8 @@ try {
 
 const page = await openPage({
   page: "web-next/dist/run.html",
-  query: "",
+  // `?debug`：药水夹具（`grantPotion`）只在 debug 页面存在。
+  query: "debug",
   gate: GATE,
   viewport: { width: 1280, height: 900 },
   waitFor: "Boolean(window.__run && window.__run.ready)",
@@ -507,6 +508,56 @@ if ((await ev("window.__run.scene()")).base === "SC-03") {
     JSON.stringify(pair)
   );
 }
+// ── §411：**需要选敌人的药水**必须能选中（玩家报的"恐惧药水卡住"）────────────
+// 判据：点「选目标」⇒ 进入 targeting；点敌人 ⇒ 药水被喝掉 + 敌人多出易伤；之后退出 targeting。
+{
+  const granted = await ev(`window.__run.grantPotion && window.__run.grantPotion("fear_potion")`);
+  if (granted && granted.code === 0) {
+    const potion = (granted.potions ?? []).find((row) => row.id === "fear_potion");
+    const clicked = await ev(`(() => {
+      const node = document.querySelector('[data-potion-use="${potion?.slot}"]');
+      if (!node) return false;
+      node.click();
+      return true;
+    })()`);
+    await sleep(120);
+    const targeting = await ev(
+      `document.querySelector("[data-potion-targeting]")?.dataset.potionTargeting ?? null`
+    );
+    check(clicked && targeting !== null, "点「选目标」进入选敌人状态", String(targeting));
+    const point = await ev(`(() => {
+      const probe = window.__p1;
+      const enemy = probe && probe.layout().enemies[0];
+      return enemy ? { x: enemy.x, y: enemy.y, slot: enemy.slot } : null;
+    })()`);
+    if (point) {
+      const before = await ev("window.__run.combat()");
+      await page.send("Input.dispatchMouseEvent", {
+        type: "mousePressed", x: point.x, y: point.y, button: "left", buttons: 1, clickCount: 1,
+      });
+      await page.send("Input.dispatchMouseEvent", {
+        type: "mouseReleased", x: point.x, y: point.y, button: "left", buttons: 0, clickCount: 1,
+      });
+      await sleep(350);
+      const after = await ev("window.__run.combat()");
+      const left = (await ev("window.__run.screens()")).potions ?? [];
+      const was = before.enemies.find((e) => e.slot === point.slot)?.statuses?.vulnerable ?? 0;
+      const now = after.enemies.find((e) => e.slot === point.slot)?.statuses?.vulnerable ?? 0;
+      check(
+        left.length === 0 && now > was,
+        "点敌人 ⇒ 药水被喝掉、敌人获得易伤（不是卡在选目标）",
+        `药水剩 ${left.length} · 易伤 ${was}→${now}`
+      );
+      check(
+        (await ev(`document.querySelector("[data-potion-targeting]")?.dataset.potionTargeting ?? null`)) === null,
+        "选完之后**退出**选目标状态"
+      );
+    }
+  } else {
+    check(true, "没有药水夹具（跳过药水选目标）");
+  }
+}
+
 for (let steps = 0; steps < 240; steps += 1) {
   const hand = await ev("window.__run.hand()");
   if (!hand || hand.result !== "ongoing") break;
