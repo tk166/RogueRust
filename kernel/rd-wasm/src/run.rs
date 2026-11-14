@@ -13026,6 +13026,51 @@ mod tests {
     // §292：拾取欠账的兑现 + 药水倍率
     // =============================================================================================
 
+    /// §410：**每一件遗物**走真实导出（`rd_run_grant_relic`）之后，**自动兑现的欠账必须清零**。
+    ///
+    /// 这一轮踩到的形状：`calling_bell` 的"再给 3 件遗物"是欠账（`pickup_relics`），
+    /// 而兑现点只挂在部分入口上 ⇒ 玩家拿了铃铛一件都没多。修法之后，判据要**穷尽**：
+    /// 152 件遗物逐一授予，断言 `pickup_relics` / `pickup_potions` 都归零。
+    ///
+    /// ⚠️ **牌**的欠账（`orrery` 的 5 张、`tiny_house` 的 1 张）是**故意**留着的 ——
+    /// 那要玩家自己选牌（`pickup_add`），不属于"自动兑现"，所以不在断言里。
+    #[test]
+    fn every_relic_that_owes_relics_or_potions_settles_them() {
+        let deck = ["strike", "strike", "defend", "defend", "bash"];
+        // 用现成的 `relic_pool`（它按 `REL` 表逐行读 id）—— 不用另写一份表遍历。
+        let relics: Vec<&'static str> = relic_pool(content()).into_iter().map(|r| r.id).collect();
+        assert!(relics.len() > 100, "the content must expose its relic table");
+        let mut granted = 0;
+        for id in relics {
+            test_run(7, 80, 80, &deck);
+            let code = unsafe { rd_run_grant_relic(id.as_ptr(), id.len() as i32) };
+            if code != 0 {
+                // 内核不认识的遗物 ⇒ 由内容闸门负责（这里只关心"欠账有没有人付"）。
+                continue;
+            }
+            granted += 1;
+            let state = &run_slot().as_ref().expect("a run").state;
+            assert_eq!(
+                state.pickup_relics(),
+                0,
+                "granting {id} left {} relic(s) owed — some path forgot to settle",
+                state.pickup_relics()
+            );
+            // ⚠️ 药水的欠账**允许留着**：腰带只有 3 格，`settle_pickup_debts` 只在有空位时兑现
+            // （`cauldron` 要酿 5 瓶 ⇒ 必然剩 2 瓶欠账，这是设计不是 bug）。
+            // 判据因此是"要么付清、要么腰带真的满了"。
+            let belt_full = state.potions().len() >= usize::from(state.potion_slots());
+            assert!(
+                state.pickup_potions() == 0 || belt_full,
+                "granting {id} left {} potion(s) owed while the belt has room ({} / {})",
+                state.pickup_potions(),
+                state.potions().len(),
+                state.potion_slots()
+            );
+        }
+        assert!(granted > 100, "most relics must be grantable, got {granted}");
+    }
+
     /// §401：**Boss 遗物也是遗物入口** —— `calling_bell`（召唤铃铛）从 Boss 奖励里拿到时，
     /// 它的"再给 3 件遗物"是欠账（`pickup_relics`），必须在**这条**路径上兑现。
     ///

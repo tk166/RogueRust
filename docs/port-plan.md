@@ -27060,3 +27060,65 @@ id 只是字符串 ⇒ 兼容模式等于把另一份内容的档放进来到后
 闸门 **57**（不变）；内核 819 + 233 + **196**（+2：无形过期、守护者离开防御态）；
 内容闸门 `[7e] timed statuses` 仍盯 7 条 + 无形（`status.standard.intangible` 的 `UsesDuration`
 由内核测试守）；wasm 1,376,169 B。
+
+---
+
+## §410 机制审计：把"一个个试"换成**可重跑的扫描**
+
+玩家说"数量众多一个个试不现实"。这一轮之前踩过的 bug 其实只有**五类形状**，所以把它们做成
+脚本 + 两条行为测试，而不是继续凭运气撞。
+
+### 410.1 静态扫描：`native/audit_mechanics.py`（闸门 58）
+
+| 类 | 判据 | 这一轮的结果 |
+|---|---|---|
+| **A1** | 施加点写了 `DurationTurns > 0`，但状态定义 `UsesDuration = false`（时长白写） | 19 处全 timed ✅（`intangible` 已修） |
+| **A2** | 说明里有"这一回合/下一回合/到期"，却施加了永久状态 | 12 条**人工复核清单**（都是每回合触发的 power：metallicize / combust / omega / nightmare_pending / blur / flex 的 strength 那一半） |
+| **A3** | 内容用到的 `Triggers[].Event`，内核必须**真的派发** | 14 个事件全通 ✅ |
+| **B1** | 意图规则的条件计数器"能不能翻回 false" | 61 只怪全通 ✅（Guardian 的 `mode_shift_budget` 已修） |
+| **B2** | 规则引用的动作必须存在 | 全通 ✅ |
+| **C1** | **意图种类 vs 实际节目**：打伤害 ⇒ 必须 Attack；Attack ⇒ 必须有伤害；标签写 damage ⇒ 必须有伤害节点 | 167 个动作全通 ✅（修了 3 个，见下） |
+
+⚠️ **三个判据的第一版都是错的**，写在这里免得下次重犯：
+* A3 第一版数 `CombatEvent::X`，而 `FoeDowned` **没有** `CombatEvent` 变体（它是 `Downed` 处理器
+  里派生给另一阵营的）⇒ 把 `gremlin_horn` / `the_specimen` 误报成"内核从不发出"。
+  正确判据是 `TriggerEvent::X`；
+* B1 第一版只看怪物的 `Actions` 列表 ⇒ 相位计数器往往由**规则里那个动作**自己写
+  （`the_champ.anger` 写 `champ_phase`），而状态**触发器**也会写（`ritual` 写 `ritual_owner_turns`）
+  ⇒ 一口气误报 12 条。修法是把"规则/权重引用的动作"和"动作能施加的状态"都算进可达集合；
+* 我自己一度以为"29 只怪读 `last_move` 但只有 4 个动作写" —— 那是**我的正则太严**（只匹配了
+  一种 `Amount` 形状）。实际 99 个动作都写了 `last_move`/`prev_move`。**扫描脚本的正则也是代码，
+  也要被怀疑**。
+
+### 410.2 行为扫描：`every_monster_keeps_moving_and_eventually_attacks`
+
+静态判据看不了"行为"。这条测试对**每一只怪**跑 12 轮（问意图 → 执行 → 打它 10 点 → 清掉它
+召出来的小怪），断言：
+1. **非攻击动作**不连续重复超过 6 次（防御态/Buff 卡死就是这种；攻击连打是设计 ——
+   Giant Head 的 It Is Time、Transient 的唯一攻击）；
+2. 12 轮里至少有一次**攻击意图**（白名单：`spheric_guardian` 前两轮 buff/debuff）。
+
+⚠️ 两个夹具陷阱（都真的误报过）：
+* 不清小怪 ⇒ Reptomancer 的召唤撞上敌人容量上限 ⇒ 动作节目**在写 `last_move` 之前就中断**
+  ⇒ 轮转规则永远不匹配 ⇒ 看起来像卡住；
+* 判"卡住"时若只看长度，会把 `giant_head.it_is_time`（设计上连打）也报进来。
+
+### 410.3 扫描抓到并修掉的三条真 bug
+
+| 发现 | 症状 | 修法 |
+|---|---|---|
+| **`gremlin_wizard.charging` 什么都不写** | 巫师永远蓄力、**永远不放炮**（`ultimate_blast` 的条件 `charges >= 3` 永不成立） | `charging` 改成 `gremlin_wizard_charges += 1`（相对） |
+| **`deca.beam` 意图是 `Debuff`** | 它真的打 10×2，玩家却看到"减益"图标 | 意图改 `Attack` |
+| **`exploder.explode` 意图是 `Unknown`** | 它真的打 30 点，图标却是"未知" | 意图改 `Attack` |
+| **`sentry.bolt` 意图是 `Attack` 且标签写"10 damage"** | 它**不造成伤害**，只塞 2 张眩晕 ⇒ 玩家以为要挨 10 点 | 意图改 `Special`，标签改成"塞 2 张眩晕" |
+
+### 410.4 拾取遗物：**穷尽**一遍
+
+`every_relic_that_owes_relics_or_potions_settles_them`：152 件遗物逐一走**真实导出**
+（`rd_run_grant_relic`），断言 `pickup_relics == 0`；药水那一半断言"要么付清、要么腰带真的满了"
+（`cauldron` 要酿 5 瓶，腰带只有 3 格 ⇒ 剩 2 瓶欠账是**设计**）。
+
+### 410.5 数字
+
+闸门 **58**（新增 `mechanics-audit`）；内核 819 + 233 + **198**（+2：怪物行为扫描、遗物穷尽扫描）；
+wasm 1,376,321 B；内容闸门期望更新 4 处（巫师蓄力、三处意图种类）。

@@ -4018,6 +4018,149 @@ mod tests {
         );
     }
 
+    /// §410：**每只怪都会动、而且会打人** —— 行为层面的"卡住"扫描。
+    ///
+    /// 静态扫描（`native/audit_mechanics.py` 的 B1）只能看"条件里的计数器有没有可翻面的写入"。
+    /// Guardian 那个 bug 的**症状**是行为：连续每回合都选同一个动作、而且从不攻击。
+    /// 所以这条测试对**每一只怪**跑 12 轮：每轮问意图 → 执行 → 打它 10 点（触发相位切换），
+    /// 然后断言：
+    /// ① 同一个动作**不连续**超过 6 次（12 轮里一半 —— 再长就不是设计了）；
+    /// ② 12 轮里**至少有一次攻击意图**（`intentKind == Attack`），除非它在白名单里
+    ///    （设计上不打人的：`looter`/`mugger` 会逃、`spheric_guardian` 前两轮是 buff/debuff…）。
+    ///
+    /// ⚠️ 这条测试**不**追求"数值正确"，它守的是"这个怪的相位不会卡死"。
+    #[test]
+    fn every_monster_keeps_moving_and_eventually_attacks() {
+        // 设计上 12 轮里可能一次都不攻击的（前两轮 buff/debuff，之后才开始打）。
+        const NO_ATTACK_OK: &[&str] = &["spheric_guardian"];
+        let image = rd_core::content::Content::parse(crate::IMAGE).expect("image");
+        let content: &'static rd_core::content::Content<'static> = Box::leak(Box::new(image));
+        // 每个怪物找一个包含它的遭遇（`enc_*`），用它建局。
+        let mut checked = 0usize;
+        let mut stuck = Vec::new();
+        let mut never_attacked = Vec::new();
+        // 遭遇表：与 `rd_run` 里读 `ENCT` 的写法一致（`content.rows(Table::Encounter)`）。
+        let encounter_ids: Vec<&'static str> = content
+            .rows(rd_core::content::Table::Encounter)
+            .filter_map(|row| {
+                rd_core::content::EnctRow::new(row)
+                    .and_then(|enct| content.string(enct.id()))
+            })
+            .collect();
+        for (index, encounter) in encounter_ids.iter().enumerate() {
+            let index = index as u32;
+            let encounter = *encounter;
+            let Ok(session) = build_session_at(7, encounter, 400, None, 0, 0) else { continue };
+            let roster = session.enemy_roster();
+            for (slot_index, raw) in roster.iter().enumerate() {
+                let definition = raw.as_str().split('#').next().unwrap_or(raw.as_str()).to_string();
+                if definition.contains("slime_") && definition != "slime_boss" {
+                    continue; // 分裂出来的小史莱姆没有 authored 动作表
+                }
+                let Ok(actor) = rd_core::state::CombatantId::new(raw.as_str()) else { continue };
+                let Ok(Some(at)) = rd_core::intent::locate_enemy(content, index, &actor) else {
+                    continue;
+                };
+                let mut session = match build_session_at(7, encounter, 400, None, 0, 0) {
+                    Ok(s) => s,
+                    Err(_) => continue,
+                };
+                let mut picks: Vec<(String, bool)> = Vec::new();
+                let mut attacked = false;
+                for round in 1..=12 {
+                    session.state.current_round = round;
+                    if session.state.combatant(&actor).is_none() {
+                        break;
+                    }
+                    let Ok(Some(choice)) =
+                        rd_core::intent::select_action(&session.state, content, at, &actor, round)
+                    else {
+                        break;
+                    };
+                    let is_attack = choice.intent_kind == Some(rd_core::intent::IntentKind::Attack);
+                    picks.push((choice.action_id.to_string(), is_attack));
+                    if is_attack {
+                        attacked = true;
+                    }
+                    let _ = rd_core::intent::execute_action(
+                        &mut session.state, content, &actor, choice.action_row, None,
+                    );
+                    // 打它 10 点：相位切换（Guardian 的预算、Champ 的血线）都靠伤害触发。
+                    if let Some(combatant) = session.state.combatant_mut(&actor) {
+                        combatant.health_current = (combatant.health_current - 10).max(1);
+                    }
+                    // ⚠️ 顺手**清掉它召出来的小怪**：不然召唤类（Reptomancer 的匕首）会在
+                    // 敌人容量上限上反复失败，动作节目**在写 `last_move` 之前就中断** ⇒
+                    // 轮转规则永远不匹配 ⇒ 看起来像"卡住"。第一版就是这么误报的。
+                    let minions: Vec<rd_core::state::CombatantId> = session
+                        .state
+                        .combatants()
+                        .iter()
+                        .filter(|c| c.id != actor && c.team_id.as_str() == "enemy")
+                        .filter(|c| c.lifecycle_state == rd_core::state::CombatantLifecycleState::Alive)
+                        .map(|c| c.id)
+                        .collect();
+                    for minion in minions {
+                        if let Some(combatant) = session.state.combatant_mut(&minion) {
+                            combatant.health_current = 0;
+                            combatant.lifecycle_state =
+                                rd_core::state::CombatantLifecycleState::Downed;
+                        }
+                    }
+                }
+                if picks.len() < 12 {
+                    continue; // 这只怪在 12 轮内就没了（分裂/自毁），不判"卡住"
+                }
+                checked += 1;
+                let mut run_len = 1usize;
+                let mut worst = 1usize;
+                for pair in picks.windows(2) {
+                    if pair[0].0 == pair[1].0 {
+                        run_len += 1;
+                        worst = worst.max(run_len);
+                    } else {
+                        run_len = 1;
+                    }
+                }
+                // 卡住 = **非攻击**动作连续重复太多次（防御态/Buff 卡死就是这种）。
+                // 攻击动作连续重复是设计（Giant Head 的 It Is Time、Transient 的唯一攻击），
+                // 所以按"最长的那一段是不是攻击"来判，而不是只看长度。
+                if worst > 6 {
+                    // 最长那一段是哪个动作、它是不是攻击（`intent_kind` 选的时候就记下了）。
+                    let mut best_run = 1usize;
+                    let mut best_start = 0usize;
+                    let mut run_len = 1usize;
+                    for index in 1..picks.len() {
+                        if picks[index].0 == picks[index - 1].0 {
+                            run_len += 1;
+                            if run_len > best_run {
+                                best_run = run_len;
+                                best_start = index + 1 - run_len;
+                            }
+                        } else {
+                            run_len = 1;
+                        }
+                    }
+                    let (repeated, is_attack) = picks[best_start].clone();
+                    if !is_attack {
+                        stuck.push(format!("{definition}: {repeated} ×{best_run}"));
+                    }
+                }
+                if !attacked && !NO_ATTACK_OK.contains(&definition.as_str()) {
+                    let head: Vec<&str> = picks.iter().take(4).map(|(id, _)| id.as_str()).collect();
+                    never_attacked.push(format!("{definition}: {head:?}"));
+                }
+                let _ = slot_index;
+            }
+        }
+        assert!(checked >= 20, "the sweep must cover most monsters, got {checked}");
+        assert!(stuck.is_empty(), "these monsters get stuck on one move: {stuck:?}");
+        assert!(
+            never_attacked.is_empty(),
+            "these monsters never attacked in 12 rounds: {never_attacked:?}"
+        );
+    }
+
     /// §408：**无形（Intangible）会过期**（玩家报的"香炉一直在生效、伤害始终只有 1"）。
     ///
     /// `standard.intangible` 原来 `UsesDuration = false` ⇒ 内核的时长衰减整段跳过它 ⇒

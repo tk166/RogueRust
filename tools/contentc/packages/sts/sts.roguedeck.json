@@ -31974,7 +31974,7 @@
       "Id": "gremlin_wizard.charging",
       "PackageId": "sts",
       "NameKey": "Charging",
-      "DescriptionKey": "Charging — no effect",
+      "DescriptionKey": "Charging — charges up (3 charges, then Ultimate Blast)",
       "Intent": {
         "Kind": "Special",
         "Label": "Charging — no effect"
@@ -31986,7 +31986,31 @@
         "Root": {
           "kind": "node.sequence",
           "value": {
-            "Children": []
+            "Children": [
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "gremlin_wizard_charges"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "Relative": true,
+                  "ResultKey": null
+                }
+              }
+            ]
           }
         },
         "MaxNodeDepth": 64,
@@ -32128,8 +32152,8 @@
       "NameKey": "Bolt",
       "DescriptionKey": "Bolt — 10 damage",
       "Intent": {
-        "Kind": "Attack",
-        "Label": "Bolt — 10 damage"
+        "Kind": "Special",
+        "Label": "Bolt — adds 2 Dazed into your discard pile"
       },
       "Program": {
         "Id": {
@@ -45724,7 +45748,7 @@
       "NameKey": "Beam",
       "DescriptionKey": "Beam - 10 damage x2, 2 Dazed into your discard pile",
       "Intent": {
-        "Kind": "Debuff",
+        "Kind": "Attack",
         "Label": "Beam - 10 damage x2, 2 Dazed into your discard pile"
       },
       "Program": {
@@ -55903,7 +55927,7 @@
       "NameKey": "Explode",
       "DescriptionKey": "Explode - 30 damage, dies",
       "Intent": {
-        "Kind": "Unknown",
+        "Kind": "Attack",
         "Label": "Explode - 30 damage, dies"
       },
       "Program": {

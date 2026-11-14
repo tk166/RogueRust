@@ -1049,7 +1049,8 @@ INV_ACTIONS = {
     "repulsor.daze": ("Debuff", [("card", "dazed", 2, "DrawPile", "event")]),
     "repulsor.attack": ("Attack", [("damage", 11, "event")]),
     "exploder.attack": ("Attack", [("damage", 9, "event")]),
-    "exploder.explode": ("Unknown", [("damage", 30, "event"), ("destroy", "source")]),
+    # §411：Explode 真的打 30 点 ⇒ 意图必须是 Attack（旧内容是 Unknown）。
+    "exploder.explode": ("Attack", [("damage", 30, "event"), ("destroy", "source")]),
     # §314: Mugger —— 与 Looter 同一套形状（`stolen_gold` 每次都 +15，A17 起 +20 在下面那张表里）。
     "mugger.mug": ("Attack", [("damage", 10, "event"),
                               ("counter", "stolen_gold", 15, True, "source")]),
@@ -1223,7 +1224,9 @@ INV_ACTIONS = {
                                  ("block", 6, "source")]),
     "cultist.incantation": ("Buff", [("status", "ritual", 3, "source")]),
     "cultist.dark_strike": ("Attack", [("damage", 6, "event")]),
-    "gremlin_wizard.charging": ("Special", []),
+    # §411：Charging **累加**充能数（`ultimate_blast` 的条件是 >=3）。旧内容这一格是空的
+    # ⇒ 巫师永远蓄力、永远不放炮（一只"不会攻击"的怪）。
+    "gremlin_wizard.charging": ("Special", [("counter", "gremlin_wizard_charges", 1, True, "source")]),
     "slime_boss.goop_spray": ("Special", [("card", "slimed", 3, "DiscardPile", "event")]),
     "slime_boss.preparing": ("Special", []),
     "slime_boss.slam": ("Attack", [("damage", 35, "event")]),
@@ -1232,7 +1235,9 @@ INV_ACTIONS = {
     "slime_boss.split": ("Special", [("spawn", "acid_slime_l", ("expr", "currentHealth")),
                                      ("spawn", "spike_slime_l", ("expr", "currentHealth")),
                                      ("destroy", "sourceDowned")]),
-    "sentry.bolt": ("Attack", [("card", "dazed", 2, "DiscardPile", "event")]),
+    # §411：Bolt **不造成伤害**（只塞 2 张眩晕）⇒ 意图不是 Attack。旧标签写"10 damage"，
+    # 玩家会以为要挨 10 点。
+    "sentry.bolt": ("Special", [("card", "dazed", 2, "DiscardPile", "event")]),
     "sentry.beam": ("Attack", [("damage", 9, "event")]),
     "gremlin_wizard.ultimate_blast": ("Attack", [
         ("damage", 25, "event"),
@@ -1396,7 +1401,8 @@ INV_ACTIONS = {
     # --- Donu / Deca (wiki: Beam 10x2 both, Circle of Power +3 Str, Square 16 Block) --------------
     "donu.circle_of_power": ("Buff", [("status", "standard.strength", 3, "allAllies")]),
     "donu.beam": ("Attack", [("damage", 10, "event"), ("damage", 10, "event")]),
-    "deca.beam": ("Debuff", [("damage", 10, "event"), ("damage", 10, "event"),
+    # §411：Beam 打 10×2（外加 2 张眩晕）⇒ 意图是 Attack，不是 Debuff。
+    "deca.beam": ("Attack", [("damage", 10, "event"), ("damage", 10, "event"),
                              ("card", "dazed", 2, "DiscardPile", "event")]),
     "deca.square_of_protection": ("Defend", [("block", 16, "allAllies")]),
 }
