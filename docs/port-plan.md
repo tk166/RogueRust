@@ -26975,3 +26975,88 @@ Split**"* —— 变的是**意图**；分裂由它在自己回合打出 `slime_
 闸门 **57**（`ui-layout-words` 29 → 31 条断言）；内核测试 819 + 233 + 194；
 内容闸门新增 `[7d] turn-end zone` / `[7e] timed statuses`；
 wasm 1,375,998 B；状态 150 → 149（删掉不再使用的 `phase_split`）；敌人动作 166 → 167。
+
+---
+
+## §408–§409 玩家第六轮：无形永不过期、守护者卡防御态、铃铛（这次真的）没给遗物
+
+三条报障。第一条与第二条是**同一个根因**（无形永不消失 ⇒ 伤害恒为 1 ⇒ 打不死），
+第三条是**我上一轮把修复自己关掉了**还提交了。
+
+### 408 ①无形（Intangible）永不过期（#1 + #2 的一半）
+
+`standard.intangible` 的 `UsesDuration` 是 **false**，而内核的时长衰减先问这一格
+（`host::try_decrease_timed_statuses` → `status_bind::uses_duration`）。false 就整段跳过
+⇒ 所有施加点写的 `DurationTurns` 都是白写。
+
+后果正是玩家描述的两件事：
+
+* **香炉**每 6 回合再给 1 层无形，而它永不过期 ⇒ 第 6 回合之后**一直**是无形；
+* 无形把一切伤害压成 1 ⇒ "尖刺叠加、伤害始终只有 1"（配合下面的守护者 bug 就成了打不死）。
+
+修法：`UsesDuration = true` + 所有施加点 `DurationTurns = 1`
+（`apparition` / `apparition+` / `phantom_veil` 触发器 / `incense_burner` 触发器）。
+
+> ★ **为什么上一轮（§400）漏了它**：那次我是按"**已经写了** `DurationTurns > 0` 但
+> `uses = false`"扫的，而 intangible 的每一处施加点写的都是 `DurationTurns: 0`
+> ⇒ 正好扫不到。审计要按**语义**（wiki 说它什么时候消失）扫，不能只按"已经写了时长"扫。
+
+### 408.2 ②守护者（The Guardian）卡在防御态（#2）
+
+内容是"预算"设计：`mode_shift_budget` 被打空 ⇒ 规则 **80** 选 `defensive_mode`；
+防御态的三回合由 `guard_step` 驱动（roll_attack → twin_slam → whirlwind），
+`whirlwind` 把 `guard_mode` 归零回到进攻态。
+
+两个洞：
+
+1. **规则 80 压过 70，而 budget 永不重置**（只有 `+10`）⇒ 一旦被打到 ≤0 就**每回合**都选
+   `defensive_mode` ⇒ 每回合 +3 尖刺、永远不打人；
+2. 规则 80 没有 `guard_mode == 0` 的前置 ⇒ 在防御态里也照样重进。
+
+wiki（`The Guardian`）：*"Mode Shift: After taking 30 damage in a **single turn**, gains 20 Block
+and switches to Defensive Mode. After 3 turns, returns to Offensive Mode."*
+
+修法：`standard.mode_shift` 加 **TurnStarted** 触发器（`mode_shift_budget = 30`，即"一回合内
+30 点"）+ 规则 80 加 `guard_mode == 0`。
+⚠️ 偏差：A9/A19 的 35/40 只体现在**初始**值上，每回合重置用的是 30。
+
+判据：`the_guardian_leaves_defensive_mode_after_three_turns` —— 打空预算 → 进防御态 →
+三回合必须是 roll_attack / twin_slam / whirlwind → 之后**回到进攻循环**；
+再把预算压到 −5 并跑一次 TurnStarted ⇒ 必须重置成 30 且**不**再进防御态。
+（写这条测试时踩了一次"只选意图、不执行动作"——计数器不动，于是每轮都还是 defensive_mode。）
+
+### 408.3 ③召唤铃铛"依旧"没有三件遗物（#3）—— 我把修复自己关掉了
+
+上一轮（§403）我加了 `settle_pickup_debts()` 到 `rd_run_take_boss_relic`，但为了定位另一个
+测试的失败，我临时把它注释成 `// TEMP disabled`，然后用 `.git/run.mine.rs` 覆盖回工作区
+—— **那个覆盖把注释版本带回来了**，而我随后**没有重新验证就提交**了。
+所以 `d2f9991` 里那三处真的是 `// TEMP disabled`：玩家的"依旧没有"是**完全正确**的。
+
+更糟的是**测试没抓住它**：我那条 `a_boss_relic_that_owes_relics_pays_them` 是**手动**调
+`settle_pickup_debts()` 的，而不是走 `rd_run_take_boss_relic` 导出 —— 于是"导出里那行被注释掉"
+照样绿。改成走真实导出之后，测试立刻红（`pickup_relics` 仍是 3）。
+
+> ★★ 两条教训：
+> 1. **临时关掉的代码不许进提交**：要么删掉临时改动再提交，要么提交前 `grep TEMP`；
+> 2. **测试必须走玩家走的那条路**（这里是 wasm 导出），手动调内部函数只能证明"内部函数对"。
+
+现在三处（Boss 遗物 / 挖宝 / 事件给遗物）都是真调用，且判据走导出：
+`a_boss_relic_that_owes_relics_pays_them` 先找一个三选一里真有铃铛的种子，
+再 `rd_run_take_boss_relic(slot)`，断言 `pickup_relics() == 0` 且遗物 +4。
+浏览器端也验过：铃铛 + 三件 = 1 → 5 件。
+
+### 409 存档与内容的绑定：试过放宽，**撤回了**
+
+玩家连续三轮给的存档都因为"内容变了"被拒（每次内容修正都会换指纹），所以试过
+"指纹不同也读进来（兼容模式）"。**撤回**：存档层（`archive.rs`）是 `no_std` 且**不认识内容**，
+id 只是字符串 ⇒ 兼容模式等于把另一份内容的档放进来到后面才炸（`UnknownCard` 一类），
+而那正是 §166 这条检查存在的理由。要放宽得把内容句柄传进来逐 id 核对，是一次真重构。
+
+现在只把**拒绝信息**说清楚（"内容变了，从当前构建重新导出"），并在 `native/replay_save.mjs`
+里保持"落盘再读"的流程（FACT.md §8.6）。
+
+### 409.1 数字
+
+闸门 **57**（不变）；内核 819 + 233 + **196**（+2：无形过期、守护者离开防御态）；
+内容闸门 `[7e] timed statuses` 仍盯 7 条 + 无形（`status.standard.intangible` 的 `UsesDuration`
+由内核测试守）；wasm 1,376,169 B。

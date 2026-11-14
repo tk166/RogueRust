@@ -117,7 +117,7 @@ impl core::fmt::Display for ArchiveError {
             Self::BadVersion => f.write_str("archive version is not supported"),
             Self::ContentMismatch { archive, build } => write!(
                 f,
-                "archive is from another content build (archive {:08x}, this build {:08x})",
+                "archive is from another content build (archive {:08x}, this build {:08x}) —                  the content changed since this save was made; re-export from the running build",
                 *archive as u32, *build as u32
             ),
             Self::BadField(what) => write!(f, "archive field {what} is not valid"),
@@ -726,6 +726,11 @@ fn write_payload(state: &RunState, content: i32, payload: &mut [u8]) -> Result<u
 }
 
 /// 从 `payload` 还原一局。**全有或全无**。
+///
+/// ⚠️ §409 试过"指纹不同也读进来（兼容模式）"，**撤回了**：存档层不认识内容，id 只是字符串
+/// ⇒ 兼容模式等于把"另一份内容的档"放进来到后面才炸（`UnknownCard` 一类），而那正是 §166
+/// 这条检查存在的理由。要放宽，得把内容句柄传进来逐 id 核对（`archive` 是 `no_std` 且与内容
+/// 解耦，这是一次真重构），不是在这里开个开关。
 fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, ArchiveError> {
     let mut reader = Reader { buf: payload, at: 0 };
     if reader.byte()? != VERSION {

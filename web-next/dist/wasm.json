@@ -1,6 +1,6 @@
 {
  "note": "复制自 web/rd_wasm.wasm（唯一构建产物）。装载时比对 sha256；不一致就拒绝启动。",
  "source": "web/rd_wasm.wasm",
- "bytes": 1375998,
- "sha256": "c54782ea5c2bed5a3c1a01a0b259ac4a08e08a6e5a33316060102b9150164b09"
+ "bytes": 1376169,
+ "sha256": "d6ffe9a3a06205cf4c0b3b7e9bd4126b0e6bc9f6db3e3d53431308d4c184bf7c"
 }

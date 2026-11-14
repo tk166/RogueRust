@@ -4295,7 +4295,10 @@ def check_statuses(doc):
                         "standard.curiosity": ["CardPlayed"],
                         # §195.1: "after losing X HP" is a `DamageTaken` trigger (the event now carries
                         # the amount).
-                        "standard.mode_shift": ["DamageTaken"],
+                        # §408：Mode Shift 的 budget 是"**一回合内** 30 点"（wiki），所以每回合
+                        # 开始时重置 —— 少了这条 TurnStarted，budget 一旦被打到 ≤0 就永远 ≤0，
+                        # 规则 80 每回合都选 defensive_mode（一直加尖刺、永不攻击）。
+                        "standard.mode_shift": ["DamageTaken", "TurnStarted"],
                         # §195.4: "on death, the stolen card is returned" -- a Downed trigger.
                         "standard.stasis": ["Downed"],
                         # §216: Slow has **no** trigger any more -- the count lives in the kernel's

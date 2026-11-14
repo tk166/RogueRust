@@ -4018,6 +4018,156 @@ mod tests {
         );
     }
 
+    /// §408：**无形（Intangible）会过期**（玩家报的"香炉一直在生效、伤害始终只有 1"）。
+    ///
+    /// `standard.intangible` 原来 `UsesDuration = false` ⇒ 内核的时长衰减整段跳过它 ⇒
+    /// 香炉每 6 回合叠一层、永不消失。判据两侧：① 定义必须是 timed；② 拿一层无形之后
+    /// 结束回合，它必须消失（而不是一直挂着）。
+    #[test]
+    fn intangible_expires_at_the_end_of_the_turn() {
+        let image = rd_core::content::Content::parse(crate::IMAGE).expect("the image parses");
+        assert!(
+            rd_core::status_bind::uses_duration(&image, "standard.intangible").unwrap_or(false),
+            "intangible must be declared as timed, or it never expires"
+        );
+
+        static DECK: [DeckEntry<'static>; 1] = [DeckEntry { card: "defend", count: 10 }];
+        let mut session = build_session_at(7, "enc_cultist", 80, Some(&DECK), 0, 0)
+            .expect("the fight builds");
+        let hero = session.hero_id().expect("a hero");
+        let has = |session: &Session| -> bool {
+            session
+                .state
+                .combatant(&hero)
+                .map(|c| c.statuses().iter().any(|s| s.definition_id.as_str() == "standard.intangible"))
+                .unwrap_or(false)
+        };
+        // 手动挂一层 1 回合的无形（香炉/幽魂形态走的是同一条 applyStatus）。
+        {
+            let instance = rd_core::state::StatusInstance::new(
+                rd_core::state::StatusInstanceId::new("st_intangible").expect("id"),
+                rd_core::state::StatusDefinitionId::new("standard.intangible").expect("def"),
+                rd_core::state::StatusPolarity::Buff,
+            )
+            .with_stacks(1)
+            .with_duration_turns(1);
+            session
+                .state
+                .combatant_mut(&hero)
+                .expect("the hero")
+                .push_status(instance)
+                .expect("push");
+        }
+        assert!(has(&session), "intangible is on the hero");
+        session.step_end_turn().expect("the turn ends");
+        assert!(
+            !has(&session),
+            "intangible must be gone after the turn ends (it is a one-turn buff)"
+        );
+    }
+
+    /// §408：**守护者不会卡在防御态**（玩家报的"一直加尖刺、不攻击不防御"）。
+    ///
+    /// 内容是"预算"设计：`mode_shift_budget` 被打空 ⇒ 规则 80 选 `defensive_mode`；
+    /// 防御态的三回合由 `guard_step` 驱动（roll_attack → twin_slam → whirlwind），
+    /// whirlwind 把 `guard_mode` 归零回到进攻态。
+    ///
+    /// 旧内容的两个洞：① budget **永不重置**（只有 `+10`）⇒ 一旦 ≤0 就每回合都进防御态；
+    /// ② 规则 80 没有 `guard_mode == 0` 的前置 ⇒ 在防御态里也照样重进。
+    /// 判据：budget 打空后进一次防御态，接着三回合必须是 roll_attack / twin_slam / whirlwind，
+    /// 然后**回到进攻循环**（而不是继续 defensive_mode）。
+    #[test]
+    fn the_guardian_leaves_defensive_mode_after_three_turns() {
+        let session_content = rd_core::content::Content::parse(crate::IMAGE).expect("image");
+        let content: &'static rd_core::content::Content<'static> =
+            Box::leak(Box::new(session_content));
+        let mut session = build_session_at(7, "enc_the_guardian", 80, None, 0, 0)
+            .expect("the guardian builds");
+        let boss = rd_core::state::CombatantId::new("the_guardian").expect("id");
+        // 把预算打空（"一回合内吃 30 点"）。
+        {
+            let combatant = session.state.combatant_mut(&boss).expect("the guardian");
+            combatant.set_counter(
+                rd_core::state::CounterId::new("mode_shift_budget").expect("key"),
+                0,
+            )
+            .expect("set");
+        }
+        // 之后每回合问一次意图；第一轮进防御态，随后三步必须是 roll_attack / twin_slam / whirlwind。
+        let mut picks = Vec::new();
+        for round in 1..=5 {
+            session.state.current_round = round;
+            // ⚠️ 第二个参数是**遭遇索引**（`Session::encounter`），不是 0 ——
+            // 第一版传 0 就 "the guardian is in the encounter" 失败（0 号是别的遭遇）。
+            let at = rd_core::intent::locate_enemy(content, session.encounter, &boss)
+                .ok()
+                .flatten()
+                .expect("the guardian is in the encounter");
+            let choice = rd_core::intent::select_action(&session.state, content, at, &boss, round)
+                .expect("select")
+                .expect("an action");
+            picks.push(choice.action_id.to_string());
+            // ⚠️ **必须真的执行**：防御态的推进靠动作自己写 `guard_mode` / `guard_step`
+            // （只选不执行，计数器永远不动，于是每轮都还是 defensive_mode —— 第一版就是这样）。
+            rd_core::intent::execute_action(&mut session.state, content, &boss, choice.action_row, None)
+                .expect("the action resolves");
+        }
+        assert_eq!(
+            picks[0], "the_guardian.defensive_mode",
+            "an empty budget enters Defensive Mode"
+        );
+        assert_eq!(
+            &picks[1..4],
+            &["the_guardian.roll_attack", "the_guardian.twin_slam", "the_guardian.whirlwind"],
+            "the three defensive turns: {picks:?}"
+        );
+        assert!(
+            !picks[4].contains("defensive_mode"),
+            "after whirlwind it must be back to the offensive cycle, got {picks:?}"
+        );
+
+        // ③ **预算每回合重置**（"一回合内 30 点"）。没有这条，budget 一旦被打成负数就永远
+        // 负数 ⇒ 每回合都重新进防御态（就是玩家看到的"一直在加尖刺"）。
+        {
+            let combatant = session.state.combatant_mut(&boss).expect("the guardian");
+            combatant
+                .set_counter(
+                    rd_core::state::CounterId::new("mode_shift_budget").expect("key"),
+                    -5,
+                )
+                .expect("drain");
+        }
+        let mut host = rd_core::host::Host::new(content);
+        host.try_run_turn_started_triggers(&mut session.state, &boss)
+            .expect("turn start");
+        let budget = session
+            .state
+            .combatant(&boss)
+            .expect("the guardian")
+            .counters()
+            .iter()
+            .find(|c| c.key.as_str() == "mode_shift_budget")
+            .map(|c| c.value);
+        assert_eq!(
+            budget,
+            Some(30),
+            "TurnStarted must reset the mode-shift budget to 30 (per-turn damage window)"
+        );
+        session.state.current_round = 6;
+        let at = rd_core::intent::locate_enemy(content, session.encounter, &boss)
+            .ok()
+            .flatten()
+            .expect("the guardian is in the encounter");
+        let next = rd_core::intent::select_action(&session.state, content, at, &boss, 6)
+            .expect("select")
+            .expect("an action");
+        assert_ne!(
+            next.action_id.to_string(),
+            "the_guardian.defensive_mode",
+            "a reset budget must NOT re-enter Defensive Mode"
+        );
+    }
+
     /// §400：**真实出牌路径**下，史莱姆老大在 50% 之后**它的回合**才分裂。
     ///
     /// 旧语义（§395）是"掉血到 50% 立刻分裂"，那是 `standard.phase_split` 的 DamageTaken

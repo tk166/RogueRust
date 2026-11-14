@@ -1322,7 +1322,15 @@ pub extern "C" fn rd_run_take_boss_relic(slot: i32) -> i32 {
     session.log(K_BOSS_RELIC, slot, -1, "");
     match session.state.take_boss_relic(slot as u8, &pool) {
         Ok(_) => {
-            // TEMP disabled
+            // §403：**Boss 遗物也是 `push_relic` 的入口** —— `calling_bell`（召唤铃铛）正是
+            // Boss 遗物，它的"再给 3 件遗物"是**欠账**（`pickup_relics`）。这里不兑现，
+            // 欠账就永远留在 RunState 上：玩家拿了铃铛却一件都没多。
+            // ⚠️ 这个函数的注释早就写着"兑现点必须是**所有**会 push_relic 的入口"，
+            // 而 Boss 遗物走的是**内核**的 `take_boss_relic`（内部 push），于是被漏掉了。
+            //
+            // ⚠️⚠️ §403 的第一版把这一行写成 `// TEMP disabled`（定位另一个测试时临时关掉的），
+            // 然后**直接提交了** —— 玩家实机反馈"依旧没有三件遗物"才发现。教训见 §408.3。
+            settle_pickup_debts();
             session.error.clear();
             0
         }
@@ -1980,7 +1988,10 @@ pub extern "C" fn rd_run_dig() -> i32 {
     session.log(K_DIG, -1, -1, "");
     let relics = relic_pool(content());
     let outcome = session.state.dig(&relics).map(|_| 0i32);
-    // TEMP disabled
+    // §403：挖宝给的是**遗物**（内核内部 push）⇒ 欠账也要在这里兑现。
+    if outcome.is_ok() {
+        settle_pickup_debts();
+    }
     finish(session, outcome)
 }
 
@@ -2721,7 +2732,11 @@ pub extern "C" fn rd_run_choose(slot: i32) -> i32 {
         .state
         .resolve_event_effects(&event_move, &pool)
         .map(|_| 0i32);
-    // TEMP: 先把这一处关掉，定位 neows_lament 的失败
+    // §403：事件效果里的 `relic:<id>` 也会 push 遗物（拾取类遗物走事件时同样会记欠账）
+    // ⇒ 成功之后兑现。与 `rd_run_take_boss_relic` / `rd_run_dig` 同一个理由。
+    if outcome.is_ok() {
+        settle_pickup_debts();
+    }
     finish(session, outcome)
 }
 
@@ -13023,13 +13038,13 @@ mod tests {
         let deck = ["strike", "strike", "strike", "strike", "strike",
                     "defend", "defend", "defend", "defend", "bash"];
         let relics = relic_pool(content());
-        // Boss 三选一是**随机**的。写死一个种子会让这条测试"有时跑到、有时早退"——
-        // 那就是假绿。所以**先找一个**三选一里真的有铃铛的种子，再断言。
+        // Boss 三选一是**随机**的：先找一个三选一里真有铃铛的种子（写死种子会"有时跑到、
+        // 有时早退"，那是假绿）。
         let mut found = None;
         for seed in 0..400 {
             test_run(seed, 80, 80, &deck);
-            let slot = run_slot().as_mut().expect("a run");
-            if slot.state.offer_boss_relics(&relics).is_err() {
+            let session = run_slot().as_mut().expect("a run");
+            if session.state.offer_boss_relics(&relics).is_err() {
                 continue;
             }
             let offer = run_slot().as_ref().expect("a run").state.boss_relic_offer().to_vec();
@@ -13039,7 +13054,6 @@ mod tests {
             }
         }
         let (seed, index) = found.expect("some seed must offer calling_bell");
-        // 用那个种子重开一局（上面那轮已经把局面推进过了）。
         test_run(seed, 80, 80, &deck);
         run_slot()
             .as_mut()
@@ -13048,25 +13062,18 @@ mod tests {
             .offer_boss_relics(&relics)
             .expect("offer");
         let before = run_slot().as_ref().expect("a run").state.relics().len();
-        let pool = crate::run::full_pool(content(), true).expect("the card pool");
-        let taken = run_slot()
-            .as_mut()
-            .expect("a run")
-            .state
-            .take_boss_relic(index as u8, &pool)
-            .expect("take");
-        assert_eq!(taken.as_str(), "calling_bell");
+
+        // ⚠️ 走**真实导出** —— 玩家点的是它，只有它绿了才算修好。
         assert_eq!(
-            run_slot().as_ref().expect("a run").state.pickup_relics(),
-            3,
-            "the kernel only records the debt; paying it is the wasm layer's job"
+            rd_run_take_boss_relic(index as i32),
+            0,
+            "the export must accept the pick: {}",
+            run_error_text()
         );
-        // 兑现（这就是 `rd_run_take_boss_relic` 里补上的那一行）。
-        settle_pickup_debts();
         assert_eq!(
             run_slot().as_ref().expect("a run").state.pickup_relics(),
             0,
-            "the three owed relics must be paid, not left on the ledger"
+            "the three owed relics must be paid by the export, not left on the ledger"
         );
         assert_eq!(
             run_slot().as_ref().expect("a run").state.relics().len(),

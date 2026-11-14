@@ -37,16 +37,16 @@
 | 类别 | 行数 | TestNamed | HarnessOnly | 两层都没有 | SourceTie:wiki | SourceTie:spec | 有偏差声明 | orphan |
 |---|---|---|---|---|---|---|---|---|
 | 怪物 | 61 | 56 | 0 | 5 | 52 | 9 | 7 | 0 |
-| 敌人动作 | 167 | 93 | 74 | 0 | 144 | 23 | 60 | 0 |
+| 敌人动作 | 167 | 95 | 72 | 0 | 144 | 23 | 60 | 0 |
 | 卡牌 | 295 | 169 | 126 | 0 | 281 | 14 | 18 | 0 |
 | 状态 | 149 | 139 | 5 | 5 | 0 | 149 | 1 | 0 |
 | 遭遇 | 64 | 46 | 18 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 36 | 36 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 152 | 138 | 14 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 957 | 710 | 237 | 10 | 477 | 195 | 86 | 0 |
+| **合计** | 957 | 712 | 235 | 10 | 477 | 195 | 86 | 0 |
 
-扫描到的具名测试：**1248** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
+扫描到的具名测试：**1250** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
 
 事件：池里有 **39** 个位次、**36** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -113,7 +113,7 @@
 | taskmaster | yes | the_five_elite_encounters_match_the_wiki_numbers, taskmaster_scouring_whip_scales_wounds_and_strength_by_ascension | — | wiki:wiki_asc/taskmaster.txt | — | INV_ASC_HP+INV_MONSTERS/the_five_elite_encounters_match_the_wiki_numbers |
 | the_champ | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids, the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half …(+2) | — | wiki:wiki_asc/the_champ.txt | gap §H: Taunt 在二阶段仍每 4 回合触发（wiki 的 "Random Move (Same chances as Phase One)" 措辞含糊，我们按"包含 Taunt"实现） | §194/§312/INV_ASC_HP+INV_MONSTERS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
 | the_collector | yes | the_collector_draws_by_weight_and_never_buffs_twice_in_a_row, a_minion_is_not_on_the_field_until_its_summon_lands …(+1) | — | wiki:wiki_asc/the_collector.txt | — | §138/§282/INV_ASC_HP+INV_MONSTERS/the_collector_draws_by_weight_and_never_buffs_twice_in_a_row |
-| the_guardian | yes | mode_shift_is_a_budget_drained_by_the_health_actually_lost, building_a_guardian_fight_seeds_its_mode_shift_budget_by_ascension …(+2) | — | wiki:wiki_asc/the_guardian.txt | — | §194/INV_ASC_HP+INV_MONSTERS+INV_SPAWN_COUNTERS/mode_shift_is_a_budget_drained_by_the_health_actually_lost |
+| the_guardian | yes | mode_shift_is_a_budget_drained_by_the_health_actually_lost, the_guardian_leaves_defensive_mode_after_three_turns …(+3) | — | wiki:wiki_asc/the_guardian.txt | — | §194/INV_ASC_HP+INV_MONSTERS+INV_SPAWN_COUNTERS/mode_shift_is_a_budget_drained_by_the_health_actually_lost |
 | time_eater | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids, time_eater_head_slam_reaches_32_at_a4 …(+2) | — | wiki:wiki_asc/time_eater.txt | — | §312/§313/INV_ASC_HP+INV_MONSTERS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
 | torch_head | yes | a_minion_is_not_on_the_field_until_its_summon_lands, the_collector_summons_only_up_to_two_torch_heads | — | wiki:wiki_asc/torch_head.txt | — | §282/§329/INV_ASC_HP+INV_MONSTERS/a_minion_is_not_on_the_field_until_its_summon_lands |
 | transient | yes | the_transient_scales_its_attack_and_fades_away | — | spec:INV_MONSTERS+INV_NO_ASC_HP | 无 AscHP：wiki Transient: HP 999 always | §316/§317/INV_MONSTERS+INV_NO_ASC_HP/the_transient_scales_its_attack_and_fades_away |
@@ -277,12 +277,12 @@
 | the_collector.mega_debuff | yes | — | ENEMY_DIFF | wiki:wiki_asc/the_collector.txt (via the_collector) | — | INV_ACTIONS+INV_ASC_VARIANTS |
 | the_collector.spawn | yes | the_collector_draws_by_weight_and_never_buffs_twice_in_a_row, a_minion_is_not_on_the_field_until_its_summon_lands …(+1) | — | wiki:wiki_asc/the_collector.txt (via the_collector) · 仅基础值 | 无升档：wiki The Collector: Spawn has no numbers | §329/INV_ACTIONS+INV_NO_ASC/the_collector_draws_by_weight_and_never_buffs_twice_in_a_row |
 | the_guardian.charging_up | yes | — | ENEMY_DIFF | wiki:wiki_asc/the_guardian.txt (via the_guardian) · 仅基础值 | 无升档：wiki The Guardian: Mode Shift moves, no A-row on the move itself | §194/INV_ACTIONS+INV_NO_ASC |
-| the_guardian.defensive_mode | yes | mode_shift_is_a_budget_drained_by_the_health_actually_lost | — | wiki:wiki_asc/the_guardian.txt (via the_guardian) | — | §195.1/INV_ACTIONS+INV_ASC_VARIANTS/mode_shift_is_a_budget_drained_by_the_health_actually_lost |
+| the_guardian.defensive_mode | yes | mode_shift_is_a_budget_drained_by_the_health_actually_lost, the_guardian_leaves_defensive_mode_after_three_turns | — | wiki:wiki_asc/the_guardian.txt (via the_guardian) | — | §195.1/INV_ACTIONS+INV_ASC_VARIANTS/mode_shift_is_a_budget_drained_by_the_health_actually_lost |
 | the_guardian.fierce_bash | yes | — | ENEMY_DIFF | wiki:wiki_asc/the_guardian.txt (via the_guardian) | — | §194/INV_ACTIONS+INV_ASC_VARIANTS |
-| the_guardian.roll_attack | yes | — | ENEMY_DIFF | wiki:wiki_asc/the_guardian.txt (via the_guardian) | — | §194/INV_ACTIONS+INV_ASC_VARIANTS |
-| the_guardian.twin_slam | yes | sharp_hide_hurts_the_player_for_attacks_and_only_attacks | — | wiki:wiki_asc/the_guardian.txt (via the_guardian) · 仅基础值 | 无升档：wiki The Guardian: no A-row | INV_ACTIONS+INV_NO_ASC/sharp_hide_hurts_the_player_for_attacks_and_only_attacks |
+| the_guardian.roll_attack | yes | the_guardian_leaves_defensive_mode_after_three_turns | — | wiki:wiki_asc/the_guardian.txt (via the_guardian) | — | §194/INV_ACTIONS+INV_ASC_VARIANTS/the_guardian_leaves_defensive_mode_after_three_turns |
+| the_guardian.twin_slam | yes | sharp_hide_hurts_the_player_for_attacks_and_only_attacks, the_guardian_leaves_defensive_mode_after_three_turns | — | wiki:wiki_asc/the_guardian.txt (via the_guardian) · 仅基础值 | 无升档：wiki The Guardian: no A-row | INV_ACTIONS+INV_NO_ASC/sharp_hide_hurts_the_player_for_attacks_and_only_attacks |
 | the_guardian.vent_steam | yes | — | ENEMY_DIFF | wiki:wiki_asc/the_guardian.txt (via the_guardian) · 仅基础值 | 无升档：wiki The Guardian: Vent Steam has no A-row | §194/INV_ACTIONS+INV_NO_ASC |
-| the_guardian.whirlwind | yes | — | ENEMY_DIFF | wiki:wiki_asc/the_guardian.txt (via the_guardian) · 仅基础值 | 无升档：wiki The Guardian: no A-row | §194/INV_ACTIONS+INV_NO_ASC |
+| the_guardian.whirlwind | yes | the_guardian_leaves_defensive_mode_after_three_turns | — | wiki:wiki_asc/the_guardian.txt (via the_guardian) · 仅基础值 | 无升档：wiki The Guardian: no A-row | §194/INV_ACTIONS+INV_NO_ASC/the_guardian_leaves_defensive_mode_after_three_turns |
 | time_eater.haste | yes | the_two_phase_heals_also_cleanse_debuffs | — | wiki:wiki_asc/time_eater.txt (via time_eater) | — | §194/§329/INV_ACTIONS+INV_ASC_VARIANTS/the_two_phase_heals_also_cleanse_debuffs |
 | time_eater.head_slam | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids, time_eater_head_slam_reaches_32_at_a4 | — | wiki:wiki_asc/time_eater.txt (via time_eater) | — | §195.7/INV_ACTIONS+INV_ASC_VARIANTS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
 | time_eater.reverberate | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids | — | wiki:wiki_asc/time_eater.txt (via time_eater) | — | §194/INV_ACTIONS+INV_ASC_VARIANTS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
@@ -362,7 +362,7 @@
 | decay | yes | the_turn_end_curses_do_their_own_thing | — | wiki:wiki_cards/decay.txt | — | CARD_WIKI+INV_CARDS/the_turn_end_curses_do_their_own_thing |
 | deep_breath | yes | deep_breath_shuffles_the_discard_pile_back_first | — | wiki:wiki_cards/deep_breath.txt | — | CARD_WIKI+INV_CARDS/deep_breath_shuffles_the_discard_pile_back_first |
 | deep_breath+ | yes | — | CARD_DIFF | wiki:wiki_cards/deep_breath.txt (via deep_breath) | — | INV_CARDS |
-| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+96) | — | wiki:wiki_cards/defend.txt | — | §2.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
+| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+97) | — | wiki:wiki_cards/defend.txt | — | §2.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
 | defend+ | yes | armaments_gains_block_then_upgrades_the_chosen_card, the_upgrade_eggs_upgrade_two_of_their_own_kind …(+2) | — | wiki:wiki_cards/defend.txt (via defend) | — | INV_CARDS/armaments_gains_block_then_upgrades_the_chosen_card |
 | demon_form | yes | demon_form_grows_strength_at_every_turn_start, a_shop_stocks_all_four_shelves_with_the_wikis_composition | — | wiki:wiki_cards/demon_form.txt | — | CARD_WIKI+INV_CARDS/demon_form_grows_strength_at_every_turn_start |
 | demon_form+ | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt (via demon_form) | — | INV_CARDS/demon_form_grows_strength_at_every_turn_start |
@@ -657,7 +657,7 @@
 | standard.ice_cream | yes | the_five_combat_start_relics_wire_their_own_carrier, the_combat_start_relics_change_the_right_step_of_the_turn | — | spec:INV_STATUSES | — | §261/INV_STATUSES/the_five_combat_start_relics_wire_their_own_carrier |
 | standard.incense_burner | yes | the_eight_turn_shaped_relics_wire_their_own_status, the_turn_shaped_relic_statuses_fire_on_the_turn_the_wiki_names | — | spec:INV_STATUSES | — | §260/INV_STATUSES/the_eight_turn_shaped_relics_wire_their_own_status |
 | standard.ink_bottle | yes | the_every_nth_card_relics_wire_their_own_carrier, the_every_nth_card_relics_count_the_right_kind_of_card | — | spec:INV_STATUSES | — | §262/INV_STATUSES/the_every_nth_card_relics_wire_their_own_carrier |
-| standard.intangible | yes | the_damage_pipeline_honours_intangible_buffer_and_plated_armor, the_turn_shaped_relic_statuses_fire_on_the_turn_the_wiki_names | — | spec:INV_STATUSES | — | §210/§223/INV_STATUSES/the_damage_pipeline_honours_intangible_buffer_and_plated_armor |
+| standard.intangible | yes | the_damage_pipeline_honours_intangible_buffer_and_plated_armor, intangible_expires_at_the_end_of_the_turn …(+1) | — | spec:INV_STATUSES | — | §210/§223/INV_STATUSES/the_damage_pipeline_honours_intangible_buffer_and_plated_armor |
 | standard.juggernaut | yes | juggernaut_punishes_every_block_gain | — | spec:INV_STATUSES | — | §263/§276/INV_STATUSES/juggernaut_punishes_every_block_gain |
 | standard.kunai | yes | the_every_nth_card_relics_wire_their_own_carrier, the_every_nth_card_relics_count_the_right_kind_of_card | — | spec:INV_STATUSES | — | §261/§262/INV_STATUSES/the_every_nth_card_relics_wire_their_own_carrier |
 | standard.lagavulin_asleep | yes | lagavulin_wakes_when_it_loses_health_and_loses_a_turn, the_ambush_lagavulin_starts_awake_with_siphon_soul | — | spec:INV_STATUSES | — | §256/§257/INV_STATUSES/lagavulin_wakes_when_it_loses_health_and_loses_a_turn |
@@ -674,7 +674,7 @@
 | standard.medical_kit | yes | the_two_unplayable_relics_let_their_own_card_kind_through | — | spec:INV_STATUSES | — | §298/INV_STATUSES/the_two_unplayable_relics_let_their_own_card_kind_through |
 | standard.mercury_hourglass | yes | the_eight_turn_shaped_relics_wire_their_own_status, the_turn_shaped_relic_statuses_fire_on_the_turn_the_wiki_names | — | spec:INV_STATUSES | — | §257/§260/INV_STATUSES/the_eight_turn_shaped_relics_wire_their_own_status |
 | standard.metallicize | yes | metallicize_grants_block_at_the_end_of_the_turn, plated_armor_and_metallicize_both_pay_block_at_turn_end …(+1) | — | spec:INV_STATUSES | — | §107/§194/INV_STATUSES/metallicize_grants_block_at_the_end_of_the_turn |
-| standard.mode_shift | yes | mode_shift_is_a_budget_drained_by_the_health_actually_lost | — | spec:INV_STATUSES | — | §195.1/INV_STATUSES/mode_shift_is_a_budget_drained_by_the_health_actually_lost |
+| standard.mode_shift | yes | mode_shift_is_a_budget_drained_by_the_health_actually_lost | — | spec:INV_STATUSES | — | §195.1/§408/INV_STATUSES/mode_shift_is_a_budget_drained_by_the_health_actually_lost |
 | standard.mummified_hand | yes | mummified_hand_makes_one_random_card_free_after_a_power | — | spec:INV_STATUSES | — | §300/INV_STATUSES/mummified_hand_makes_one_random_card_free_after_a_power |
 | standard.mutagenic_strength | yes | the_zero_infrastructure_batch_wires_the_right_carrier, mutagenic_strength_rides_its_own_carrier_status …(+2) | — | spec:INV_STATUSES | — | §267/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
 | standard.nightmare_pending | yes | nightmare_copies_into_the_aside_pile_and_next_turn_they_arrive | — | spec:INV_STATUSES | — | §283/§333/INV_STATUSES/nightmare_copies_into_the_aside_pile_and_next_turn_they_arrive |
@@ -720,7 +720,7 @@
 | standard.split_acid_l | yes | a_large_slime_splits_at_half_health_with_its_current_hp | — | spec:INV_STATUSES | — | §269/§276/INV_STATUSES/a_large_slime_splits_at_half_health_with_its_current_hp |
 | standard.split_spike_l | yes | a_large_slime_splits_at_half_health_with_its_current_hp, a_large_slime_above_half_health_does_not_split | — | spec:INV_STATUSES | — | §269/§276/INV_STATUSES/a_large_slime_splits_at_half_health_with_its_current_hp |
 | standard.spore_cloud | yes | spore_cloud_weakens_the_killer_on_death | — | spec:INV_STATUSES | — | §312/§317/INV_STATUSES/spore_cloud_weakens_the_killer_on_death |
-| standard.stasis | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_STATUSES | — | §195.1/§195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
+| standard.stasis | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_STATUSES | — | §195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
 | standard.stasis_ready | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_STATUSES | — | §195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
 | standard.stone_calendar | yes | the_eight_turn_shaped_relics_wire_their_own_status, the_turn_shaped_relic_statuses_fire_on_the_turn_the_wiki_names | — | spec:INV_STATUSES | — | §260/INV_STATUSES/the_eight_turn_shaped_relics_wire_their_own_status |
 | standard.strange_spoon | yes | — | — | spec:INV_STATUSES | — | §296/§302/INV_STATUSES |
@@ -759,7 +759,7 @@
 | enc_city_byrds | yes | three_byrds_each_start_with_their_own_flying, flying_halves_attack_damage_and_loses_a_stack_per_hit | — | — | — | §277/§311/three_byrds_each_start_with_their_own_flying |
 | enc_colosseum_champions | yes | enc_colosseum_slavers_and_champions_are_the_event_fights | — | — | — | enc_colosseum_slavers_and_champions_are_the_event_fights |
 | enc_colosseum_slavers | yes | enc_colosseum_slavers_and_champions_are_the_event_fights | — | — | — | enc_colosseum_slavers_and_champions_are_the_event_fights |
-| enc_cultist | yes | an_encounter_without_rolls_draws_nothing, one_turn_statuses_expire_when_the_turn_ends …(+15) | — | — | — | §5.2/§130/an_encounter_without_rolls_draws_nothing |
+| enc_cultist | yes | an_encounter_without_rolls_draws_nothing, one_turn_statuses_expire_when_the_turn_ends …(+16) | — | — | — | §5.2/§130/an_encounter_without_rolls_draws_nothing |
 | enc_cultist_and_chosen | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §311 |
 | enc_darklings | yes | an_encounter_with_two_records_of_the_same_id_builds | — | — | — | §316/an_encounter_with_two_records_of_the_same_id_builds |
 | enc_darklings_hard | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §316/§317 |
@@ -800,7 +800,7 @@
 | enc_swarm_of_slimes | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §275/§276 |
 | enc_the_champ | yes | an_ascension_health_row_applies_at_its_own_level_and_not_below, every_act_has_three_bosses_and_each_one_is_a_buildable_encounter …(+5) | — | — | — | §194/an_ascension_health_row_applies_at_its_own_level_and_not_below |
 | enc_the_collector | yes | the_collector_draws_by_weight_and_never_buffs_twice_in_a_row, every_act_has_three_bosses_and_each_one_is_a_buildable_encounter …(+2) | — | — | — | §138/§194/the_collector_draws_by_weight_and_never_buffs_twice_in_a_row |
-| enc_the_guardian | yes | mode_shift_is_a_budget_drained_by_the_health_actually_lost, every_act_has_three_bosses_and_each_one_is_a_buildable_encounter …(+2) | — | — | — | §194/mode_shift_is_a_budget_drained_by_the_health_actually_lost |
+| enc_the_guardian | yes | mode_shift_is_a_budget_drained_by_the_health_actually_lost, every_act_has_three_bosses_and_each_one_is_a_buildable_encounter …(+3) | — | — | — | §194/mode_shift_is_a_budget_drained_by_the_health_actually_lost |
 | enc_three_cultists | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §282 |
 | enc_three_fungi_beasts | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §323/§325 |
 | enc_three_louses | yes | the_act_one_hard_pool_encounters_match_the_wiki_numbers, the_intent_preview_reads_rolled_damage | — | — | — | §258/§275/the_act_one_hard_pool_encounters_match_the_wiki_numbers |
